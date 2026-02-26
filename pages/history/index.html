@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>History | Hira</title>
+    <link rel="stylesheet" href="../../css/base.css" />
+    <link rel="stylesheet" href="../settings/settings.css" />
+    <link rel="stylesheet" href="../../ext/icons/iconfont.css" />
+    <style>
+      #history-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 1rem;
+      }
+      .history-header-main h3 {
+        margin-bottom: 0.25rem;
+      }
+      .history-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+      .history-search-wrapper {
+        position: relative;
+        min-width: 220px;
+      }
+      .history-search-wrapper input {
+        width: 100%;
+        padding: 0.4em 0.7em 0.4em 2rem;
+        border-radius: 999px;
+        border: 1px solid var(--border-color);
+        background: rgba(0, 0, 0, 0.02);
+        color: var(--text-color);
+        font-size: 0.9em;
+      }
+      .history-search-wrapper input:focus {
+        outline: none;
+        border-color: var(--accent-color);
+        box-shadow: 0 0 0 2px rgba(var(--accent-color-rgb, 0, 122, 255), 0.2);
+      }
+      .history-search-icon {
+        position: absolute;
+        left: 0.75rem;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 1rem;
+        opacity: 0.7;
+      }
+      body.dark-mode .history-search-wrapper input {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.16);
+        color: #f9fafb;
+      }
+      #history-list {
+        max-height: calc(100vh - 220px);
+        overflow-y: auto;
+        padding-right: 4px;
+      }
+      .history-section {
+        margin-bottom: 1.25rem;
+        padding-bottom: 0.25rem;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+      }
+      .history-section-header {
+        font-size: 0.9rem;
+        font-weight: 500;
+        opacity: 0.8;
+        margin-bottom: 0.5rem;
+      }
+      .history-item {
+        display: flex;
+        align-items: center;
+        padding: 0.5rem 0.75rem;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: background 0.15s ease, transform 0.05s ease;
+      }
+      .history-item:hover {
+        background: rgba(15, 23, 42, 0.04);
+      }
+      body.dark-mode .history-item:hover {
+        background: rgba(148, 163, 184, 0.18);
+      }
+      .history-item.is-selected {
+        background: rgba(59, 130, 246, 0.12);
+        box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3);
+      }
+      body.dark-mode .history-item.is-selected {
+        background: rgba(59, 130, 246, 0.2);
+        box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.5);
+      }
+      .history-item-favicon {
+        flex: 0 0 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 12px;
+      }
+      .history-item-favicon img {
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+      }
+      .history-item-favicon-fallback {
+        width: 24px;
+        height: 24px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.25);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: #4b5563;
+      }
+      .history-item-main {
+        flex: 1;
+        min-width: 0;
+      }
+      .history-item-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .history-item-title {
+        font-size: 0.95rem;
+        color: inherit;
+        text-decoration: none;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .history-item-title:hover {
+        text-decoration: underline;
+      }
+      .history-item-time {
+        font-size: 0.8rem;
+        opacity: 0.65;
+        flex: 0 0 auto;
+      }
+      .history-item-url {
+        font-size: 0.8rem;
+        opacity: 0.7;
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .history-item-remove {
+        flex: 0 0 24px;
+        text-align: center;
+        font-size: 1rem;
+        opacity: 0.6;
+        cursor: pointer;
+      }
+      .history-item-remove:hover {
+        opacity: 1;
+      }
+      .history-item-checkbox {
+        width: 16px;
+        height: 16px;
+        margin-right: 8px;
+        flex: 0 0 auto;
+      }
+      .history-selection-banner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.5rem 0.75rem;
+        margin-bottom: 0.75rem;
+        border-radius: 8px;
+        background: rgba(59, 130, 246, 0.08);
+        font-size: 0.85rem;
+      }
+      body.dark-mode .history-selection-banner {
+        background: rgba(37, 99, 235, 0.3);
+      }
+      .history-selection-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .history-empty {
+        padding: 1.5rem 0.5rem;
+        text-align: center;
+        opacity: 0.7;
+        font-size: 0.9rem;
+      }
+      @media all and (max-width: 800px) {
+        #history-list {
+          max-height: none;
+        }
+        .history-header-actions {
+          width: 100%;
+          margin-top: 0.75rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="short-hero blue-gradient-background">
+      <div class="container">
+        <h2 data-string="searchHistory"></h2>
+        <div class="settings-info-subheading">
+          浏览、搜索、清理和管理你的浏览历史。
+        </div>
+      </div>
+    </div>
+    <div id="settings-layout">
+      <nav id="settings-sidebar" aria-label="History ranges">
+        <div class="settings-sidebar-group">
+          <div class="settings-sidebar-title">时间范围</div>
+          <button
+            type="button"
+            class="settings-sidebar-item is-active"
+            data-range="all"
+          >
+            <span class="settings-sidebar-icon i carbon:time"></span>
+            <span class="settings-sidebar-label">全部记录</span>
+          </button>
+          <button
+            type="button"
+            class="settings-sidebar-item"
+            data-range="today"
+          >
+            <span class="settings-sidebar-icon i carbon:calendar"></span>
+            <span class="settings-sidebar-label">今天</span>
+          </button>
+          <button
+            type="button"
+            class="settings-sidebar-item"
+            data-range="yesterday"
+          >
+            <span class="settings-sidebar-icon i carbon:calendar--tools"></span>
+            <span class="settings-sidebar-label">昨天</span>
+          </button>
+          <button
+            type="button"
+            class="settings-sidebar-item"
+            data-range="last7"
+          >
+            <span
+              class="settings-sidebar-icon i carbon:calendar-heat-map"
+            ></span>
+            <span class="settings-sidebar-label">最近 7 天</span>
+          </button>
+          <button
+            type="button"
+            class="settings-sidebar-item"
+            data-range="older"
+          >
+            <span
+              class="settings-sidebar-icon i carbon:calendar-settings"
+            ></span>
+            <span class="settings-sidebar-label">更早</span>
+          </button>
+        </div>
+      </nav>
+      <div id="settings-main">
+        <div class="settings-container">
+          <div id="history-header">
+            <div class="history-header-main">
+              <h3>历史记录</h3>
+              <div class="settings-info-subheading">
+                按时间范围浏览，或通过搜索快速找到访问过的网页。
+              </div>
+            </div>
+            <div class="history-header-actions">
+              <div class="history-search-wrapper">
+                <span class="history-search-icon i carbon:search"></span>
+                <input
+                  id="history-search-input"
+                  type="search"
+                  placeholder="搜索历史记录"
+                  autocomplete="off"
+                />
+              </div>
+              <button
+                id="history-clear-button"
+                class="settings-primary-button"
+                data-string="clearHistory"
+              ></button>
+            </div>
+          </div>
+          <div id="selection-banner" class="history-selection-banner" hidden>
+            <div id="selection-text">已选择 0 项</div>
+            <div class="history-selection-actions">
+              <button id="selection-delete" class="settings-primary-button">
+                删除所选
+              </button>
+              <button id="selection-cancel" class="secondary-button">
+                取消
+              </button>
+            </div>
+          </div>
+          <div id="history-list" class="has-thin-scrollbar"></div>
+        </div>
+      </div>
+    </div>
+    <script src="../../js/util/settings/settingsContent.js"></script>
+    <script src="../../js/util/theme.js"></script>
+    <script src="../../dist/localization.build.js"></script>
+    <script src="../../node_modules/dexie/dist/dexie.min.js"></script>
+    <script src="../../js/util/database.js"></script>
+    <script>
+      'use strict';
+      (function () {
+        var placesClient = {
+          messagePort: null,
+          pendingPromises: {},
+          initialize: function () {
+            var channel = new MessageChannel();
+            window.postMessage(
+              { message: 'places-connect' },
+              window.location.toString(),
+              [channel.port1]
+            );
+            this.messagePort = channel.port2;
+            var self = this;
+            this.messagePort.addEventListener('message', function (e) {
+              self.onMessage(e);
+            });
+            this.messagePort.start();
+          },
+          sendMessage: function (data) {
+            if (!this.messagePort) {
+              return;
+            }
+            this.messagePort.postMessage(data);
+          },
+          invokeWithPromise: function (data) {
+            var callbackId = Math.random();
+            var resolver = Promise.withResolvers();
+            this.pendingPromises[callbackId] = resolver;
+            this.sendMessage(
+              Object.assign({}, data, { callbackId: callbackId })
+            );
+            return resolver.promise;
+          },
+          replyToPromise: function (callbackId, result) {
+            var resolver = this.pendingPromises[callbackId];
+            if (!resolver) {
+              return;
+            }
+            resolver.resolve(result);
+            delete this.pendingPromises[callbackId];
+          },
+          onMessage: function (e) {
+            if (e.data && e.data.callbackId) {
+              this.replyToPromise(e.data.callbackId, e.data.result);
+            }
+          },
+          searchPlaces: function (text, options) {
+            return this.invokeWithPromise({
+              action: 'searchPlaces',
+              text: text,
+              options: options,
+            });
+          },
+          getAllItems: function () {
+            return this.invokeWithPromise({ action: 'getAllPlaces' });
+          },
+          deleteHistory: function (url) {
+            return this.invokeWithPromise({
+              action: 'deleteHistory',
+              pageData: { url: url },
+            });
+          },
+          deleteAllHistory: function () {
+            return this.invokeWithPromise({ action: 'deleteAllHistory' });
+          },
+        };
+        var allItems = [];
+        var selectedRange = 'all';
+        var selectedUrls = new Set();
+        function formatDateKey(date) {
+          var y = date.getFullYear();
+          var m = String(date.getMonth() + 1).padStart(2, '0');
+          var d = String(date.getDate()).padStart(2, '0');
+          return y + '-' + m + '-' + d;
+        }
+        function getSectionLabel(date) {
+          var today = new Date();
+          var yesterday = new Date();
+          yesterday.setDate(today.getDate() - 1);
+          var dateKey = formatDateKey(date);
+          var todayKey = formatDateKey(today);
+          var yesterdayKey = formatDateKey(yesterday);
+          var labelDate =
+            date.getFullYear() +
+            '年' +
+            (date.getMonth() + 1) +
+            '月' +
+            date.getDate() +
+            '日';
+          if (dateKey === todayKey) {
+            return '今天 - ' + labelDate;
+          }
+          if (dateKey === yesterdayKey) {
+            return '昨天 - ' + labelDate;
+          }
+          return labelDate;
+        }
+        function formatTime(date) {
+          var h = String(date.getHours()).padStart(2, '0');
+          var m = String(date.getMinutes()).padStart(2, '0');
+          return h + ':' + m;
+        }
+        function inRange(date) {
+          if (selectedRange === 'all') {
+            return true;
+          }
+          var now = new Date();
+          if (selectedRange === 'today') {
+            var start = new Date(
+              now.getFullYear(),
+              now.getMonth(),
+              now.getDate()
+            );
+            return date >= start;
+          }
+          if (selectedRange === 'yesterday') {
+            var startYesterday = new Date(
+              now.getFullYear(),
+              now.getMonth(),
+              now.getDate() - 1
+            );
+            var endYesterday = new Date(
+              now.getFullYear(),
+              now.getMonth(),
+              now.getDate()
+            );
+            return date >= startYesterday && date < endYesterday;
+          }
+          if (selectedRange === 'last7') {
+            var sevenDaysAgo = new Date(
+              now.getTime() - 7 * 24 * 60 * 60 * 1000
+            );
+            return date >= sevenDaysAgo;
+          }
+          if (selectedRange === 'older') {
+            var sevenDaysAgo2 = new Date(
+              now.getTime() - 7 * 24 * 60 * 60 * 1000
+            );
+            return date < sevenDaysAgo2;
+          }
+          return true;
+        }
+        function loadHistory(query) {
+          var text = query || '';
+          placesClient
+            .searchPlaces(text, { limit: Infinity })
+            .then(function (items) {
+              allItems = Array.isArray(items)
+                ? items.filter(function (item) {
+                    return !!item.url;
+                  })
+                : [];
+              renderHistory();
+            });
+        }
+        function updateSelectionBanner() {
+          var banner = document.getElementById('selection-banner');
+          var textEl = document.getElementById('selection-text');
+          var count = selectedUrls.size;
+          if (!banner || !textEl) {
+            return;
+          }
+          if (count === 0) {
+            banner.hidden = true;
+            return;
+          }
+          banner.hidden = false;
+          textEl.textContent = '已选择 ' + count + ' 项';
+        }
+        function buildItemElement(item) {
+          var date = new Date(item.lastVisit || 0);
+          var li = document.createElement('div');
+          li.className = 'history-item';
+          li.dataset.url = item.url;
+          var isSelected = selectedUrls.has(item.url);
+          if (isSelected) {
+            li.classList.add('is-selected');
+          }
+          var checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.className = 'history-item-checkbox';
+          checkbox.checked = isSelected;
+          var faviconWrapper = document.createElement('div');
+          faviconWrapper.className = 'history-item-favicon';
+          if (item.favicon) {
+            var img = document.createElement('img');
+            img.src = item.favicon;
+            img.alt = '';
+            faviconWrapper.appendChild(img);
+          } else {
+            var fallback = document.createElement('div');
+            fallback.className = 'history-item-favicon-fallback';
+            var letter = document.createElement('span');
+            var hostLetter = (item.title || item.url || '')
+              .trim()
+              .charAt(0)
+              .toUpperCase();
+            letter.textContent = hostLetter || ' ';
+            fallback.appendChild(letter);
+            faviconWrapper.appendChild(fallback);
+          }
+          var main = document.createElement('div');
+          main.className = 'history-item-main';
+          var titleRow = document.createElement('div');
+          titleRow.className = 'history-item-title-row';
+          var title = document.createElement('a');
+          title.className = 'history-item-title';
+          title.textContent = item.title || item.url;
+          title.href = item.url;
+          var time = document.createElement('div');
+          time.className = 'history-item-time';
+          time.textContent = formatTime(date);
+          titleRow.appendChild(title);
+          titleRow.appendChild(time);
+          var urlRow = document.createElement('div');
+          urlRow.className = 'history-item-url';
+          urlRow.textContent = item.url;
+          main.appendChild(titleRow);
+          main.appendChild(urlRow);
+          var remove = document.createElement('div');
+          remove.className = 'history-item-remove i carbon:trash-can';
+          remove.title = '删除此记录';
+          li.appendChild(checkbox);
+          li.appendChild(faviconWrapper);
+          li.appendChild(main);
+          li.appendChild(remove);
+          checkbox.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            var url = li.dataset.url;
+            if (!url) {
+              return;
+            }
+            if (checkbox.checked) {
+              selectedUrls.add(url);
+              li.classList.add('is-selected');
+            } else {
+              selectedUrls.delete(url);
+              li.classList.remove('is-selected');
+            }
+            updateSelectionBanner();
+          });
+          li.addEventListener('click', function () {
+            var url = li.dataset.url;
+            if (!url) {
+              return;
+            }
+            window.postMessage(
+              {
+                message: 'openURLInNewTab',
+                url: url,
+              },
+              window.location.toString()
+            );
+          });
+          remove.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            var url = li.dataset.url;
+            if (!url) {
+              return;
+            }
+            placesClient.deleteHistory(url).then(function () {
+              allItems = allItems.filter(function (x) {
+                return x.url !== url;
+              });
+              selectedUrls.delete(url);
+              renderHistory();
+            });
+          });
+          return li;
+        }
+        function renderHistory() {
+          var container = document.getElementById('history-list');
+          if (!container) {
+            return;
+          }
+          container.innerHTML = '';
+          if (!allItems.length) {
+            var empty = document.createElement('div');
+            empty.className = 'history-empty';
+            empty.textContent = '暂无历史记录';
+            container.appendChild(empty);
+            updateSelectionBanner();
+            return;
+          }
+          var items = allItems
+            .slice()
+            .sort(function (a, b) {
+              return (b.lastVisit || 0) - (a.lastVisit || 0);
+            })
+            .filter(function (item) {
+              var date = new Date(item.lastVisit || 0);
+              if (!inRange(date)) {
+                return false;
+              }
+              return true;
+            });
+          if (!items.length) {
+            var emptyFiltered = document.createElement('div');
+            emptyFiltered.className = 'history-empty';
+            emptyFiltered.textContent = '没有符合条件的记录';
+            container.appendChild(emptyFiltered);
+            updateSelectionBanner();
+            return;
+          }
+          var lastSectionKey = null;
+          var sectionEl = null;
+          items.forEach(function (item) {
+            var date = new Date(item.lastVisit || 0);
+            var key = formatDateKey(date);
+            if (key !== lastSectionKey) {
+              lastSectionKey = key;
+              sectionEl = document.createElement('div');
+              sectionEl.className = 'history-section';
+              var header = document.createElement('div');
+              header.className = 'history-section-header';
+              header.textContent = getSectionLabel(date);
+              sectionEl.appendChild(header);
+              container.appendChild(sectionEl);
+            }
+            if (!sectionEl) {
+              return;
+            }
+            sectionEl.appendChild(buildItemElement(item));
+          });
+          updateSelectionBanner();
+        }
+        function bindFilters() {
+          var sidebar = document.getElementById('settings-sidebar');
+          if (!sidebar) {
+            return;
+          }
+          var buttons = Array.prototype.slice.call(
+            sidebar.querySelectorAll('[data-range]')
+          );
+          buttons.forEach(function (button) {
+            button.addEventListener('click', function () {
+              var range = button.getAttribute('data-range');
+              if (!range) {
+                return;
+              }
+              selectedRange = range;
+              buttons.forEach(function (b) {
+                b.classList.remove('is-active');
+              });
+              button.classList.add('is-active');
+              renderHistory();
+            });
+          });
+        }
+        function bindSearch() {
+          var input = document.getElementById('history-search-input');
+          if (!input) {
+            return;
+          }
+          input.addEventListener('input', function () {
+            var value = input.value.trim();
+            loadHistory(value);
+          });
+        }
+        function bindSelectionActions() {
+          var cancelButton = document.getElementById('selection-cancel');
+          var deleteButton = document.getElementById('selection-delete');
+          if (cancelButton) {
+            cancelButton.addEventListener('click', function () {
+              selectedUrls.clear();
+              renderHistory();
+            });
+          }
+          if (deleteButton) {
+            deleteButton.addEventListener('click', function () {
+              if (selectedUrls.size === 0) {
+                return;
+              }
+              var urls = Array.from(selectedUrls);
+              Promise.all(
+                urls.map(function (url) {
+                  return placesClient.deleteHistory(url);
+                })
+              ).then(function () {
+                allItems = allItems.filter(function (item) {
+                  return !selectedUrls.has(item.url);
+                });
+                selectedUrls.clear();
+                renderHistory();
+              });
+            });
+          }
+        }
+        function bindClearAll() {
+          var clearButton = document.getElementById('history-clear-button');
+          if (!clearButton) {
+            return;
+          }
+          clearButton.addEventListener('click', function () {
+            var confirmed = confirm(l('clearHistoryConfirmation'));
+            if (!confirmed) {
+              return;
+            }
+            placesClient.deleteAllHistory().then(function () {
+              if (typeof ipc !== 'undefined' && ipc.invoke) {
+                ipc.invoke('clearStorageData');
+              }
+              allItems = [];
+              selectedUrls.clear();
+              renderHistory();
+            });
+          });
+        }
+        function initializeTitle() {
+          if (typeof l === 'function') {
+            document.title = l('searchHistory') + ' | Hira';
+          } else {
+            document.title = 'History | Hira';
+          }
+        }
+        function initialize() {
+          initializeTitle();
+          placesClient.initialize();
+          var searchInput = document.getElementById('history-search-input');
+          if (searchInput && typeof l === 'function') {
+            searchInput.placeholder = l('searchHistory');
+          }
+          bindFilters();
+          bindSearch();
+          bindSelectionActions();
+          bindClearAll();
+          loadHistory('');
+        }
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', initialize);
+        } else {
+          initialize();
+        }
+      })();
+    </script>
+  </body>
+</html>

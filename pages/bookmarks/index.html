@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Bookmarks | Hira</title>
+    <link rel="stylesheet" href="../../css/base.css" />
+    <link rel="stylesheet" href="../settings/settings.css" />
+    <link rel="stylesheet" href="../../ext/icons/iconfont.css" />
+    <style>
+      #bookmarks-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 1rem;
+      }
+      .bookmarks-header-main h3 {
+        margin-bottom: 0.25rem;
+      }
+      .bookmarks-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+      .bookmarks-search-wrapper {
+        position: relative;
+        min-width: 220px;
+      }
+      .bookmarks-search-wrapper input {
+        width: 100%;
+        padding: 0.4em 0.7em 0.4em 2rem;
+        border-radius: 999px;
+        border: 1px solid var(--border-color);
+        background: rgba(0, 0, 0, 0.02);
+        color: var(--text-color);
+        font-size: 0.9em;
+      }
+      .bookmarks-search-wrapper input:focus {
+        outline: none;
+        border-color: var(--accent-color);
+        box-shadow: 0 0 0 2px rgba(var(--accent-color-rgb, 0, 122, 255), 0.2);
+      }
+      .bookmarks-search-icon {
+        position: absolute;
+        left: 0.75rem;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 1rem;
+        opacity: 0.7;
+      }
+      body.dark-mode .bookmarks-search-wrapper input {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.16);
+        color: #f9fafb;
+      }
+      #bookmarks-list {
+        max-height: calc(100vh - 220px);
+        overflow-y: auto;
+        padding-right: 4px;
+      }
+      .bookmark-item {
+        display: flex;
+        align-items: flex-start;
+        padding: 0.5rem 0.75rem;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: background 0.15s ease, transform 0.05s ease;
+      }
+      .bookmark-item:hover {
+        background: rgba(15, 23, 42, 0.04);
+      }
+      body.dark-mode .bookmark-item:hover {
+        background: rgba(148, 163, 184, 0.18);
+      }
+      .bookmark-item-favicon {
+        flex: 0 0 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 12px;
+      }
+      .bookmark-item-favicon img {
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+      }
+      .bookmark-item-favicon-fallback {
+        width: 24px;
+        height: 24px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.25);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: #4b5563;
+      }
+      .bookmark-item-main {
+        flex: 1;
+        min-width: 0;
+      }
+      .bookmark-item-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .bookmark-item-title {
+        font-size: 0.95rem;
+        color: inherit;
+        text-decoration: none;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .bookmark-item-title:hover {
+        text-decoration: underline;
+      }
+      .bookmark-item-url {
+        font-size: 0.8rem;
+        opacity: 0.7;
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .bookmark-item-actions {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        margin-left: 8px;
+      }
+      .bookmark-item-action-button {
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        border: none;
+        background: transparent;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        opacity: 0.7;
+        cursor: pointer;
+      }
+      .bookmark-item-action-button:hover {
+        background: rgba(148, 163, 184, 0.16);
+        opacity: 1;
+      }
+      .bookmark-tags {
+        margin-top: 4px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+      .bookmark-tag {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.15rem 0.4rem;
+        border-radius: 999px;
+        background-color: rgba(148, 163, 184, 0.2);
+        font-size: 0.75rem;
+        cursor: pointer;
+      }
+      .bookmark-tag span {
+        max-width: 120px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .bookmark-tag-remove {
+        margin-left: 4px;
+        font-size: 0.8rem;
+        opacity: 0.7;
+      }
+      .bookmark-tag-remove:hover {
+        opacity: 1;
+      }
+      .bookmark-tag.selected {
+        background-color: rgba(59, 130, 246, 0.18);
+        color: #1d4ed8;
+      }
+      body.dark-mode .bookmark-tag.selected {
+        background-color: rgba(59, 130, 246, 0.3);
+        color: #bfdbfe;
+      }
+      .bookmark-editor-inline {
+        margin-top: 6px;
+        padding: 6px 8px;
+        border-radius: 8px;
+        background: rgba(148, 163, 184, 0.1);
+      }
+      .bookmark-editor-input-row {
+        display: flex;
+        gap: 6px;
+        margin-top: 6px;
+      }
+      .bookmark-editor-input-row input {
+        flex: 1;
+        padding: 0.25rem 0.5rem;
+        border-radius: 6px;
+        border: 1px solid var(--border-color);
+        font-size: 0.8rem;
+      }
+      .bookmark-editor-input-row button {
+        padding: 0.25rem 0.6rem;
+        border-radius: 6px;
+        border: none;
+        font-size: 0.8rem;
+        cursor: pointer;
+      }
+      .bookmark-editor-input-row button.bookmark-delete-button {
+        background: rgba(248, 113, 113, 0.95);
+        color: white;
+      }
+      .bookmark-editor-input-row button.bookmark-done-button {
+        background: var(--accent-color);
+        color: white;
+      }
+      .bookmarks-empty {
+        padding: 1.5rem 0.5rem;
+        text-align: center;
+        opacity: 0.7;
+        font-size: 0.9rem;
+      }
+      .bookmarks-tag-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-bottom: 0.5rem;
+      }
+      .bookmarks-tag-filter {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.5rem;
+        border-radius: 999px;
+        background-color: rgba(148, 163, 184, 0.2);
+        font-size: 0.78rem;
+        cursor: pointer;
+      }
+      .bookmarks-tag-filter.selected {
+        background-color: rgba(59, 130, 246, 0.18);
+        color: #1d4ed8;
+      }
+      .bookmarks-tag-filter span {
+        max-width: 120px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .bookmarks-tag-filter-remove {
+        margin-left: 4px;
+        font-size: 0.8rem;
+        opacity: 0.7;
+      }
+      .bookmarks-tag-filter-remove:hover {
+        opacity: 1;
+      }
+      @media all and (max-width: 800px) {
+        #bookmarks-list {
+          max-height: none;
+        }
+        .bookmarks-header-actions {
+          width: 100%;
+          margin-top: 0.75rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="short-hero blue-gradient-background">
+      <div class="container">
+        <h2 data-string="searchBookmarks"></h2>
+        <div class="settings-info-subheading">
+          浏览、搜索和管理你的书签，支持标签编辑。
+        </div>
+      </div>
+    </div>
+    <div id="settings-layout">
+      <nav id="settings-sidebar" aria-label="Bookmarks filters">
+        <div class="settings-sidebar-group">
+          <div class="settings-sidebar-title">视图</div>
+          <button
+            type="button"
+            class="settings-sidebar-item is-active"
+            data-filter="all"
+          >
+            <span class="settings-sidebar-icon i carbon:bookmark"></span>
+            <span class="settings-sidebar-label">全部书签</span>
+          </button>
+        </div>
+      </nav>
+      <main id="settings-main" class="has-thin-scrollbar">
+        <section class="settings-section">
+          <header id="bookmarks-header">
+            <div class="bookmarks-header-main">
+              <h3>书签</h3>
+              <div class="settings-info-subheading">
+                浏览、搜索、整理和管理你的书签与标签。
+              </div>
+            </div>
+            <div class="bookmarks-header-actions">
+              <div class="bookmarks-search-wrapper">
+                <span class="bookmarks-search-icon i carbon:search"></span>
+                <input
+                  id="bookmarks-search-input"
+                  type="text"
+                  placeholder="搜索书签或输入标签，例如：#work"
+                  spellcheck="false"
+                />
+              </div>
+            </div>
+          </header>
+          <div id="bookmarks-tag-bar" class="bookmarks-tag-bar"></div>
+          <div id="bookmarks-list"></div>
+        </section>
+      </main>
+    </div>
+    <script src="../../dist/localization.build.js"></script>
+    <script src="../../node_modules/dexie/dist/dexie.min.js"></script>
+    <script src="../../js/util/database.js"></script>
+    <script>
+      'use strict';
+      (function () {
+        var placesClient = {
+          messagePort: null,
+          pendingPromises: {},
+          initialize: function () {
+            var channel = new MessageChannel();
+            window.postMessage(
+              { message: 'places-connect' },
+              window.location.toString(),
+              [channel.port1]
+            );
+            this.messagePort = channel.port2;
+            var self = this;
+            this.messagePort.addEventListener('message', function (e) {
+              self.onMessage(e);
+            });
+            this.messagePort.start();
+          },
+          sendMessage: function (data) {
+            if (!this.messagePort) {
+              return;
+            }
+            this.messagePort.postMessage(data);
+          },
+          invokeWithPromise: function (data) {
+            var callbackId = Math.random();
+            var resolver = Promise.withResolvers();
+            this.pendingPromises[callbackId] = resolver;
+            this.sendMessage(
+              Object.assign({}, data, { callbackId: callbackId })
+            );
+            return resolver.promise;
+          },
+          replyToPromise: function (callbackId, result) {
+            var resolver = this.pendingPromises[callbackId];
+            if (!resolver) {
+              return;
+            }
+            resolver.resolve(result);
+            delete this.pendingPromises[callbackId];
+          },
+          onMessage: function (e) {
+            if (e.data && e.data.callbackId) {
+              this.replyToPromise(e.data.callbackId, e.data.result);
+            }
+          },
+          searchPlaces: function (text, options) {
+            return this.invokeWithPromise({
+              action: 'searchPlaces',
+              text: text,
+              options: options,
+            });
+          },
+          getAllItems: function () {
+            return this.invokeWithPromise({ action: 'getAllPlaces' });
+          },
+          getItem: function (url) {
+            return this.invokeWithPromise({
+              action: 'getPlace',
+              pageData: { url: url },
+            });
+          },
+          updateItem: function (url, fields) {
+            return this.invokeWithPromise({
+              action: 'updatePlace',
+              pageData: Object.assign({ url: url }, fields || {}),
+            });
+          },
+          deleteBookmarkCompletely: function (url) {
+            return this.invokeWithPromise({
+              action: 'deleteHistory',
+              pageData: { url: url },
+            });
+          },
+          getSuggestedTags: function (url) {
+            return this.invokeWithPromise({
+              action: 'getSuggestedTags',
+              pageData: { url: url },
+            });
+          },
+          getAllTagsRanked: function (url) {
+            return this.invokeWithPromise({
+              action: 'getAllTagsRanked',
+              pageData: { url: url },
+            });
+          },
+          getSuggestedItemsForTags: function (tags) {
+            return this.invokeWithPromise({
+              action: 'getSuggestedItemsForTags',
+              pageData: { tags: tags },
+            });
+          },
+          autocompleteTags: function (tags) {
+            return this.invokeWithPromise({
+              action: 'autocompleteTags',
+              pageData: { tags: tags },
+            });
+          },
+          toggleTag: function (url, tag) {
+            var self = this;
+            return this.getItem(url).then(function (item) {
+              if (!item) {
+                return;
+              }
+              var tags = Array.isArray(item.tags) ? item.tags.slice() : [];
+              if (tags.includes(tag)) {
+                tags = tags.filter(function (t) {
+                  return t !== tag;
+                });
+              } else {
+                tags.push(tag);
+              }
+              return self.updateItem(url, { tags: tags }).then(function () {
+                item.tags = tags;
+                return item;
+              });
+            });
+          },
+        };
+        var allItems = [];
+        var currentQuery = '';
+        var currentTags = [];
+        var currentEditorUrl = null;
+        function parseBookmarkSearch(text) {
+          var parts = text.split(/\s/g).filter(function (w) {
+            return w;
+          });
+          var tags = [];
+          parts.forEach(function (word) {
+            if (word.startsWith('#') && word.length > 1) {
+              tags.push(word.substring(1));
+            }
+          });
+          var newText = text;
+          tags.forEach(function (word) {
+            newText = newText.replace('#' + word, '');
+          });
+          newText = newText.trim();
+          return {
+            tags: tags,
+            text: newText,
+          };
+        }
+        function itemMatchesTags(item, tags) {
+          if (!tags.length) {
+            return true;
+          }
+          var itemTags = Array.isArray(item.tags) ? item.tags : [];
+          for (var i = 0; i < tags.length; i++) {
+            var t = tags[i];
+            var has = itemTags.some(function (tag) {
+              return tag && tag.startsWith(t);
+            });
+            if (!has) {
+              return false;
+            }
+          }
+          return true;
+        }
+        function getFaviconLetter(title, url) {
+          var source = title || url || '';
+          var trimmed = source.trim();
+          if (!trimmed) {
+            return '?';
+          }
+          return trimmed.charAt(0).toUpperCase();
+        }
+        function buildTagElement(tag, url, isSelected) {
+          var tagEl = document.createElement('div');
+          tagEl.className = 'bookmark-tag' + (isSelected ? ' selected' : '');
+          var textSpan = document.createElement('span');
+          textSpan.textContent = tag;
+          tagEl.appendChild(textSpan);
+          var removeBtn = document.createElement('span');
+          removeBtn.className = 'bookmark-tag-remove';
+          removeBtn.textContent = '×';
+          tagEl.appendChild(removeBtn);
+          removeBtn.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            placesClient
+              .toggleTag(url, tag)
+              .then(function () {
+                allItems = allItems.map(function (item) {
+                  if (item.url === url) {
+                    var tags = Array.isArray(item.tags)
+                      ? item.tags.slice()
+                      : [];
+                    tags = tags.filter(function (t) {
+                      return t !== tag;
+                    });
+                    item.tags = tags;
+                  }
+                  return item;
+                });
+                renderBookmarks();
+              })
+              .catch(function () {});
+          });
+          tagEl.addEventListener('click', function () {
+            if (!currentTags.includes(tag)) {
+              currentTags.push(tag);
+              var input = document.getElementById('bookmarks-search-input');
+              if (input) {
+                var base = currentQuery.split(/\s/g).filter(function (w) {
+                  return w && !w.startsWith('#');
+                });
+                base.push('#' + tag);
+                input.value = base.join(' ');
+              }
+            }
+            loadBookmarks(currentQuery);
+          });
+          return tagEl;
+        }
+        function buildBookmarkEditor(item, container) {
+          var existing = container.querySelector('.bookmark-editor-inline');
+          if (existing) {
+            existing.remove();
+          }
+          currentEditorUrl = item.url;
+          var editor = document.createElement('div');
+          editor.className = 'bookmark-editor-inline';
+          var tagArea = document.createElement('div');
+          tagArea.className = 'bookmark-tags';
+          var itemTags = Array.isArray(item.tags) ? item.tags : [];
+          itemTags.forEach(function (tag) {
+            var el = buildTagElement(tag, item.url, false);
+            tagArea.appendChild(el);
+          });
+          editor.appendChild(tagArea);
+          var inputRow = document.createElement('div');
+          inputRow.className = 'bookmark-editor-input-row';
+          var input = document.createElement('input');
+          input.type = 'text';
+          input.placeholder = '添加标签并回车';
+          input.spellcheck = false;
+          inputRow.appendChild(input);
+          var deleteBtn = document.createElement('button');
+          deleteBtn.className = 'bookmark-delete-button';
+          deleteBtn.textContent = '删除书签';
+          inputRow.appendChild(deleteBtn);
+          var doneBtn = document.createElement('button');
+          doneBtn.className = 'bookmark-done-button';
+          doneBtn.textContent = '完成';
+          inputRow.appendChild(doneBtn);
+          editor.appendChild(inputRow);
+          function refreshItemTags(newTags) {
+            allItems = allItems.map(function (i) {
+              if (i.url === item.url) {
+                i.tags = newTags.slice();
+              }
+              return i;
+            });
+            var row = container;
+            var tagsRow = row.querySelector('.bookmark-tags');
+            if (tagsRow) {
+              tagsRow.innerHTML = '';
+              newTags.forEach(function (tag) {
+                tagsRow.appendChild(buildTagElement(tag, item.url, false));
+              });
+            }
+          }
+          input.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Enter') {
+              var val = input.value.trim();
+              if (!val) {
+                return;
+              }
+              placesClient
+                .toggleTag(item.url, val)
+                .then(function (updated) {
+                  if (updated && Array.isArray(updated.tags)) {
+                    tagArea.appendChild(buildTagElement(val, item.url, false));
+                    refreshItemTags(updated.tags);
+                  }
+                  input.value = '';
+                })
+                .catch(function () {});
+            }
+          });
+          deleteBtn.addEventListener('click', function () {
+            placesClient
+              .deleteBookmarkCompletely(item.url)
+              .then(function () {
+                allItems = allItems.filter(function (i) {
+                  return i.url !== item.url;
+                });
+                renderBookmarks();
+              })
+              .catch(function () {});
+          });
+          doneBtn.addEventListener('click', function () {
+            editor.remove();
+            currentEditorUrl = null;
+          });
+          return editor;
+        }
+        function buildBookmarkItem(item) {
+          var li = document.createElement('div');
+          li.className = 'bookmark-item';
+          li.dataset.url = item.url;
+          var faviconWrapper = document.createElement('div');
+          faviconWrapper.className = 'bookmark-item-favicon';
+          if (item.favicon) {
+            var img = document.createElement('img');
+            img.src = item.favicon;
+            img.alt = '';
+            img.onerror = function () {
+              faviconWrapper.innerHTML = '';
+              var fallback = document.createElement('div');
+              fallback.className = 'bookmark-item-favicon-fallback';
+              fallback.textContent = getFaviconLetter(item.title, item.url);
+              faviconWrapper.appendChild(fallback);
+            };
+            faviconWrapper.appendChild(img);
+          } else {
+            var fallback = document.createElement('div');
+            fallback.className = 'bookmark-item-favicon-fallback';
+            fallback.textContent = getFaviconLetter(item.title, item.url);
+            faviconWrapper.appendChild(fallback);
+          }
+          var main = document.createElement('div');
+          main.className = 'bookmark-item-main';
+          var titleRow = document.createElement('div');
+          titleRow.className = 'bookmark-item-title-row';
+          var title = document.createElement('a');
+          title.className = 'bookmark-item-title';
+          title.textContent = item.title || item.url;
+          title.href = item.url;
+          var urlEl = document.createElement('div');
+          urlEl.className = 'bookmark-item-url';
+          urlEl.textContent = item.url;
+          titleRow.appendChild(title);
+          var actions = document.createElement('div');
+          actions.className = 'bookmark-item-actions';
+          var editBtn = document.createElement('button');
+          editBtn.className = 'bookmark-item-action-button i carbon:edit';
+          actions.appendChild(editBtn);
+          var openBtn = document.createElement('button');
+          openBtn.className = 'bookmark-item-action-button i carbon:launch';
+          actions.appendChild(openBtn);
+          titleRow.appendChild(actions);
+          main.appendChild(titleRow);
+          main.appendChild(urlEl);
+          var tagsRow = document.createElement('div');
+          tagsRow.className = 'bookmark-tags';
+          var itemTags = Array.isArray(item.tags) ? item.tags : [];
+          itemTags.forEach(function (tag) {
+            tagsRow.appendChild(buildTagElement(tag, item.url, false));
+          });
+          main.appendChild(tagsRow);
+          li.appendChild(faviconWrapper);
+          li.appendChild(main);
+          li.addEventListener('click', function () {
+            var url = li.dataset.url;
+            if (!url) {
+              return;
+            }
+            window.postMessage(
+              {
+                message: 'openURLInNewTab',
+                url: url,
+              },
+              window.location.toString()
+            );
+          });
+          editBtn.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            var existing = li.querySelector('.bookmark-editor-inline');
+            if (existing) {
+              existing.remove();
+              currentEditorUrl = null;
+              return;
+            }
+            var editor = buildBookmarkEditor(item, li);
+            li.appendChild(editor);
+          });
+          openBtn.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            var url = li.dataset.url;
+            if (!url) {
+              return;
+            }
+            window.postMessage(
+              {
+                message: 'openURLInNewTab',
+                url: url,
+              },
+              window.location.toString()
+            );
+          });
+          return li;
+        }
+        function renderTagBar() {
+          var bar = document.getElementById('bookmarks-tag-bar');
+          if (!bar) {
+            return;
+          }
+          bar.innerHTML = '';
+          if (!currentTags.length) {
+            return;
+          }
+          currentTags.forEach(function (tag) {
+            var el = document.createElement('div');
+            el.className = 'bookmarks-tag-filter selected';
+            var textSpan = document.createElement('span');
+            textSpan.textContent = '#' + tag;
+            el.appendChild(textSpan);
+            var remove = document.createElement('span');
+            remove.className = 'bookmarks-tag-filter-remove';
+            remove.textContent = '×';
+            el.appendChild(remove);
+            remove.addEventListener('click', function () {
+              currentTags = currentTags.filter(function (t) {
+                return t !== tag;
+              });
+              var input = document.getElementById('bookmarks-search-input');
+              if (input) {
+                var base = currentQuery.split(/\s/g).filter(function (w) {
+                  return w && !w.startsWith('#' + tag);
+                });
+                input.value = base.join(' ');
+              }
+              loadBookmarks(currentQuery);
+            });
+            bar.appendChild(el);
+          });
+        }
+        function renderBookmarks() {
+          var container = document.getElementById('bookmarks-list');
+          if (!container) {
+            return;
+          }
+          container.innerHTML = '';
+          renderTagBar();
+          if (!allItems.length) {
+            var empty = document.createElement('div');
+            empty.className = 'bookmarks-empty';
+            empty.textContent = '暂无书签';
+            container.appendChild(empty);
+            return;
+          }
+          var items = allItems
+            .slice()
+            .filter(function (item) {
+              return item.isBookmarked;
+            })
+            .filter(function (item) {
+              return itemMatchesTags(item, currentTags);
+            })
+            .sort(function (a, b) {
+              var aTime = a.lastVisit || 0;
+              var bTime = b.lastVisit || 0;
+              return bTime - aTime;
+            });
+          if (!items.length) {
+            var emptyFiltered = document.createElement('div');
+            emptyFiltered.className = 'bookmarks-empty';
+            emptyFiltered.textContent = '没有符合条件的书签';
+            container.appendChild(emptyFiltered);
+            return;
+          }
+          items.forEach(function (item) {
+            container.appendChild(buildBookmarkItem(item));
+          });
+        }
+        function loadBookmarks(query) {
+          var q = query || '';
+          currentQuery = q;
+          var parsed = parseBookmarkSearch(q);
+          currentTags = parsed.tags.slice();
+          placesClient
+            .searchPlaces(parsed.text, {
+              searchBookmarks: true,
+              limit: Infinity,
+            })
+            .then(function (items) {
+              allItems = Array.isArray(items) ? items.slice() : [];
+              renderBookmarks();
+            })
+            .catch(function () {
+              allItems = [];
+              renderBookmarks();
+            });
+        }
+        function bindSearch() {
+          var input = document.getElementById('bookmarks-search-input');
+          if (!input) {
+            return;
+          }
+          input.addEventListener('input', function () {
+            var value = input.value.trim();
+            loadBookmarks(value);
+          });
+        }
+        function initializeTitle() {
+          if (typeof l === 'function') {
+            document.title = l('searchBookmarks') + ' | Hira';
+          } else {
+            document.title = 'Bookmarks | Hira';
+          }
+        }
+        function initialize() {
+          initializeTitle();
+          placesClient.initialize();
+          bindSearch();
+          loadBookmarks('');
+        }
+        window.addEventListener('DOMContentLoaded', initialize);
+      })();
+    </script>
+  </body>
+</html>

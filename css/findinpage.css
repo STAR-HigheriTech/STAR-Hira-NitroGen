@@ -1,0 +1,72 @@
+#findinpage-bar,
+#zoom-bar {
+  display: flex;
+  align-items: center;
+  position: absolute;
+  top: calc(var(--control-space-top) + 4px);
+  left: 50%;
+  height: 36px;
+  max-width: 420px;
+  padding: 0 8px;
+  z-index: 99;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+  transform: translateX(-50%);
+  -webkit-app-region: no-drag;
+}
+
+body.dark-mode #findinpage-bar,
+body.dark-mode #zoom-bar {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+#findinpage-bar #findinpage-input {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  outline: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  min-width: 80px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+#findinpage-bar #findinpage-input::-webkit-input-placeholder {
+  opacity: 0.75;
+  color: inherit;
+}
+
+#findinpage-bar .divider {
+  height: 100%;
+  width: 8px;
+}
+
+#findinpage-bar .inline-text {
+  font-size: 0.85em;
+  vertical-align: middle;
+}
+
+#findinpage-bar button {
+  padding: 0 2px;
+  margin-top: 0;
+}
+
+#findinpage-bar .navbar-action-button {
+  padding: 0;
+  margin: 0;
+  border-radius: 50%;
+}
+
+#zoom-bar .navbar-action-button {
+  margin: 0 4px;
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+}

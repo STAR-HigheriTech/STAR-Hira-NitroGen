@@ -1,0 +1,277 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-size: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  transition: 200ms !important;
+}
+
+:root {
+  --main-bg-color: #eef6ff;
+  --no-main-bg-color: transparent;
+  --no-main-font-color: #1a1a1a;
+  --sys-btn-font-color: #1a1a1a;
+
+  --main-border-color: transparent;
+  --new-tab-btn-bg-color: transparent;
+  --new-tab-btn-bg-color-hover: rgba(0, 0, 0, 0.1);
+  --new-tab-btn-font-color: #1a1a1a;
+
+  --new-tab-label-hover-bg-color: rgba(0, 0, 0, 0.05);
+  --tab-label-box-shadow-color: rgba(0, 0, 0, 0.1);
+
+  --main-btn-bg-color-hover: rgba(0, 0, 0, 0.1);
+
+  --addr-bar-bg-color: rgba(255, 255, 255, 0.8);
+  --addr-bar-bg-color-hover: rgba(255, 255, 255, 0.9);
+  --addr-bar-bg-color-focus: rgba(255, 255, 255, 1);
+  --addr-bar-border-color: rgba(0, 117, 255, 0.5);
+
+  --tool-btn-color: #1a1a1a;
+  --tool-btn-dis-color: rgba(0, 0, 0, 0.5);
+
+  --more-container-bg-color: rgba(255, 255, 255, 0.8);
+  --filter-back: saturate(180%) blur(20px);
+
+  --badge-font-color: white;
+  --badge-bg-color: #007aff;
+
+  --msg-icon-color: #007aff;
+
+  /* 原有变量保持兼容 */
+  --bg-color: #ffffff;
+  --text-color: #1a1a1a;
+  --border-color: rgba(0, 0, 0, 0.1);
+  --accent-color: #007aff;
+  --accent-hover: #0056cc;
+  --secondary-color: #8e8e93;
+  --secondary-hover: #6d6d70;
+}
+
+body.light-theme-softWhite:not(.dark-mode) {
+  --main-bg-color: #f9fafb;
+  --addr-bar-bg-color: rgba(255, 255, 255, 0.96);
+  --addr-bar-bg-color-hover: rgba(255, 255, 255, 0.98);
+  --addr-bar-bg-color-focus: #ffffff;
+  --addr-bar-border-color: rgba(148, 163, 184, 0.45);
+  --accent-color: #2563eb;
+  --accent-hover: #1d4ed8;
+  --badge-bg-color: #2563eb;
+  --msg-icon-color: #2563eb;
+}
+
+body.light-theme-mint:not(.dark-mode) {
+  --main-bg-color: #ecfdf3;
+  --addr-bar-bg-color: rgba(255, 255, 255, 0.95);
+  --addr-bar-bg-color-hover: rgba(255, 255, 255, 0.98);
+  --addr-bar-bg-color-focus: #ffffff;
+  --addr-bar-border-color: rgba(16, 185, 129, 0.35);
+  --accent-color: #10b981;
+  --accent-hover: #059669;
+  --badge-bg-color: #10b981;
+  --msg-icon-color: #10b981;
+}
+
+body.light-theme-warmGray:not(.dark-mode) {
+  --main-bg-color: #f5f5f4;
+  --addr-bar-bg-color: rgba(255, 255, 255, 0.95);
+  --addr-bar-bg-color-hover: rgba(255, 255, 255, 0.98);
+  --addr-bar-bg-color-focus: #ffffff;
+  --addr-bar-border-color: rgba(148, 163, 184, 0.4);
+  --accent-color: #f97316;
+  --accent-hover: #ea580c;
+  --badge-bg-color: #f97316;
+  --msg-icon-color: #f97316;
+}
+
+body.light-theme-sakura:not(.dark-mode) {
+  --main-bg-color: #fff1f5;
+  --addr-bar-bg-color: rgba(255, 255, 255, 0.95);
+  --addr-bar-bg-color-hover: rgba(255, 255, 255, 0.98);
+  --addr-bar-bg-color-focus: #ffffff;
+  --addr-bar-border-color: rgba(244, 114, 182, 0.4);
+  --accent-color: #ec4899;
+  --accent-hover: #db2777;
+  --badge-bg-color: #ec4899;
+  --msg-icon-color: #ec4899;
+}
+
+body.dark {
+  --main-bg-color: transparent;
+  --no-main-bg-color: transparent;
+  --no-main-font-color: #ffffff;
+  --sys-btn-font-color: #ffffff;
+
+  --main-border-color: transparent;
+  --new-tab-btn-bg-color: transparent;
+  --new-tab-btn-bg-color-hover: rgba(255, 255, 255, 0.1);
+  --new-tab-btn-font-color: #ffffff;
+
+  --new-tab-label-hover-bg-color: rgba(255, 255, 255, 0.05);
+  --tab-label-box-shadow-color: rgba(255, 255, 255, 0.1);
+
+  --main-btn-bg-color-hover: rgba(255, 255, 255, 0.1);
+
+  --addr-bar-bg-color: rgba(26, 26, 26, 0.8);
+  --addr-bar-bg-color-hover: rgba(26, 26, 26, 0.9);
+  --addr-bar-bg-color-focus: rgba(26, 26, 26, 1);
+  --addr-bar-border-color: rgba(10, 132, 255, 0.5);
+
+  --tool-btn-color: #ffffff;
+  --tool-btn-dis-color: rgba(255, 255, 255, 0.5);
+
+  --more-container-bg-color: rgba(26, 26, 26, 0.8);
+  --filter-back: saturate(180%) blur(20px);
+
+  --badge-font-color: white;
+  --badge-bg-color: #0a84ff;
+
+  --msg-icon-color: #0a84ff;
+
+  /* 原有变量保持兼容 */
+  --bg-color: #1a1a1a;
+  --text-color: #ffffff;
+  --border-color: rgba(255, 255, 255, 0.1);
+  --accent-color: #0a84ff;
+  --accent-hover: #409cff;
+  --secondary-color: #8e8e93;
+  --secondary-hover: #aeaeb2;
+}
+
+*:focus {
+  outline-color: rgb(0, 117, 255);
+}
+.dark-mode *:focus {
+  outline-color: transparent;
+}
+body.mac * {
+  letter-spacing: 0.4px;
+}
+[hidden] {
+  display: none !important;
+}
+
+button {
+  -webkit-appearance: none;
+  background: none;
+  border: none;
+  color: inherit;
+  outline: none;
+}
+body,
+html {
+  background-color: var(--main-bg-color);
+  color: #000;
+  height: 100%;
+  overflow: hidden;
+  -webkit-user-select: none;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+#main-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+body.dark-mode {
+  background-color: rgb(33, 37, 43);
+  color: lightgrey;
+  --main-bg-color: rgb(33, 37, 43);
+}
+
+h1,
+h2,
+h3 {
+  font-size: 5em;
+  font-weight: 300;
+  opacity: 0.8;
+  margin: 0.5em 0;
+  color: inherit;
+  text-align: center;
+}
+h2 {
+  text-align: left;
+  font-size: 2.75em;
+}
+h3 {
+  text-align: left;
+  font-size: 2em;
+}
+h1 + h2 {
+  margin-top: -1em;
+}
+.centered {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-50%);
+}
+.spacer {
+  height: 1em;
+}
+
+.light-fade {
+  opacity: 0.666;
+}
+
+a {
+  color: royalblue;
+  text-decoration: none;
+}
+
+.dark-mode a {
+  color: dodgerblue;
+}
+
+.dark-mode input,
+.dark-mode textarea {
+  background-color: rgb(52, 58, 68);
+  color: white;
+  border-color: transparent;
+}
+
+/* styled scrollbars */
+
+.has-thin-scrollbar::-webkit-scrollbar {
+  height: 0.25em;
+}
+.has-thin-scrollbar::-webkit-scrollbar-track {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+.has-thin-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.175);
+  border-radius: 0.25em;
+}
+.dark-theme .has-thin-scrollbar::-webkit-scrollbar-track {
+  background-color: rgba(255, 255, 255, 0.25);
+}
+.dark-theme .has-thin-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.6);
+}
+
+#navbar-actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+
+.navbar-action-setting {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: 0.5em;
+}
+
+.navbar-action-setting > label {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.navbar-action-setting .navbar-action-move-up,
+.navbar-action-setting .navbar-action-move-down {
+  min-width: 3.5em;
+}

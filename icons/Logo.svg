@@ -1,0 +1,112 @@
+<svg width="1024" height="1024" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="tileBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#F9FAFB"/>
+      <stop offset="55%" stop-color="#E5EDFF"/>
+      <stop offset="100%" stop-color="#D0E2FF"/>
+    </linearGradient>
+    <linearGradient id="tileHighlight" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="40%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="h2Main" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="45%" stop-color="#0EA5E9"/>
+      <stop offset="100%" stop-color="#E879F9"/>
+    </linearGradient>
+    <linearGradient id="h2Inner" x1="10%" y1="0%" x2="90%" y2="100%">
+      <stop offset="0%" stop-color="#E0F2FE" stop-opacity="0.96"/>
+      <stop offset="45%" stop-color="#BAE6FD" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#A7F3D0" stop-opacity="0.85"/>
+    </linearGradient>
+    <linearGradient id="h2Ring" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#F9FAFF" stop-opacity="0.95"/>
+      <stop offset="45%" stop-color="#7DD3FC" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#0284C7" stop-opacity="0.95"/>
+    </linearGradient>
+    <radialGradient id="h2Core" cx="50%" cy="45%" r="52%">
+      <stop offset="0%" stop-color="#E0F2FE" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#E0F2FE" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="tileShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#0F172A" flood-opacity="0.26"/>
+    </filter>
+    <filter id="glyphShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#0F172A" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <rect x="40" y="40" width="432" height="432" rx="90" ry="90" fill="url(#tileBg)" filter="url(#tileShadow)"/>
+  <rect x="40" y="40" width="432" height="432" rx="90" ry="90" fill="url(#tileHighlight)"/>
+
+  <g transform="translate(-34,-29)" filter="url(#glyphShadow)">
+    <ellipse
+      cx="256"
+      cy="252"
+      rx="192"
+      ry="78"
+      fill="none"
+      stroke="url(#h2Ring)"
+      stroke-width="48"
+      transform="rotate(-18 256 252)"
+      opacity="0.9"
+    />
+
+    <circle cx="256" cy="232" r="88" fill="url(#h2Core)"/>
+
+    <!-- 左侧流线竖画 -->
+    <path
+      d="
+        M 152 108
+        C 126 132, 110 164, 102 200
+          94 238, 96 280, 106 316
+          116 352, 136 384, 162 410
+          188 434, 220 452, 254 462
+          276 468, 298 470, 318 468
+          298 456, 280 440, 264 420
+          242 392, 226 360, 218 326
+          210 292, 210 258, 218 226
+          226 196, 242 170, 264 148
+          284 130, 308 118, 332 112
+          308 108, 282 106, 256 106
+          224 106, 188 112, 152 124
+        Z"
+      fill="url(#h2Main)"
+    />
+
+    <!-- 右侧弧形流线竖画 -->
+    <path
+      d="
+        M 364 118
+        C 386 122, 406 132, 426 148
+          446 164, 462 186, 472 212
+          480 234, 484 258, 484 282
+          484 306, 480 330, 472 352
+          462 376, 448 396, 430 412
+          412 426, 390 436, 368 440
+          350 442, 334 440, 320 436
+          336 424, 350 410, 362 392
+          374 372, 382 350, 386 328
+          390 304, 390 280, 386 258
+          382 236, 374 216, 362 198
+          350 182, 338 170, 326 160
+          338 146, 350 134, 364 126
+        Z"
+      fill="url(#h2Main)"
+    />
+
+    <ellipse
+      cx="256"
+      cy="252"
+      rx="192"
+      ry="78"
+      fill="none"
+      stroke="url(#h2Ring)"
+      stroke-width="48"
+      stroke-linecap="round"
+      stroke-dasharray="360 420"
+      stroke-dashoffset="140"
+      transform="rotate(-18 256 252)"
+    />
+  </g>
+</svg>

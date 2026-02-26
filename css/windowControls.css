@@ -1,0 +1,182 @@
+body {
+  --control-space-top: 0px;
+  --control-space-left: 0.3em;
+  --control-space-right: 0.3em;
+  --window-controls-width: 75px;
+}
+/* window drag regions */
+
+.window-drag-area {
+  display: none;
+}
+
+/* 由于 #navbar 已设置为可拖动区域，额外拖动区域不再需要 */
+body.windows:not(.maximized):not(.fullscreen):not(.separate-titlebar)
+  .window-drag-area,
+body.linux:not(.maximized):not(.fullscreen):not(.separate-titlebar)
+  .window-drag-area {
+  display: none;
+}
+
+body.mac:not(.separate-titlebar):not(.fullscreen) .window-drag-area {
+  display: none;
+}
+
+body.mac:not(.is-edit-mode):not(.fullscreen):not(.separate-titlebar)
+  #mac-window-drag-area {
+  margin-left: calc(var(--control-space-left) * -1);
+  width: calc(var(--control-space-left) + 1.25em);
+  height: 100%;
+  -webkit-app-region: drag;
+}
+
+/* macOS traffic light buttons */
+
+#mac-traffic-lights {
+  display: none;
+  position: absolute;
+  top: calc(var(--control-space-top) + 12px);
+  left: 10px;
+  z-index: 1000;
+  gap: 8px;
+  -webkit-app-region: no-drag;
+}
+
+.traffic-light {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.traffic-light:hover {
+  transform: scale(1.1);
+}
+
+.traffic-light:active {
+  transform: scale(0.9);
+}
+
+.traffic-light.close {
+  background-color: #ff5f57;
+  box-shadow: 0 0 0 1px rgba(255, 95, 87, 0.2);
+}
+
+.traffic-light.minimize {
+  background-color: #ffbd2e;
+  box-shadow: 0 0 0 1px rgba(255, 189, 46, 0.2);
+}
+
+.traffic-light.maximize {
+  background-color: #28ca42;
+  box-shadow: 0 0 0 1px rgba(40, 202, 66, 0.2);
+}
+
+.windows-caption-buttons {
+  display: none;
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 1000;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+}
+
+.windows-caption-buttons .element {
+  width: 36px;
+  height: 24px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(0, 0, 0, 0.8);
+}
+
+.windows-caption-buttons .element svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  fill: none;
+}
+
+.windows-caption-buttons .element:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.windows-caption-buttons .caption-close:hover {
+  background: #e81123;
+  color: #ffffff;
+}
+
+body.dark-mode .windows-caption-buttons .element {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+body.dark-mode .windows-caption-buttons .element:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+#linux-control-buttons {
+  display: none;
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  z-index: 1000;
+  padding: 0;
+  border: none;
+  background: transparent;
+  -webkit-app-region: no-drag;
+}
+
+body.dark-mode #linux-control-buttons {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+body.window-controls-traffic-lights {
+  --window-controls-width: 75px;
+}
+
+body.window-controls-windows {
+  --window-controls-width: 120px;
+}
+
+body.window-controls-left:not(.separate-titlebar) {
+  --control-space-left: var(--window-controls-width);
+  --control-space-right: 0.3em;
+}
+
+body.window-controls-right:not(.separate-titlebar) {
+  --control-space-right: var(--window-controls-width);
+  --control-space-left: 0.3em;
+}
+
+body.window-controls-traffic-lights:not(.separate-titlebar)
+  #mac-traffic-lights {
+  display: flex;
+}
+
+body.window-controls-windows:not(.separate-titlebar).windows
+  .windows-caption-buttons {
+  display: flex;
+}
+
+body.window-controls-windows:not(.separate-titlebar).linux
+  #linux-control-buttons {
+  display: inline-flex;
+}
+
+body.window-controls-left #mac-traffic-lights,
+body.window-controls-left .windows-caption-buttons,
+body.window-controls-left #linux-control-buttons {
+  left: 10px;
+  right: auto;
+}
+
+body.window-controls-right #mac-traffic-lights,
+body.window-controls-right .windows-caption-buttons,
+body.window-controls-right #linux-control-buttons {
+  right: 10px;
+  left: auto;
+}

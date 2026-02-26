@@ -1,0 +1,207 @@
+/* 分屏视图样式 */
+
+.split-view-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+  z-index: 1000;
+  background: var(--bg-color);
+}
+
+.split-view-panel {
+  position: absolute;
+  top: 0;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.split-view-panel iframe,
+.split-view-panel webview {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: white;
+}
+
+body.dark-mode .split-view-panel iframe,
+body.dark-mode .split-view-panel webview {
+  background: #1a1a1a;
+}
+
+.split-view-splitter {
+  position: absolute;
+  z-index: 1001;
+  background: var(--border-color);
+  transition: background-color 0.2s ease;
+}
+
+.split-view-splitter:hover {
+  background: var(--accent-color);
+}
+
+.split-view-splitter.horizontal {
+  cursor: col-resize;
+}
+
+.split-view-splitter.vertical {
+  cursor: row-resize;
+}
+
+.split-view-controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1002;
+  display: flex;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.split-view-container:hover .split-view-controls {
+  opacity: 1;
+}
+
+.split-view-control-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.1);
+  color: var(--text-color);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+
+.split-view-control-btn:hover {
+  background: rgba(0, 0, 0, 0.2);
+  transform: scale(1.05);
+}
+
+body.dark-mode .split-view-control-btn {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+body.dark-mode .split-view-control-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.split-webview-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.split-webview {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+/* 分屏视图激活时的状态 */
+.split-view-active .webview {
+  visibility: hidden !important;
+}
+
+.split-view-active #webviews {
+  background: transparent !important;
+}
+
+/* 动画效果 */
+@keyframes splitViewSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.split-view-container {
+  animation: splitViewSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .split-view-controls {
+    top: 5px;
+    right: 5px;
+  }
+
+  .split-view-control-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+}
+
+/* 分割线拖拽效果 */
+.split-view-splitter.dragging {
+  background: var(--accent-color);
+  opacity: 0.8;
+}
+
+/* 面板标题栏 */
+.split-view-panel-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background: rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  z-index: 10;
+  font-size: 13px;
+  color: var(--text-color);
+}
+
+body.dark-mode .split-view-panel-header {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.split-view-panel-title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.split-view-panel-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.split-view-panel-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-color);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.split-view-panel-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+body.dark-mode .split-view-panel-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
