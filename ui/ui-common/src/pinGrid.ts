@@ -37,7 +37,7 @@
  */
 
 import { createFaviconBadge } from './favicon'
-import { TAB_FAVICON_BG_VAR, TAB_FAVICON_FG_VAR } from './faviconColor'
+import { applyFaviconColor, TAB_FAVICON_BG_VAR, TAB_FAVICON_FG_VAR } from './faviconColor'
 import { createHoverPreview } from './hoverPreview'
 import { tabPreviewFacts } from './tabPreviewFacts'
 import { createRenameSlot } from './tab/renameSlot'
@@ -160,7 +160,7 @@ export function injectPinGridStyles(doc: Document): void {
       border: 0; border-radius: var(--hira-radius-lg, 14px); cursor: pointer;
       background: transparent; box-sizing: border-box; overflow: hidden;
       color: var(--hira-text-secondary, #4b5563);
-      ${TAB_FAVICON_BG_VAR}: currentColor;
+      ${TAB_FAVICON_BG_VAR}: var(--ng-tab-active-fg, var(--hira-accent, #3b82f6));
       ${TAB_FAVICON_FG_VAR}: var(--hira-bg-elevated, #fff);
       contain: layout style; -webkit-user-select: none; user-select: none;
       transition: background var(--hira-dur-fast, 120ms) var(--hira-ease-standard, ease),
@@ -361,6 +361,19 @@ export function createPinGrid(doc: Document, opts: PinGridOptions = {}): PinGrid
     return list[i + 1]
   }
 
+  /**
+   * 网格卡片只同步 favicon 底板，不改变卡片自身的选中底色。
+   * `active=false` 是刻意的：它让共享取色器只写底板令牌，
+   * 同时仍使用该标签选中时应有的前景色（白/深）作为底板。
+   */
+  function syncFaviconChip(card: HTMLElement, tab: PinGridTab): void {
+    const faviconUrl = tab.favicon || ''
+    card.dataset.faviconUrl = faviconUrl
+    applyFaviconColor(card, faviconUrl, false, () => (
+      card.isConnected && card.dataset.faviconUrl === faviconUrl
+    ))
+  }
+
   // ── 卡片 ──────────────────────────────────────────────────────────────────
   function buildCard(tab: PinGridTab): HTMLDivElement {
     const card = doc.createElement('div')
@@ -380,6 +393,7 @@ export function createPinGrid(doc: Document, opts: PinGridOptions = {}): PinGrid
     title.setAttribute('data-tab-title', '')
     title.textContent = tab.title || tab.url || ''
     card.appendChild(title)
+    syncFaviconChip(card, tab)
 
     // 正在放音的标签：角上一个可点的静音开关（点击不触发展开）
     if (tab.isPlaying || tab.muted) {
@@ -472,6 +486,7 @@ export function createPinGrid(doc: Document, opts: PinGridOptions = {}): PinGrid
     if (favWrap) {
       favWrap.replaceChildren(createFaviconBadge(doc, tab.favicon, tab.title || tab.url, 30, tab.url, { tabChip: true }))
     }
+    syncFaviconChip(card, tab)
     const hasAudio = !!card.querySelector('.pingrid-audio')
     const wantAudio = !!(tab.isPlaying || tab.muted)
     if (hasAudio !== wantAudio) {

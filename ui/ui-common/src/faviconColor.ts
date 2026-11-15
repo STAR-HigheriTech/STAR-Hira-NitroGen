@@ -307,7 +307,7 @@ export function getFaviconColors(faviconUrl: string): Promise<FaviconColors | nu
  * 两处视觉不可能分叉。规则学 Hira：
  *   · 选中项：整块底色 = favicon 主色，文字 = 按对比度选出的黑/白
  *   · 未选中项：只给一条该色的指示线（形状由各组件 CSS 决定，颜色走 `--favicon-tab-color`）
- *   · favicon 底板跟随标题前景色（白/深自动切换）—— 由共用令牌驱动，这里只写色值
+ *   · favicon 底板固定使用「选中态文字色」（白/深自动切换）—— 与当前是否选中无关
  *
  * 「无视深色模式压暗」：深浅色用同一份色值，不做任何按主题调暗/调透明。
  * @param {HTMLElement} row
@@ -336,16 +336,15 @@ export function paintFaviconColor(
   }
   row.classList.add('has-favicon-color')
   row.style.setProperty('--favicon-tab-color', colors.bg)
+  // 选中与否都消费同一份前景色：未选中行仍显示"选中时会是白字还是深字"。
+  row.style.setProperty(TAB_FAVICON_BG_VAR, colors.fg)
+  row.style.setProperty(TAB_FAVICON_FG_VAR, colors.bg)
   if (active) {
-    row.style.setProperty(TAB_FAVICON_BG_VAR, colors.fg)
-    row.style.setProperty(TAB_FAVICON_FG_VAR, colors.bg)
     row.style.background = colors.bg
     row.style.color = colors.fg
     // 边框与底色同色 → 实心圆角块，不留一条与主色打架的异色描边
     row.style.borderColor = colors.bg
   } else {
-    row.style.removeProperty(TAB_FAVICON_BG_VAR)
-    row.style.removeProperty(TAB_FAVICON_FG_VAR)
     row.style.background = ''
     row.style.color = ''
     row.style.borderColor = ''

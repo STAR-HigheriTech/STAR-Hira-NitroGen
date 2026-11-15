@@ -90,10 +90,10 @@ const FAVICON_RADIUS = 5
  * 观感走内联而不是写进两种模式各自的 CSS：这些数字是**图标槽自己**的口径，
  * 与"横向留多宽 / 纵向留多高"无关；写在这里，横竖两端永远同一份。
  */
-const ICON_SLOT_CSS = `display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:${FAVICON_BOX}px;height:${FAVICON_BOX}px;border-radius:${FAVICON_RADIUS}px;background-color:var(${TAB_FAVICON_BG_VAR},currentColor);transition:background-color var(--ng-anim-fast,120ms) var(--ng-anim-ease,ease);`
+const ICON_SLOT_CSS = `display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:${FAVICON_BOX}px;height:${FAVICON_BOX}px;border-radius:${FAVICON_RADIUS}px;background-color:var(${TAB_FAVICON_BG_VAR},var(--ng-tab-active-fg,var(--hira-accent,#3b82f6)));transition:background-color var(--ng-anim-fast,120ms) var(--ng-anim-ease,ease);`
 
 /**
- * favicon 本体：glyph 内容框 + pad 边 = box 的跟随前景色底板。
+ * favicon 本体：glyph 内容框 + pad 边 = box 的选中态前景色底板。
  *
  * `box-sizing: content-box` 是硬要求：纵向列表的宿主有 `.vtabs * { box-sizing: border-box }`，
  * border-box 下 padding 会**吃掉**图标本体（16px 只剩 12px 画图）——

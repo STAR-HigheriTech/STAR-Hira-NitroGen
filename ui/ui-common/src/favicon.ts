@@ -35,7 +35,7 @@ export function createFaviconBadge(
 ): HTMLSpanElement {
   const tabChip = opts.tabChip === true
   const wrap = doc.createElement('span')
-  wrap.style.cssText = `width:${size}px;height:${size}px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;${tabChip ? `border-radius:4px;background-color:var(${TAB_FAVICON_BG_VAR},currentColor);` : ''}`
+  wrap.style.cssText = `width:${size}px;height:${size}px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;${tabChip ? `border-radius:4px;background-color:var(${TAB_FAVICON_BG_VAR},var(--ng-tab-active-fg,var(--hira-accent,#3b82f6)));` : ''}`
 
   const fallback = (): void => {
     wrap.replaceChildren()
