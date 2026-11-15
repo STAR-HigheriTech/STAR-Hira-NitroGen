@@ -1,0 +1,83 @@
+.archive-page {
+  min-height: 100vh;
+  margin: 0;
+}
+
+.archive-header {
+  position: sticky;
+  top: 0;
+  z-index: var(--hira-z-elevated);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.archive-heading {
+  min-width: 0;
+}
+
+.archive-heading h1 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archive-origin {
+  display: block;
+  max-width: min(70vw, 900px);
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archive-reader {
+  min-height: calc(100vh - 82px);
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.archive-loading,
+.archive-error {
+  display: grid;
+  min-height: 320px;
+  place-items: center;
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.archive-error {
+  color: var(--danger);
+}
+
+.archive-frame {
+  display: block;
+  width: 100%;
+  height: calc(100vh - 114px);
+  min-height: 480px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.archive-fallback {
+  margin-top: 16px;
+  color: var(--text-soft);
+}
+
+.archive-fallback summary {
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.archive-fallback pre {
+  margin: 10px 0 0;
+  padding: 14px;
+  overflow-wrap: anywhere;
+  border-radius: var(--r-md);
+  background: var(--surface-soft);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}

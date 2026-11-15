@@ -1,0 +1,24 @@
+{
+  "id": "panel-downloads",
+  "name": "活动下载面板",
+  "version": "0.0.1",
+  "type": "ui-panel-plugin",
+  "trustLevel": "internal",
+  "description": "在侧栏显示下载项与实时进度，支持暂停、继续、取消与打开。",
+  "main": "./panel-generic.cjs",
+  "contributes": {
+    "panels": [
+      {
+        "id": "downloads-panel",
+        "title": "活动下载",
+        "icon": "Download",
+        "order": 120,
+        "segment": "panel"
+      }
+    ]
+  },
+  "dependsOn": [
+    "side-panel-skeleton",
+    "download-service"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": "ai-agent-browser",
+  "name": "AI Agent · 后台浏览器",
+  "version": "1.0.0",
+  "type": "feature-plugin",
+  "trustLevel": "internal",
+  "description": "为 AI 与外部 Agent 提供不抢焦点、复用当前登录态的后台浏览、搜索、点击、填写和截图能力。",
+  "main": "./ai-agent-browser.cjs",
+  "dependsOn": [
+    "ai-engine"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "id": "space-service",
+  "name": "空间引擎",
+  "version": "0.0.1",
+  "type": "feature-plugin",
+  "trustLevel": "internal",
+  "description": "提供工作空间的列表、创建、改名、排序、迁移与切换能力，不含界面。",
+  "main": "./space-service.cjs",
+  "capabilities": [
+    "space.list",
+    "space.listAll",
+    "space.get",
+    "space.create",
+    "space.update",
+    "space.move",
+    "space.remove",
+    "space.reorder",
+    "space.getUsing",
+    "space.getLastUsed",
+    "space.setUsing"
+  ],
+  "dependsOn": ["profile-service"]
+}

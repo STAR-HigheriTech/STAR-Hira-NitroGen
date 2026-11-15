@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>书签</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="./bookmarks.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="page-heading">
+        <h1>书签</h1>
+      </div>
+      <div class="toolbar">
+        <button class="btn btn-primary" id="new-bookmark" title="新建书签（N）">新建书签</button>
+        <button class="btn" id="new-folder" title="新建文件夹">新建文件夹</button>
+        <button class="btn" id="refresh">刷新</button>
+        <button class="btn" id="export">导出</button>
+        <button class="btn" id="import">导入</button>
+        <button class="btn" id="backup-now">备份</button>
+        <button class="btn" id="backups">备份记录</button>
+        <button class="btn" id="ai-digest" title="让 AI 给还没有摘要的收藏补摘要（在 AI 面板里执行）">AI 补摘要</button>
+      </div>
+    </header>
+
+    <div class="toolbar bookmarks-toolbar">
+      <input class="search" id="search" placeholder="搜索标题、网址或标签…" title="搜索（/）" />
+      <span class="toolbar-note" id="toolbar-note"></span>
+    </div>
+
+    <!-- 标签分类栏：系统标签（书签栏 / 侧栏图标栏）在前，用户标签在后，均带计数。 -->
+    <div class="tag-bar" id="tag-bar" role="toolbar" aria-label="按标签筛选"></div>
+
+    <div class="batch-bar" id="batch-bar" hidden>
+      <span class="batch-count" id="batch-count">已选 0 项</span>
+      <button class="btn btn-sm" id="batch-select-all">全选</button>
+      <button class="btn btn-sm" id="batch-tag">打标签…</button>
+      <button class="btn btn-sm" id="batch-pin">固定到书签栏</button>
+      <button class="btn btn-sm" id="batch-rail">固定到侧栏</button>
+      <button class="btn btn-sm" id="batch-move">移动到…</button>
+      <button class="btn btn-sm" id="batch-ai-digest" title="让 AI 给选中的收藏补摘要">AI 补摘要</button>
+      <button class="btn btn-sm btn-danger" id="batch-delete">删除</button>
+      <button class="btn btn-sm" id="batch-cancel">取消选择</button>
+    </div>
+
+    <p class="feedback" id="feedback" role="status" aria-live="polite" hidden></p>
+
+    <div class="bookmarks-layout">
+      <aside class="folder-pane">
+        <div class="pane-head">
+          <span class="section-title">文件夹</span>
+        </div>
+        <div class="folder-tree" id="folder-tree"></div>
+      </aside>
+      <main class="bookmarks-main">
+        <div class="breadcrumb" id="breadcrumb"></div>
+        <div class="list" id="list"></div>
+      </main>
+    </div>
+
+    <input type="file" id="import-file" hidden />
+    <script type="module" src="./bookmarks.js"></script>
+  </body>
+</html>

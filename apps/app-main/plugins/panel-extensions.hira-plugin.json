@@ -1,0 +1,24 @@
+{
+  "id": "panel-extensions",
+  "name": "扩展面板",
+  "version": "0.0.1",
+  "type": "ui-panel-plugin",
+  "trustLevel": "internal",
+  "description": "在侧栏管理 Chrome 扩展：导入、启停、卸载与详情。",
+  "main": "./panel-generic.cjs",
+  "contributes": {
+    "panels": [
+      {
+        "id": "extensions-panel",
+        "title": "扩展",
+        "icon": "Puzzle",
+        "order": 130,
+        "segment": "panel"
+      }
+    ]
+  },
+  "dependsOn": [
+    "side-panel-skeleton",
+    "extensions-service"
+  ]
+}

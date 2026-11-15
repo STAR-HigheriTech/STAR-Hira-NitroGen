@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>键盘快捷键</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="./shortcuts.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="page-heading">
+        <h1>键盘快捷键</h1>
+      </div>
+      <div class="toolbar">
+        <button class="btn btn-danger" id="reset-all" disabled>恢复全部默认</button>
+      </div>
+    </header>
+
+    <div class="toolbar kb-toolbar">
+      <input class="search" id="search" type="search" placeholder="搜索动作或组合键…" aria-label="搜索快捷键" />
+      <span class="toolbar-note" id="count"></span>
+    </div>
+
+    <div class="feedback" id="feedback" role="status" hidden></div>
+
+    <div id="groups"></div>
+
+    <dialog class="kb-dialog" id="reset-dialog" aria-labelledby="reset-dialog-title">
+      <h2 class="kb-dialog-title" id="reset-dialog-title">恢复全部默认快捷键？</h2>
+      <p class="kb-dialog-text">所有自定义的键位都会被清除，恢复成内置默认值。这一步无法撤销。</p>
+      <div class="kb-dialog-actions">
+        <button class="btn" id="reset-cancel" type="button">取消</button>
+        <button class="btn btn-danger" id="reset-confirm" type="button">恢复默认</button>
+      </div>
+    </dialog>
+
+    <script type="module" src="./shortcuts.js"></script>
+  </body>
+</html>

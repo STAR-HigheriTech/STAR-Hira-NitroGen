@@ -1,0 +1,183 @@
+/* ============================================================================
+ * hira://shared/browser-import.css · 「从 Chrome / Edge 一键导入」卡片
+ *
+ * 两个入口（OOBE 迁移步 / 导入数据页）共用同一份视觉。只用 base.css 的令牌
+ * （--surface / --field-bg / --text* / --accent / --hira-success / --danger / --r-*），
+ * 不自建调色板；两页各自的内层排版（.oobe-* / .importer-*）保持原样。
+ * ========================================================================= */
+
+.bi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+}
+
+/* 与 base.css 的卡片节奏对齐（导入数据页里本卡片紧挨着 .card） */
+.bi-card + .card,
+.card + .bi-card {
+  margin-top: 14px;
+}
+
+/* ── 抬头 ───────────────────────────────────────────────────────────── */
+
+.bi-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.bi-head-text {
+  min-width: 0;
+}
+.bi-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+.bi-subtitle {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.bi-head-badge {
+  margin-left: auto;
+}
+
+/* ── 源列表 ─────────────────────────────────────────────────────────── */
+
+.bi-body {
+  display: grid;
+  gap: 8px;
+}
+/* 检测中 / 未检测到：与卡片文字同色的弱化提示 */
+.bi-empty {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.bi-source {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--field-bg);
+  border-radius: var(--r-md);
+}
+.bi-source-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bi-source-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ── 复选原语（数据集 / profile 共用一套方块）────────────────────────── */
+
+.bi-chip input,
+.bi-check input {
+  position: relative;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--text) 16%, transparent);
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transition: background-color 0.14s ease;
+}
+.bi-chip input:checked,
+.bi-check input:checked {
+  background: var(--accent);
+}
+.bi-chip input:checked::after,
+.bi-check input:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+.bi-chip input:focus-visible,
+.bi-check input:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+.bi-chip:has(input:disabled),
+.bi-check:has(input:disabled) {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* 数据集：一行普通复选项 */
+.bi-datasets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+.bi-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-soft);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* 用户配置：药丸复选（只有多 profile 时才出现） */
+.bi-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.bi-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--ctl-h-sm);
+  padding: 0 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text-soft);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.14s ease, color 0.14s ease;
+}
+.bi-chip:hover {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+.bi-chip:has(input:checked) {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+
+/* ── 动作行 ─────────────────────────────────────────────────────────── */
+
+.bi-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.bi-status {
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.bi-status.is-ok {
+  color: var(--hira-success);
+}
+.bi-status.is-bad {
+  color: var(--danger);
+}

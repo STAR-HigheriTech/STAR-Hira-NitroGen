@@ -1,0 +1,25 @@
+{
+  "id": "panel-plugins",
+  "name": "插件中心",
+  "version": "0.0.1",
+  "type": "ui-panel-plugin",
+  "trustLevel": "internal",
+  "nonDisableable": true,
+  "description": "列出浏览器自身的插件，可查看依赖关系并启用或禁用。入口直达 hira://plugins 内部页。",
+  "main": "./panel-generic.cjs",
+  "contributes": {
+    "panels": [
+      {
+        "id": "plugins-panel",
+        "title": "插件",
+        "icon": "Blocks",
+        "order": 140,
+        "segment": "panel",
+        "opensPage": "plugins"
+      }
+    ]
+  },
+  "dependsOn": [
+    "side-panel-skeleton"
+  ]
+}

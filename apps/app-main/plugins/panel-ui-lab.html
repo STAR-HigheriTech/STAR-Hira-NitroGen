@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UI 实验室 · HTML</title>
+<!--
+  一块「零渲染代码」的面板 —— 本文件就是全部实现。
+
+  宿主会把它塞进 srcdoc，并用 sandbox="allow-scripts allow-forms"
+  （**不含 allow-same-origin**）的 iframe 承载，所以在写下文之前要记住三条：
+
+    1. 这里没有 localStorage / cookie / IndexedDB 可用（opaque origin 会直接抛错）。
+       要持久化就用 `hira.storage.*` —— 它落在宿主 SQLite 里，按插件隔离。
+    2. CSP 是 `default-src 'none'` 派生的：不能外链脚本、样式、字体、图片。
+       本文件因此不引用任何外部资源。
+    3. `window.hira` 是宿主注入的唯一能力入口，桥脚本在本文件之前就执行完毕。
+       能力清单可以直接问它自己：`await hira.capabilities()`。
+
+  颜色一律用 `var(--hira-*)`：宿主把当前主题令牌注入到 `:root`，
+  深浅色 / 换肤自动跟随，面板不必认识任何具体色值。
+-->
+<style>
+  :root { color-scheme: light dark; }
+
+  html, body { overflow: auto; }
+
+  body {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    color: var(--hira-panel-fg, var(--hira-text-primary, #e7e7ea));
+  }
+
+  .card {
+    border: 1px solid var(--hira-border-subtle, rgba(127, 127, 127, 0.22));
+    border-radius: 8px;
+    padding: 10px;
+    background: var(--hira-bg-subtle, rgba(127, 127, 127, 0.06));
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .card > h2 {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .badge {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: 999px;
+    color: var(--hira-on-accent, #fff);
+    background: var(--hira-accent, #6aa1ff);
+    flex: none;
+  }
+
+  .muted {
+    color: var(--hira-panel-fg-muted, var(--hira-text-tertiary, #8b8f98));
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  .kv {
+    display: grid;
+    grid-template-columns: 64px 1fr;
+    gap: 4px 8px;
+    font-size: 11px;
+    align-items: baseline;
+  }
+
+  .kv > span {
+    color: var(--hira-panel-fg-muted, var(--hira-text-tertiary, #8b8f98));
+  }
+
+  .kv > b {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .row > * { min-width: 0; }
+
+  input[type='text'] {
+    flex: 1;
+    font: inherit;
+    font-size: 12px;
+    padding: 5px 7px;
+    border-radius: 6px;
+    border: 1px solid var(--hira-border-subtle, rgba(127, 127, 127, 0.3));
+    background: var(--hira-field-bg, rgba(127, 127, 127, 0.12));
+    color: inherit;
+  }
+
+  input[type='text']:focus { outline: none; border-color: var(--hira-accent, #6aa1ff); }
+
+  button {
+    font: inherit;
+    font-size: 12px;
+    padding: 5px 9px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: inherit;
+    border: 1px solid var(--hira-border-subtle, rgba(127, 127, 127, 0.3));
+    background: var(--hira-field-bg, rgba(127, 127, 127, 0.12));
+  }
+
+  button:hover:not(:disabled) { background: var(--hira-hover-bg, rgba(127, 127, 127, 0.2)); }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:disabled { opacity: 0.5; cursor: default; }
+
+  button.primary {
+    color: var(--hira-on-accent, #fff);
+    background: var(--hira-accent, #6aa1ff);
+    border-color: transparent;
+  }
+
+  button.danger { color: var(--hira-danger, #e5484d); }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 132px;
+    overflow: auto;
+    font-size: 11px;
+  }
+
+  .list .item {
+    padding: 3px 6px;
+    border-radius: 4px;
+    background: var(--hira-surface-soft, rgba(127, 127, 127, 0.08));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #status {
+    font-size: 11px;
+    min-height: 16px;
+    color: var(--hira-panel-fg-muted, var(--hira-text-tertiary, #8b8f98));
+  }
+
+  #status[data-tone='error'] { color: var(--hira-danger, #e5484d); }
+  #status[data-tone='ok'] { color: var(--hira-success, #30a46c); }
+
+  details > summary { cursor: pointer; font-size: 11px; color: var(--hira-panel-fg-muted, var(--hira-text-tertiary, #8b8f98)); }
+  details[open] > summary { margin-bottom: 6px; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h2>宿主信息 <span class="badge">HTML</span></h2>
+  <div class="kv">
+    <span>插件</span><b id="info-plugin">…</b>
+    <span>面板</span><b id="info-panel">…</b>
+    <span>权限</span><b id="info-level">…</b>
+    <span>支持形态</span><b id="info-kinds">…</b>
+  </div>
+  <div class="muted">这份界面没有任何渲染入口代码，宿主读的就是本文件。</div>
+</div>
+
+<div class="card">
+  <h2>持久化存储</h2>
+  <div class="muted">`hira.storage.*` 落在宿主 SQLite（按 profile + 插件隔离）。关掉面板再打开，计数会接着涨 —— 这就是它和 localStorage 的区别。</div>
+  <div class="kv">
+    <span>打开次数</span><b id="visits">…</b>
+  </div>
+  <div class="row">
+    <input id="key" type="text" value="demo:greeting" spellcheck="false" aria-label="键">
+    <button id="btn-save" class="primary">写入</button>
+  </div>
+  <div class="row">
+    <input id="value" type="text" value="你好，DeepSeekHarness" spellcheck="false" aria-label="值">
+    <button id="btn-read">读取</button>
+  </div>
+  <div class="row">
+    <button id="btn-remove">删除该键</button>
+    <button id="btn-clear" class="danger">清空全部</button>
+  </div>
+  <div class="list" id="keys"></div>
+  <div class="muted" id="storage-value">（还没读取）</div>
+</div>
+
+<div class="card">
+  <h2>宿主环境</h2>
+  <div class="kv">
+    <span>主题</span><b id="theme-id">…</b>
+    <span>令牌数</span><b id="token-count">…</b>
+    <span>标签数</span><b id="tab-count">…</b>
+  </div>
+  <div class="list" id="tab-list"></div>
+  <div class="row">
+    <button id="btn-refresh">刷新</button>
+    <button id="btn-open-tab">打开示例标签</button>
+    <button id="btn-theme">订阅主题事件</button>
+  </div>
+  <div class="muted">主题事件已收到 <b id="theme-hits">0</b> 次。</div>
+</div>
+
+<div class="card">
+  <h2>能力清单</h2>
+  <details id="caps-wrap">
+    <summary>展开 <span id="cap-count">0</span> 项能力</summary>
+    <div class="list" id="caps"></div>
+  </details>
+  <div class="muted">
+    第三方插件要拿到带 scope 的能力（storage / tabs / settings / clipboard），
+    必须在 manifest 的 `requestedPermissions` 里逐条声明，并由用户同意。
+  </div>
+</div>
+
+<div id="status"></div>
+
+<script>
+(async function () {
+  'use strict';
+
+  const $ = (sel) => document.querySelector(sel);
+
+  function setStatus(message, tone) {
+    const el = $('#status');
+    el.textContent = message || '';
+    el.dataset.tone = tone || '';
+  }
+
+  function printable(value) {
+    if (value === null || value === undefined) return '（空）';
+    if (typeof value === 'string') return value;
+    try { return JSON.stringify(value, null, 2); } catch (_) { return String(value); }
+  }
+
+  /** 列表一律用 DOM 拼装 —— 数据来自存储/宿主，不该走 innerHTML。 */
+  function renderList(container, texts) {
+    container.textContent = '';
+    if (!texts.length) {
+      const empty = document.createElement('div');
+      empty.className = 'muted';
+      empty.textContent = '（空）';
+      container.appendChild(empty);
+      return;
+    }
+    for (const text of texts) {
+      const row = document.createElement('div');
+      row.className = 'item';
+      row.textContent = text;
+      container.appendChild(row);
+    }
+  }
+
+  /** 包一层：示例里每个动作都该让作者看到"失败长什么样"。 */
+  async function attempt(label, fn) {
+    const buttons = document.querySelectorAll('button');
+    buttons.forEach((b) => { b.disabled = true; });
+    try {
+      await fn();
+    } catch (error) {
+      setStatus(label + ' 失败：' + ((error && error.message) || error), 'error');
+    } finally {
+      buttons.forEach((b) => { b.disabled = false; });
+    }
+  }
+
+  // ── ① 宿主信息 ────────────────────────────────────────────────
+  const info = await hira.app.info();
+  $('#info-plugin').textContent = info.pluginId;
+  $('#info-panel').textContent = info.panelId;
+  $('#info-level').textContent = info.permissionLevel + (info.firstParty ? ' · 第一方' : ' · 第三方');
+  $('#info-kinds').textContent = (info.kinds || []).join(' / ');
+
+  // ── ② 能力清单（面板能做什么，问它自己）────────────────────────
+  const caps = await hira.capabilities();
+  $('#cap-count').textContent = String(caps.length);
+  renderList($('#caps'), caps.map((cap) => {
+    const scope = cap.scope ? ' · ' + cap.scope : '';
+    return cap.method + '（' + cap.minLevel + scope + '）— ' + cap.summary;
+  }));
+
+  // ── ③ 存储：每次打开 +1，证明持久化真落在宿主侧 ────────────────
+  const VISITS = 'demo:visits';
+  const visits = (Number(await hira.storage.get(VISITS)) || 0) + 1;
+  await hira.storage.set(VISITS, visits);
+  $('#visits').textContent = String(visits);
+
+  async function refreshKeys() {
+    const keys = await hira.storage.keys();
+    renderList($('#keys'), keys.map((entry) => {
+      const name = (entry && entry.key) || '（无键名）';
+      const when = entry && entry.updatedAt ? new Date(entry.updatedAt).toLocaleString() : '';
+      return when ? name + ' · ' + when : name;
+    }));
+  }
+
+  $('#btn-save').addEventListener('click', () => attempt('写入', async () => {
+    const key = $('#key').value.trim();
+    const text = $('#value').value;
+    const saved = await hira.storage.set(key, { text, at: Date.now() });
+    setStatus('已写入 ' + saved.key + '（' + (saved.bytes || 0) + ' 字节，共 ' + (saved.keys || 0) + ' 个键）', 'ok');
+    await refreshKeys();
+  }));
+
+  $('#btn-read').addEventListener('click', () => attempt('读取', async () => {
+    const value = await hira.storage.get($('#key').value.trim());
+    $('#storage-value').textContent = printable(value);
+    setStatus('已读取', 'ok');
+  }));
+
+  $('#btn-remove').addEventListener('click', () => attempt('删除', async () => {
+    const removed = await hira.storage.remove($('#key').value.trim());
+    setStatus(removed.removed ? '已删除' : '这个键本来就不存在', 'ok');
+    await refreshKeys();
+  }));
+
+  $('#btn-clear').addEventListener('click', () => attempt('清空', async () => {
+    const ok = await hira.ui.confirm({
+      title: '清空插件存储',
+      message: '会删掉本插件在当前 profile 下的全部键，不可撤销。',
+      danger: true,
+      confirmLabel: '清空'
+    });
+    if (!ok) { setStatus('已取消'); return; }
+    const result = await hira.storage.clear();
+    $('#storage-value').textContent = '（还没读取）';
+    setStatus('已删除 ' + result.removed + ' 个键', 'ok');
+    await refreshKeys();
+  }));
+
+  // ── ④ 主题 / 标签 / 事件 ──────────────────────────────────────
+  async function refreshEnvironment() {
+    const tokens = await hira.theme.tokens();
+    $('#token-count').textContent = String(Object.keys(tokens || {}).length);
+
+    const active = await hira.theme.active();
+    $('#theme-id').textContent = typeof active === 'string'
+      ? active
+      : ((active && (active.id || active.name)) || printable(active));
+
+    const projection = await hira.tabs.projection();
+    const tabs = (Array.isArray(projection) ? projection : [])
+      .filter((tab) => tab && tab.type !== 'stack');
+    $('#tab-count').textContent = String(tabs.length);
+    renderList($('#tab-list'), tabs.slice(0, 6).map((tab) => {
+      const mark = tab.active ? '● ' : '○ ';
+      return mark + (tab.title || tab.url || tab.id || '（未命名）');
+    }));
+  }
+
+  $('#btn-refresh').addEventListener('click', () => attempt('刷新', async () => {
+    await refreshEnvironment();
+    setStatus('已刷新', 'ok');
+  }));
+
+  $('#btn-open-tab').addEventListener('click', () => attempt('打开标签', async () => {
+    await hira.tabs.open('https://example.com');
+    setStatus('已请求打开标签', 'ok');
+    setTimeout(() => { refreshEnvironment().catch(() => {}); }, 600);
+  }));
+
+  // 订阅返回**退订函数** —— 面板卸载时宿主会断开桥，但主动退订仍是最干净的做法。
+  let offTheme = null;
+  let themeHits = 0;
+  $('#btn-theme').addEventListener('click', () => {
+    if (offTheme) {
+      offTheme();
+      offTheme = null;
+      $('#btn-theme').textContent = '订阅主题事件';
+      setStatus('已退订 theme:changed');
+      return;
+    }
+    offTheme = hira.on('theme:changed', (payload) => {
+      themeHits += 1;
+      $('#theme-hits').textContent = String(themeHits);
+      setStatus('收到 theme:changed：' + printable(payload));
+      refreshEnvironment().catch(() => {});
+    });
+    $('#btn-theme').textContent = '退订主题事件';
+    setStatus('已订阅 theme:changed（去设置里换个主题试试）', 'ok');
+  });
+
+  // ── 启动 ───────────────────────────────────────────────────────
+  await refreshKeys();
+  await refreshEnvironment();
+  hira.log('UI 实验室（HTML）已就绪', { pluginId: info.pluginId, visits });
+  setStatus('就绪', 'ok');
+})().catch((error) => {
+  const el = document.getElementById('status');
+  if (el) {
+    el.dataset.tone = 'error';
+    el.textContent = '初始化失败：' + ((error && error.message) || error);
+  }
+});
+</script>
+</body>
+</html>

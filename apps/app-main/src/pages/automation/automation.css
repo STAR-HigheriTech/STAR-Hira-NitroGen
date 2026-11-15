@@ -1,0 +1,186 @@
+/* 自动化页特有规则。公共骨架（页头 / 工具条 / 表单 / 按钮 / 列表 / 行 / 徽章）
+   全部来自 hira://shared/base.css —— 与 history / bookmarks 同款。
+
+   本文件只补真正不同的部分：状态行间距、编辑器卡片、行内列宽。 */
+
+#view-chains > .page-sub {
+  margin-bottom: 14px;
+}
+
+/* 编辑器 = 展开面板：底色 / 淡入由骨架的 .panel 提供，本文件只管内部段落间距 */
+.editor-panel {
+  margin-top: 4px;
+}
+.editor-panel .panel-head + .toolbar {
+  margin-bottom: 10px;
+}
+.editor-panel #steps {
+  margin-bottom: 10px;
+}
+.editor-panel .editor-actions {
+  margin-bottom: 0;
+}
+#step-picker {
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+
+/* ── 行内布局（都建在 .row 上）────────────────────────── */
+.automation-chain-row,
+.automation-step-row,
+.automation-gesture-row {
+  cursor: default;
+}
+
+.automation-rule-row {
+  cursor: default;
+}
+
+.automation-rule-copy {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.automation-rule-copy .summary {
+  font-family: var(--hira-font-mono, ui-monospace, Consolas, monospace);
+}
+
+.rule-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 170px;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.rule-toolbar-extra {
+  margin-bottom: 10px;
+}
+.rule-toolbar-extra #rule-template {
+  min-width: 170px;
+}
+.rule-toolbar-extra #task-name {
+  flex: 1 1 180px;
+  min-width: 140px;
+}
+.task-workspaces {
+  margin-bottom: 14px;
+}
+.task-workspaces .section-title {
+  padding-left: 8px;
+}
+.task-workspaces .list {
+  margin-top: 4px;
+}
+
+.rule-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.rule-field--wide {
+  grid-column: 1 / -1;
+}
+
+.rule-field input,
+.rule-field select {
+  width: 100%;
+  min-width: 0;
+}
+.automation-chain-row:hover,
+.automation-step-row:hover,
+.automation-gesture-row:hover {
+  background: transparent;
+}
+/* 链行：名字 + 步骤摘要 + 右侧按钮组（.row .actions 由 base.css 提供）。 */
+.automation-chain-copy {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: baseline;
+  gap: 12px;
+}
+.automation-chain-copy .title {
+  flex: 0 1 auto;
+  min-width: 96px;
+}
+.row .summary {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 步骤行：序号 + 命令名 + 上移/下移/移除（.icon-btn 由 base.css 提供）。 */
+.row .idx {
+  flex: 0 0 18px;
+  text-align: center;
+  font-family: var(--hira-font-mono, ui-monospace, Consolas, "Courier New", "Microsoft YaHei UI", "Microsoft YaHei", monospace);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.row .step-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 手势行：方向（固定列宽，便于纵扫）+ 命令下拉（占满剩余）。 */
+.row .dir {
+  flex: 0 0 84px;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+.row select {
+  flex: 1;
+  min-width: 0;
+}
+
+.automation-status {
+  min-height: 18px;
+}
+.automation-status[data-type='success'] {
+  color: var(--hira-success);
+}
+.automation-status[data-type='error'] {
+  color: var(--danger);
+}
+.empty > .btn {
+  margin-top: 12px;
+}
+
+@media (max-width: 620px) {
+  .automation-chain-row {
+    align-items: flex-start;
+  }
+  .automation-chain-copy {
+    display: block;
+  }
+  .automation-chain-copy .title {
+    min-width: 0;
+    margin-bottom: 3px;
+  }
+  .automation-gesture-row .dir {
+    flex-basis: 76px;
+  }
+
+  .rule-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .rule-field--wide {
+    grid-column: auto;
+  }
+}

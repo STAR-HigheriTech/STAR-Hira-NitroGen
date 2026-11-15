@@ -1,0 +1,286 @@
+<Page Title="UI 实验室 · XAML">
+  <!--
+    一份「只写声明」的面板。
+
+    宿主读这个文件 → 用 packages/shared-types/src/xaml.mjs 编译成 HTML →
+    塞进无同源沙箱 iframe。整个过程没有一行渲染入口代码，也不需要 main。
+
+    三条硬规则（写错不会报错，只会静默不生效，所以先看这里）：
+
+      1. 只认 ELEMENTS 表里的标签；不认识的标签会退化成 div（内容仍显示）。
+      2. `Click="OnFoo"` / `Change="OnBar"` 只是**事件名**，不是函数调用。
+         宿主派发 `hira-xaml` CustomEvent，由下方 <Script> 自己按名字分发。
+      3. `Text="{Binding Key}"` 是文本绑定，值由 `window.__hiraXaml.bind({...})` 提供。
+
+    颜色同样走 `var(--hira-*)`；宿主在 <head> 里注入了当前主题的全部令牌。
+  -->
+
+  <StackPanel Spacing="10" Padding="12">
+
+    <TextBlock Text="声明式界面" FontSize="15" FontWeight="SemiBold" />
+    <TextBlock Text="这一页没有 HTML：控件、间距、皮肤都由宿主从 XAML 翻译而来。"
+               TextWrapping="Wrap" FontSize="11"
+               Foreground="var(--hira-panel-fg-muted, #8b8f98)" />
+
+    <Separator />
+
+    <!-- ── 宿主信息 ───────────────────────────────────────────── -->
+    <Border BorderThickness="1" BorderBrush="var(--hira-border-subtle, #3a3a42)"
+            CornerRadius="8" Padding="10"
+            Background="var(--hira-bg-subtle, rgba(127,127,127,.06))">
+      <StackPanel Spacing="6">
+        <TextBlock Text="宿主信息" FontSize="12" FontWeight="SemiBold" />
+        <Grid ColumnDefinitions="60,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="4" ColumnSpacing="8">
+          <TextBlock Grid.Row="0" Grid.Column="0" Text="插件" FontSize="11"
+                     Foreground="var(--hira-panel-fg-muted, #8b8f98)" />
+          <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Plugin}" FontSize="11" />
+          <TextBlock Grid.Row="1" Grid.Column="0" Text="面板" FontSize="11"
+                     Foreground="var(--hira-panel-fg-muted, #8b8f98)" />
+          <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Panel}" FontSize="11" />
+          <TextBlock Grid.Row="2" Grid.Column="0" Text="权限" FontSize="11"
+                     Foreground="var(--hira-panel-fg-muted, #8b8f98)" />
+          <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Level}" FontSize="11" />
+        </Grid>
+        <TextBlock Text="{Binding Visits}" FontSize="11" TextWrapping="Wrap"
+                   Foreground="var(--hira-panel-fg-muted, #8b8f98)" />
+      </StackPanel>
+    </Border>
+
+    <!-- ── 持久化存储 ─────────────────────────────────────────── -->
+    <Border BorderThickness="1" BorderBrush="var(--hira-border-subtle, #3a3a42)"
+            CornerRadius="8" Padding="10"
+            Background="var(--hira-bg-subtle, rgba(127,127,127,.06))">
+      <StackPanel Spacing="6">
+        <TextBlock Text="持久化存储" FontSize="12" FontWeight="SemiBold" />
+        <TextBox x:Name="note" PlaceholderText="写点什么，然后点保存" FontSize="12"
+                 Change="OnNoteChanged" />
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Button Content="保存" Click="SaveNote" />
+          <Button Content="读取" Click="LoadNote" />
+          <Button Content="删除" Click="RemoveNote" />
+        </StackPanel>
+        <TextBlock Text="{Binding StorageKeys}" FontSize="11" TextWrapping="Wrap"
+                   Foreground="var(--hira-panel-fg-muted, #8b8f98)" />
+      </StackPanel>
+    </Border>
+
+    <!-- ── 控件一览 ───────────────────────────────────────────── -->
+    <Border BorderThickness="1" BorderBrush="var(--hira-border-subtle, #3a3a42)"
+            CornerRadius="8" Padding="10"
+            Background="var(--hira-bg-subtle, rgba(127,127,127,.06))">
+      <StackPanel Spacing="8">
+        <TextBlock Text="控件" FontSize="12" FontWeight="SemiBold" />
+        <ComboBox Items="全部|已启用|已禁用" SelectedIndex="0" Change="PickFilter" />
+        <Slider Minimum="0" Maximum="100" Value="42" Change="OnSlider" />
+        <TextBlock Text="{Binding SliderValue}" FontSize="11"
+                   Foreground="var(--hira-panel-fg-muted, #8b8f98)" />
+        <ProgressBar x:Name="gauge" Value="42" Maximum="100" />
+        <ToggleSwitch Header="跟随系统主题" IsOn="True" Change="ToggleFollow" />
+        <CheckBox Content="记住这个选择" IsChecked="True" Change="ToggleRemember" />
+      </StackPanel>
+    </Border>
+
+    <!-- ── 宿主环境 ───────────────────────────────────────────── -->
+    <Border BorderThickness="1" BorderBrush="var(--hira-border-subtle, #3a3a42)"
+            CornerRadius="8" Padding="10"
+            Background="var(--hira-bg-subtle, rgba(127,127,127,.06))">
+      <StackPanel Spacing="6">
+        <TextBlock Text="宿主环境" FontSize="12" FontWeight="SemiBold" />
+        <TextBlock Text="{Binding Environment}" FontSize="11" TextWrapping="Wrap" />
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Button Content="刷新" Click="Refresh" />
+          <Button Content="打开示例标签" Click="OpenExample" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <!-- ── 折叠与标签页 ───────────────────────────────────────── -->
+    <Expander Header="能力清单（宿主开放的全部能力）">
+      <TextBlock Text="{Binding Capabilities}" FontSize="11" TextWrapping="Wrap"
+                 Foreground="var(--hira-panel-fg-muted, #8b8f98)" />
+    </Expander>
+
+    <TabControl>
+      <TabItem Header="存储键">
+        <TextBlock Text="{Binding StorageKeys}" FontSize="11" TextWrapping="Wrap" />
+      </TabItem>
+      <TabItem Header="标签">
+        <TextBlock Text="{Binding TabsText}" FontSize="11" TextWrapping="Wrap" />
+      </TabItem>
+    </TabControl>
+
+    <StackPanel Orientation="Horizontal" Spacing="10">
+      <Hyperlink Click="OpenExample">在浏览器里打开示例站点</Hyperlink>
+    </StackPanel>
+
+    <TextBlock Text="{Binding Status}" FontSize="11" TextWrapping="Wrap"
+               Foreground="var(--hira-panel-fg-muted, #8b8f98)">正在读取宿主…</TextBlock>
+
+  </StackPanel>
+
+  <!--
+    <Script> 在宿主运行时之后注入，因此 window.hira 与 window.__hiraXaml 都已就绪。
+    这里没有 `eval`：`Click="X"` 只会派发事件，分发逻辑就是下面这段普通的 JS。
+  -->
+  <Script><![CDATA[
+(function () {
+  'use strict';
+
+  var root = document.querySelector('[data-hira-xaml-root]') || document.body;
+  var NOTE_KEY = 'demo:note';
+
+  function bind(data) {
+    if (window.__hiraXaml) window.__hiraXaml.bind(data);
+  }
+
+  function status(text) {
+    bind({ Status: text });
+  }
+
+  function describe(error) {
+    return (error && error.message) || String(error);
+  }
+
+  function byId(id) {
+    return document.getElementById(id);
+  }
+
+  function storageSummary(keys) {
+    if (!keys.length) return '存储键 0 个 —— 还是空的';
+    var lines = keys.map(function (entry) { return '· ' + entry.key; });
+    return '存储键 ' + keys.length + ' 个\n' + lines.join('\n');
+  }
+
+  async function refreshStorage() {
+    var keys = await hira.storage.keys();
+    bind({ StorageKeys: storageSummary(keys) });
+  }
+
+  async function refreshEnvironment() {
+    var tokens = await hira.theme.tokens();
+    var active = await hira.theme.active();
+    var projection = await hira.tabs.projection();
+    var tabs = (Array.isArray(projection) ? projection : []).filter(function (tab) {
+      return tab && tab.type !== 'stack';
+    });
+    var themeId = typeof active === 'string' ? active : ((active && (active.id || active.name)) || '未知');
+    bind({
+      Environment: '主题 ' + themeId + ' · 令牌 ' + Object.keys(tokens || {}).length + ' 个\n' +
+        '当前窗口 ' + tabs.length + ' 个标签',
+      TabsText: tabs.length
+        ? tabs.map(function (tab) {
+            return (tab.active ? '● ' : '○ ') + (tab.title || tab.url || tab.id || '未命名');
+          }).join('\n')
+        : '（没有标签）'
+    });
+  }
+
+  async function refreshAll() {
+    try {
+      status('正在读取宿主…');
+      var info = await hira.app.info();
+      var caps = await hira.capabilities();
+      // 每次打开 +1：写进宿主 SQLite，关掉面板再回来会接着涨。
+      var visits = (Number(await hira.storage.get('demo:visits')) || 0) + 1;
+      await hira.storage.set('demo:visits', visits);
+      bind({
+        Plugin: info.pluginId,
+        Panel: info.panelId,
+        Level: info.permissionLevel + (info.firstParty ? ' · 第一方' : ' · 第三方'),
+        Visits: '第 ' + visits + ' 次打开（计数存在宿主 SQLite 里）',
+        Capabilities: caps.map(function (cap) {
+          var scope = cap.scope ? ' · ' + cap.scope : '';
+          return cap.method + '（' + cap.minLevel + scope + '）';
+        }).join('\n')
+      });
+      await refreshStorage();
+      await refreshEnvironment();
+      status('就绪');
+    } catch (error) {
+      status('初始化失败：' + describe(error));
+    }
+  }
+
+  async function saveNote() {
+    try {
+      var input = byId('note');
+      var text = input ? input.value.trim() : '';
+      if (!text) { status('先写点内容再保存'); return; }
+      await hira.storage.set(NOTE_KEY, { text: text, at: Date.now() });
+      await refreshStorage();
+      status('已保存到插件存储');
+    } catch (error) {
+      status('保存失败：' + describe(error));
+    }
+  }
+
+  async function loadNote() {
+    try {
+      var value = await hira.storage.get(NOTE_KEY);
+      var input = byId('note');
+      if (!value) { status('还没有保存过内容'); return; }
+      if (input) input.value = typeof value === 'string' ? value : (value.text || '');
+      status('已读取：' + (typeof value === 'string' ? value : (value.text || '')));
+    } catch (error) {
+      status('读取失败：' + describe(error));
+    }
+  }
+
+  async function removeNote() {
+    try {
+      var result = await hira.storage.remove(NOTE_KEY);
+      await refreshStorage();
+      status(result.removed ? '已删除 demo:note' : 'demo:note 本来就不存在');
+    } catch (error) {
+      status('删除失败：' + describe(error));
+    }
+  }
+
+  async function openExample() {
+    try {
+      await hira.tabs.open('https://example.com');
+      status('已请求宿主打开新标签');
+    } catch (error) {
+      status('打开失败：' + describe(error));
+    }
+  }
+
+  root.addEventListener('hira-xaml', function (event) {
+    var detail = event.detail || {};
+    var handler = detail.handler;
+
+    if (handler === 'Refresh') { refreshAll(); return; }
+    if (handler === 'SaveNote') { saveNote(); return; }
+    if (handler === 'LoadNote') { loadNote(); return; }
+    if (handler === 'RemoveNote') { removeNote(); return; }
+    if (handler === 'OpenExample') { openExample(); return; }
+
+    if (handler === 'OnNoteChanged') {
+      status('输入框里有 ' + String(detail.value || '').length + ' 个字符（还没保存）');
+      return;
+    }
+    if (handler === 'PickFilter') {
+      status('筛选条件：' + detail.value);
+      return;
+    }
+    if (handler === 'OnSlider') {
+      var value = Number(detail.value) || 0;
+      var gauge = byId('gauge');
+      if (gauge) gauge.value = value;
+      bind({ SliderValue: '滑块 ' + value + ' / 100，进度条已同步' });
+      return;
+    }
+    if (handler === 'ToggleFollow') {
+      status(detail.checked ? '已打开「跟随系统主题」' : '已关闭「跟随系统主题」');
+      return;
+    }
+    if (handler === 'ToggleRemember') {
+      status(detail.checked ? '已勾选「记住这个选择」' : '已取消勾选');
+    }
+  });
+
+  bind({ SliderValue: '滑块 42 / 100，进度条已同步' });
+  refreshAll();
+})();
+  ]]></Script>
+</Page>

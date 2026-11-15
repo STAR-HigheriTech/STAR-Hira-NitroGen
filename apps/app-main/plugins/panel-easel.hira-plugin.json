@@ -1,0 +1,25 @@
+{
+  "id": "panel-easel",
+  "name": "画板面板",
+  "version": "0.0.1",
+  "type": "ui-panel-plugin",
+  "trustLevel": "internal",
+  "description": "无限画布：把便签、链接、图片钉上去，可拖动缩放。默认关闭。",
+  "main": "./panel-generic.cjs",
+  "defaultDisabled": true,
+  "contributes": {
+    "panels": [
+      {
+        "id": "easel-panel",
+        "title": "画板",
+        "icon": "Shapes",
+        "order": 148,
+        "segment": "panel"
+      }
+    ]
+  },
+  "dependsOn": [
+    "side-panel-skeleton",
+    "settings-service"
+  ]
+}

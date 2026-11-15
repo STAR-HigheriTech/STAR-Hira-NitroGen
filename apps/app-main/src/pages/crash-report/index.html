@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>崩溃报告</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="./crash-report.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="page-heading">
+        <h1>崩溃报告</h1>
+      </div>
+      <div class="toolbar">
+        <span class="status" id="status">读取中…</span>
+        <button class="btn" id="refresh">刷新</button>
+      </div>
+    </header>
+    <div class="notice" id="notice" hidden></div>
+    <div class="list" id="list"></div>
+    <script type="module" src="./crash-report.js"></script>
+  </body>
+</html>

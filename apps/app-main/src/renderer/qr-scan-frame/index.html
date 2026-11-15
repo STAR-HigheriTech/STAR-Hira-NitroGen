@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>扫码取景框</title>
+    <style>
+      /* 整个窗口就是一层浮在屏幕上的取景框：背景必须真透明（底下就是被扫的画面）。
+         ⚠ 框内（--pad 以内的裁剪区）**一个像素都不画** —— 抓屏会把浮框自己一起抓进去，
+         落在裁剪区里的任何一笔都会变成解码输入。装饰全部画在 --pad 这一圈里。
+
+         交互：整窗可拖（见 main.js），四角手柄缩放，提示条上的 ✕ 关闭。 */
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        overflow: hidden;
+        user-select: none;
+        cursor: move;
+        /* 字体栈走唯一令牌（shared-types/theme.mjs#UI_FONT_STACK）；兜底串与它同值。 */
+        font-family: var(--hira-font-ui, 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans SC', system-ui, -apple-system, sans-serif);
+      }
+      body:active { cursor: grabbing; }
+
+      /* 取景框：宽度铺满窗口，高度 = 窗口高 - 提示条。窗口改多大它就长多大，
+         尺寸完全由主进程落位（见 main.js 的 dragFrame：这里只报意图，不量矩形）。 */
+      .frame {
+        position: relative;
+        width: 100%;
+        height: calc(100vh - var(--bar, 46px));
+        /* 盒子边界只影响这一块：透明置顶窗口的每次重绘都要走一遍合成，收敛绘制范围能省掉
+           拖动时的绝大部分无效重绘（这是"拖起来卡"的一半来源，另一半是主进程落位）。 */
+        contain: layout paint;
+      }
+
+      /* 框边缘：静态虚线（**不做任何动画**）。
+         ⚠ 这里曾经有一条"流动虚线"和一圈呼吸角标 —— 三个无限动画叠在一个**透明置顶窗口**上，
+         等于让合成器一刻不停重绘整窗。取景框是长时间开着的工具，静态装饰已经足够醒目。 */
+      .frame__edge {
+        position: absolute;
+        inset: 0;
+        border: 1px dashed rgba(255, 255, 255, 0.5);
+        border-radius: 10px;
+        pointer-events: none;
+      }
+
+      /* 四角角标（纯装饰，不吃鼠标）—— 它同时也是"缩放手柄"的视觉：手柄就压在这上面 */
+      .frame__corner {
+        position: absolute;
+        width: 30px;
+        height: 30px;
+        border: 4px solid #4ade80;
+        pointer-events: none;
+      }
+      .frame__corner.is-tl { top: 1px; left: 1px; border-right: none; border-bottom: none; border-top-left-radius: 8px; }
+      .frame__corner.is-tr { top: 1px; right: 1px; border-left: none; border-bottom: none; border-top-right-radius: 8px; }
+      .frame__corner.is-bl { bottom: 1px; left: 1px; border-right: none; border-top: none; border-bottom-left-radius: 8px; }
+      .frame__corner.is-br { bottom: 1px; right: 1px; border-left: none; border-top: none; border-bottom-right-radius: 8px; }
+      @keyframes breathe {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.45; }
+      }
+
+      /* 四角缩放手柄：透明的命中区，正好压在角标上（角标就是它的样子）。
+         悬停时浮出一块淡绿，明确"这里能拖大小"。 */
+      .handle {
+        position: absolute;
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        transition: background 0.12s ease;
+      }
+      .handle:hover { background: rgba(74, 222, 128, 0.22); }
+      .handle.is-tl { top: 0; left: 0; cursor: nwse-resize; }
+      .handle.is-tr { top: 0; right: 0; cursor: nesw-resize; }
+      .handle.is-bl { bottom: 0; left: 0; cursor: nesw-resize; }
+      .handle.is-br { bottom: 0; right: 0; cursor: nwse-resize; }
+
+      /* 底部提示条：在裁剪区之外 */
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        box-sizing: border-box;
+        width: 100%;
+        height: var(--bar, 46px);
+        padding: 0 8px 0 12px;
+      }
+      .bar__pill {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        flex: 1;
+        min-width: 0;
+        height: 30px;
+        padding: 0 10px;
+        border-radius: 15px;
+        background: rgba(20, 22, 26, 0.86);
+        color: #e5e7eb;
+        font-size: 11.5px;
+        line-height: 1;
+      }
+      .bar__dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        background: #4ade80;
+      }
+      .bar__hint {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /* 提示条上的动作：重新扫描（低频、要够得着）。
+         ⚠ 用**实心绿 + 深色字**：早先是半透明绿底 + 绿字，压在深色胶囊旁几乎看不见 ——
+         提示条本来就小，动作按钮再"淡"就等于没有。 */
+      .bar__rescan {
+        height: 30px;
+        flex-shrink: 0;
+        padding: 0 12px;
+        border: none;
+        border-radius: 15px;
+        background: #4ade80;
+        color: #06281a;
+        font-size: 11.5px;
+        font-weight: 600;
+        font-family: inherit;
+        line-height: 1;
+        cursor: pointer;
+      }
+      .bar__rescan:hover { background: #86efac; }
+      .bar__close {
+        width: 30px;
+        height: 30px;
+        flex-shrink: 0;
+        border: none;
+        border-radius: 15px;
+        background: rgba(20, 22, 26, 0.86);
+        color: #e5e7eb;
+        font-size: 13px;
+        line-height: 1;
+        cursor: pointer;
+      }
+      .bar__close:hover { background: rgba(220, 38, 38, 0.9); color: #fff; }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <div class="frame__edge"></div>
+      <span class="frame__corner is-tl"></span>
+      <span class="frame__corner is-tr"></span>
+      <span class="frame__corner is-bl"></span>
+      <span class="frame__corner is-br"></span>
+
+      <div class="handle is-tl" data-resize="tl"></div>
+      <div class="handle is-tr" data-resize="tr"></div>
+      <div class="handle is-bl" data-resize="bl"></div>
+      <div class="handle is-br" data-resize="br"></div>
+    </div>
+    <div class="bar">
+      <div class="bar__pill">
+        <span class="bar__dot"></span>
+        <span class="bar__hint">对准二维码</span>
+      </div>
+      <button class="bar__rescan" id="rescan" title="再识别一次">重新扫描</button>
+      <button class="bar__close" id="close" title="关闭取景框（同时停止扫描）">✕</button>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
+

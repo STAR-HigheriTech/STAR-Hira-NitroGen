@@ -1,0 +1,100 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hira Sidebar Float</title>
+    <!--
+      Edge 型侧栏的**展开浮层**（独立 WebContentsView，盖在网页上）。
+
+      关键内联样式（critical CSS）：本视图是冷启动的原生视图，第一帧可能早于主题令牌到达。
+      这段时间若什么也不画，深色主题下会先闪一块白 —— 直接盖在网页上非常刺眼。
+      这里只给"底色 + 铺满 + 内缘分隔线 + 玻璃兜底 + 主题圆角"这几件事，
+      与 ui-common 面板的基底默认值同源；令牌随后到达时 --main-bg-color 会自然接管。
+    -->
+    <style>
+      /**
+       * 底色**只画在 .vtabs（= 这块浮出来的面板）自己身上**，父层一律透明。
+       *
+       * 因为按侧别裁的圆角只能靠这一层：父层若也有底色，圆角外面那两块会被父层
+       * 填回方形，裁了等于没裁（见下方"跟随主题圆角"）。视图本身是透明视图
+       * （WebContentsManager#createFloatView 写了 #00000000），所以面板之外自然
+       * 透出下层网页 —— 这正是圆角缺口该有的样子。
+       */
+      html, body {
+        margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden;
+        background: transparent;
+      }
+      /* 侧栏骨架吃满整块浮层（宽度由主进程按计划给 —— 这里只负责铺满）。 */
+      #root {
+        margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden;
+        background: transparent;
+        display: flex; flex-direction: column;
+      }
+      /* ── 展开动画的**静息态 = 闭合**（动效本体在 main.js#playEnter）───────────
+         浮层的显隐只靠 bounds（主进程**从不** setVisible，见 LayoutCoordinator#
+         setFloatBounds 的注释），所以本页察觉不到"我已经被收起"。若这里默认是全开，
+         下一次悬停会先把整块面板露出来、等 show 事件到了才开始播动画 ——
+         观感是"啪地弹出来再抖一下"。默认闭合 = 舞台等灯亮，show 一到才划开。
+         划开方向按贴边侧定：左侧由左缘、右侧由右缘长出来（与窗口边缘对齐）。
+         clip-path 只裁绘制、不参与布局 —— 面板内容全程停在最终位置，零重排。 */
+      #root { clip-path: inset(0 100% 0 0); }
+      #root[data-sb-side="right"] { clip-path: inset(0 0 0 100%); }
+      #root[data-sb-phase="open"] { clip-path: none; }
+
+      /* 冷启动兜底：第一帧可能早于主题令牌到达，深色主题下不能先闪一块白。 */
+      #root .vtabs { width: 100%; background: var(--main-bg-color, #f9fafb); }
+      @media (prefers-color-scheme: dark) {
+        #root .vtabs { background: var(--main-bg-color, #1c1c1f); }
+      }
+      /* 调宽把手在浮层里没有意义：浮层宽度由布局计划给（`app.sidebar_width` →
+         `revealWidth` → 原生视图 bounds），把手拖不动视图，还会贴着内缘吃掉
+         4px 命中区 —— 藏掉。要改宽度请用「固定占位」态拖把手（同一个设置键）。 */
+      #root .vtabs__handle { display: none; }
+      /* 浮层盖在网页上，内缘必须有那条 1px 分隔线（与 chrome 里的侧栏同款）——
+         否则标签列与网页糊成一片，看不出"这是一块浮出来的面板"。 */
+      #root .vtabs[data-region-side="left"] { border-right: 1px solid var(--border-color, rgba(0, 0, 0, .12)); }
+      #root .vtabs[data-region-side="right"] { border-left: 1px solid var(--border-color, rgba(0, 0, 0, .12)); }
+
+      /* ── 玻璃主题下的底色兜底 ─────────────────────────────────────────────
+         判据是主题控制器写的 html[data-theme-background='1']（唯一一处玻璃判据，
+         见 renderer/shared/theme-controller.js#applyBackground）：壁纸铺在窗口上，
+         或开了亚克力 / Mica 材质。
+
+         为什么这里**必须**用不透明的主题色：本浮层盖在**网页**上，它的 backdrop
+         背后是网页内容而不是外壳的玻璃带 —— 透明只会让网页文字/图片从标签列底下
+         透出来（用户口径："按原 UI 主题色来兜底"）。系统模糊与壁纸都拿不到，
+         所以这里回到主题底色（--hira-bg-surface = 调色板的 bg，即 UI 的原色）。
+         非玻璃主题不命中这条规则，背景仍是下方那行 --main-bg-color（= 同一个值）。 */
+      html[data-theme-background='1'] #root .vtabs {
+        background: var(--hira-bg-surface, #f9fafb);
+      }
+      @media (prefers-color-scheme: dark) {
+        html[data-theme-background='1'] #root .vtabs {
+          background: var(--hira-bg-surface, #1c1c1f);
+        }
+      }
+
+      /* ── 跟随主题圆角（--hira-theme-radius = 主题 style.cornerRadius）────────
+         只裁**面向内容**那一侧的两个角；贴窗口边框那一侧保持直角 —— 浮层是从
+         窗口边缘长出来的一条，外缘本来就与窗口边齐平，再给它圆角只会在窗边
+         啃出两个缺口（用户口径："面向开发这一边圆角，而窗口边框这一部分是根
+         就不用裁剪"）。
+
+         半径吃主题令牌（主题页里那根"圆角"滑杆一处调、这里跟着变），
+         缺省值 6px 与 DEFAULT_STYLE.cornerRadius 同源；0 = 完全不裁。
+         `overflow: hidden` 已在骨架 .vtabs 上（行内容跟着圆弧一起被裁掉）。 */
+      #root .vtabs[data-region-side="left"] {
+        border-radius: 0 var(--hira-theme-radius, 6px) var(--hira-theme-radius, 6px) 0;
+      }
+      #root .vtabs[data-region-side="right"] {
+        border-radius: var(--hira-theme-radius, 6px) 0 0 var(--hira-theme-radius, 6px);
+      }
+    </style>
+    <script type="module" src="./main.ts"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
+

@@ -1,0 +1,76 @@
+/* ─── STAR Hira NitroGen 渲染层 UI 层级（z-index）单一真源 ──────────────────────────────
+ *
+ * 对齐 RT `src/shared/layers.ts` 的 UILayer：渲染层内的所有层叠都只用这几档，
+ * 语义从上到下依次抬高（**负层在最底，见下**）：
+ *   backdrop(-2) < veil(-1) < base(0) < elevated(10) < controls(20) <
+ *   scrim(30) < modal(40) < popover(50) < tooltip(60) < max(100)
+ *
+ * 该表是**唯一真源**：
+ *   - CSS 侧 —— 用变量 `var(--hira-z-<layer>)` 或工具类 `.hira-z-<layer>`，二者取值同源；
+ *   - JS  侧 —— 从包入口 `import { UILayer } from '@hira-ng/shared-ui-tokens'` 取层名常量。
+ *
+ * 渲染层任何地方都**不允许**再出现裸的 z-index 数字，门禁见 `scripts/check-z-index.cjs`。
+ *
+ * 各层语义（照抄 RT 的角色定义，落地时按「元素在产品里扮演什么角色」归类）：
+ *   backdrop       —— **内容之下的装饰层**：主题壁纸/背景图。只铺画面，不承载交互
+ *                     （必定配 pointer-events:none）。之所以是负层而不是 base：
+ *                     它必须在**容器自己的内容**之下，而内容通常是 base 层的普通流。
+ *   veil           —— 背景之上的**遮罩层**：压暗/调亮背景，让上面的文字始终可读。
+ *                     与背景分成两层，是因为"调遮罩浓度"不该连图一起改（旧 Hira
+ *                     起始页踩过这个坑）。同样不承载交互。
+ *   base     —— 默认层。绝大多数元素都在这一层，通常无需 z-index。
+ *   elevated —— 浮在其文档流兄弟之上的内容块：浮动侧栏、加载指示条、
+ *               下拉建议、拖拽落点指示、吸顶工具条。
+ *   controls —— 必须压在 elevated 之上、始终可交互的控件：侧栏拖拽手柄、
+ *               边缘吸附探测条、工具条按钮。
+ *   scrim    —— 铺满视口的半透明背板（模态/面板背后的压暗层）。
+ *   modal    —— 模态对话框 / 浮出面板：压在 scrim 之上并阻断下层交互。
+ *   popover  —— 锚定在触发元素上的浮层：下拉菜单、选择器、取色器、
+ *               悬浮预览卡（设计上允许盖过 modal —— 模态里的下拉要浮在模态之上）。
+ *   tooltip  —— 提示气泡。普通 UI 里的最高层，因为它可能出现在 popover 的触发元素上。
+ *   max      —— 保留给开发者工具 / 调试浮层 / 更新动画，普通 UI 不得使用。
+ */
+:root {
+  --hira-z-backdrop: -2;
+  --hira-z-veil: -1;
+  --hira-z-base: 0;
+  --hira-z-elevated: 10;
+  --hira-z-controls: 20;
+  --hira-z-scrim: 30;
+  --hira-z-modal: 40;
+  --hira-z-popover: 50;
+  --hira-z-tooltip: 60;
+  --hira-z-max: 100;
+}
+
+/* ─── 语义工具类（与上面的变量取值同源，二选一皆可）────────────────────── */
+.hira-z-backdrop {
+  z-index: var(--hira-z-backdrop);
+}
+.hira-z-veil {
+  z-index: var(--hira-z-veil);
+}
+.hira-z-base {
+  z-index: var(--hira-z-base);
+}
+.hira-z-elevated {
+  z-index: var(--hira-z-elevated);
+}
+.hira-z-controls {
+  z-index: var(--hira-z-controls);
+}
+.hira-z-scrim {
+  z-index: var(--hira-z-scrim);
+}
+.hira-z-modal {
+  z-index: var(--hira-z-modal);
+}
+.hira-z-popover {
+  z-index: var(--hira-z-popover);
+}
+.hira-z-tooltip {
+  z-index: var(--hira-z-tooltip);
+}
+.hira-z-max {
+  z-index: var(--hira-z-max);
+}

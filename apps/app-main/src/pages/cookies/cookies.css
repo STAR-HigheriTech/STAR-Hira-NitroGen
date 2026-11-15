@@ -1,0 +1,81 @@
+/* Cookies 页特有规则。公共骨架见 hira://shared/base.css
+ *
+ * 页面只描述本页内容：域名折叠组里的一行 = 名称/（路径·过期）· 值 · 删除。
+ * 折叠组本身（组头透明、展开后整块面板底色、箭头圆片、入口药丸、aria）
+ * 全部由 base.css 的 .disclosure 提供，页面不许再写一套。 */
+
+/* 页头搜索框吃固定宽，而不是撑满整行 */
+.page-header .search {
+  width: 220px;
+  flex: none;
+}
+
+.summary {
+  margin-bottom: 8px;
+  font-size: 11.5px;
+  color: var(--text-soft);
+}
+
+/* 行：信息（名称 + 路径/过期）· 值 · 删除。
+   左内边距 40px = 组头 14px padding + 箭头圆片 18px + gap 8px，让行文本与组标题对齐。
+   行本身透明：展开后整块底色由 .disclosure-body 的 --panel-bg 统一承担，
+   条目不再各铺一层，避免「组一块、条目又一块」的碎层次。 */
+.ck-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) var(--ctl-h);
+  align-items: center;
+  gap: 12px;
+  min-height: var(--row-h);
+  padding: 5px 8px 5px 40px;
+  border-radius: var(--r-md);
+}
+.ck-row:hover {
+  background: var(--hover-bg);
+}
+
+.ck-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ck-name {
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ck-meta {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.ck-sep {
+  opacity: 0.5;
+}
+
+.ck-value {
+  min-width: 0;
+  font-family: var(--hira-font-mono, ui-monospace, Consolas, "Courier New", "Microsoft YaHei UI", "Microsoft YaHei", monospace);
+  font-size: 11.5px;
+  color: var(--text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ck-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* 无法构造删除 URL：不整行染红（底色只用来表达层级），只在 meta 里点明原因 */
+.ck-flag {
+  color: var(--danger);
+  cursor: help;
+}

@@ -1,0 +1,26 @@
+{
+  "id": "panel-sessions",
+  "name": "快速会话面板",
+  "version": "0.0.1",
+  "type": "ui-panel-plugin",
+  "trustLevel": "internal",
+  "description": "命名会话的管理入口：保存当前这组标签、恢复、删除；底部另带自动快照（关窗时自动留下的那一份）的保存 / 恢复 / 清除。",
+  "main": "./panel-generic.cjs",
+  "contributes": {
+    "panels": [
+      {
+        "id": "sessions-panel",
+        "title": "快速会话",
+        "icon": "Folder",
+        "order": 176,
+        "segment": "panel"
+      }
+    ]
+  },
+  "dependsOn": [
+    "side-panel-skeleton",
+    "tabs-service",
+    "settings-service",
+    "session-service"
+  ]
+}

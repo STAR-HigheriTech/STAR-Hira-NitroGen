@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>关于 Hira</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="./about.css" />
+  </head>
+  <body>
+    <main class="about">
+      <header class="page-header about-brand">
+        <img
+          class="about-logo"
+          src="hira://shared/app-icon.png"
+          width="48"
+          height="48"
+          alt=""
+        />
+        <div class="page-heading">
+          <h1 id="app-name">Hira</h1>
+        </div>
+      </header>
+      <p class="about-version" id="app-version">读取中…</p>
+
+      <nav class="about-tabs" role="tablist" aria-label="关于与更新">
+        <button
+          class="about-tab is-active"
+          type="button"
+          role="tab"
+          data-tab="about"
+          aria-selected="true"
+        >
+          关于 Hira
+        </button>
+        <button
+          class="about-tab"
+          type="button"
+          role="tab"
+          data-tab="update"
+          aria-selected="false"
+        >
+          软件更新
+        </button>
+      </nav>
+
+      <section class="about-pane" data-pane="about" role="tabpanel">
+        <section class="card" id="card-app">
+          <h2 class="card-title">应用</h2>
+          <dl class="def-grid" id="app"></dl>
+        </section>
+
+        <section class="card" id="card-runtime">
+          <h2 class="card-title">运行环境</h2>
+          <dl class="def-grid" id="runtime"></dl>
+        </section>
+
+        <section class="card" id="card-system">
+          <h2 class="card-title">系统</h2>
+          <dl class="def-grid" id="system"></dl>
+        </section>
+
+        <section class="card" id="card-data">
+          <h2 class="card-title">用户数据目录</h2>
+          <dl class="def-grid" id="data"></dl>
+        </section>
+
+        <section class="card" id="card-ua">
+          <h2 class="card-title">默认 User-Agent</h2>
+          <p class="about-ua" id="ua"></p>
+        </section>
+
+        <p class="about-note" id="note"></p>
+      </section>
+
+      <section class="about-pane" data-pane="update" role="tabpanel" hidden>
+        <section class="card">
+          <h2 class="card-title">更新状态</h2>
+          <div class="update-headline">
+            <span class="badge" id="status-badge">读取中</span>
+            <span class="update-line" id="status-line"></span>
+          </div>
+
+          <div class="update-progress" id="progress" hidden>
+            <div
+              class="update-progress-track"
+              id="progress-track"
+              role="progressbar"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="0"
+            >
+              <span class="update-progress-fill" id="progress-fill"></span>
+            </div>
+            <p class="update-progress-meta" id="progress-meta"></p>
+          </div>
+
+          <p class="feedback" id="feedback" hidden></p>
+
+          <div class="toolbar update-actions">
+            <button class="btn btn-primary" id="btn-check" type="button">检查更新</button>
+            <button class="btn" id="btn-download" type="button">下载更新</button>
+            <button class="btn" id="btn-install" type="button">重启并安装</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title">发布通道</h2>
+          <div class="segmented" id="channels" role="group" aria-label="发布通道"></div>
+          <p class="update-hint" id="channel-hint"></p>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title">自动检查</h2>
+          <div class="form-grid">
+            <div class="field">
+              <label class="check">
+                <input type="checkbox" id="auto-check" />
+                <span>后台静默检查更新</span>
+              </label>
+            </div>
+            <div class="field">
+              <label class="field-label" for="interval-hours">检查周期（小时）</label>
+              <input
+                type="number"
+                id="interval-hours"
+                step="1"
+                inputmode="numeric"
+              />
+              <p class="field-hint" id="interval-hint"></p>
+            </div>
+          </div>
+        </section>
+
+        <p class="notice update-smartscreen">
+          本应用未购买 Windows 代码签名证书。首次运行或升级安装包时，SmartScreen
+          可能提示「Windows 已保护你的电脑」——请点「更多信息」→「仍要运行」继续。
+        </p>
+      </section>
+    </main>
+    <script type="module" src="./about.js"></script>
+  </body>
+</html>

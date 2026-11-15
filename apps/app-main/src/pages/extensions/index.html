@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>扩展管理</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="./extensions.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="page-heading">
+        <h1>扩展管理</h1>
+      </div>
+      <div class="toolbar">
+        <a
+          class="btn"
+          id="store-btn"
+          href="https://chromewebstore.google.com/category/extensions?utm_source=ext_sidebar"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="在标签页中打开 Chrome 网上应用店，浏览并安装扩展"
+          >浏览 Chrome 应用店</a
+        >
+        <button class="btn" id="import-btn">加载已解压扩展</button>
+        <button
+          class="btn"
+          id="update-btn"
+          hidden
+          title="立即检查并安装所有扩展的可用更新（仅开发者模式显示）"
+        >
+          更新
+        </button>
+        <button class="btn" id="refresh-btn">刷新</button>
+        <button
+          class="btn"
+          id="dev-mode-btn"
+          type="button"
+          aria-pressed="false"
+          title="打开后详情里额外显示检查视图与运行时诊断，并出现「重新加载」按钮（会中断扩展运行）"
+        >
+          开发者模式：关
+        </button>
+      </div>
+    </header>
+
+    <div class="toolbar">
+      <input
+        class="search"
+        id="search"
+        type="text"
+        placeholder="搜索扩展名称"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <span class="toolbar-note" id="summary"></span>
+    </div>
+
+    <div
+      class="feedback"
+      id="feedback"
+      role="status"
+      aria-live="polite"
+      hidden
+    ></div>
+    <div class="item-list" id="list"></div>
+    <script type="module" src="./extensions.js"></script>
+  </body>
+</html>

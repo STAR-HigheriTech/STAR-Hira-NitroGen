@@ -1,0 +1,21 @@
+{
+  "id": "totp-service",
+  "name": "验证器引擎",
+  "version": "0.0.1",
+  "type": "feature-plugin",
+  "trustLevel": "internal",
+  "description": "TOTP/HOTP 一次性口令的存储与计算：密钥经系统钥匙串加密落盘，验证码在主进程计算。可选功能，默认关闭。",
+  "main": "./totp-service.cjs",
+  "defaultDisabled": true,
+  "capabilities": [
+    "totp.list",
+    "totp.code",
+    "totp.add",
+    "totp.update",
+    "totp.remove",
+    "totp.import",
+    "totp.exportUri",
+    "totp.calibrate"
+  ],
+  "dependsOn": []
+}

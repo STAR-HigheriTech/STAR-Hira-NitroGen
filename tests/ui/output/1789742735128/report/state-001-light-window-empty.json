@@ -1,0 +1,18 @@
+{
+  "caseId": "001",
+  "baselineVersion": "v7.5.0",
+  "baselinePngPath": "E:\\Desktop\\OTHER\\1A-STAR_Hira\\1A-STAR_Hira_NG\\docs-ng\\ui-baseline\\v7.5.0\\state-001-light-window-empty.png",
+  "baselineJsonPath": "E:\\Desktop\\OTHER\\1A-STAR_Hira\\1A-STAR_Hira_NG\\docs-ng\\ui-baseline\\v7.5.0\\state-001-light-window-empty.json",
+  "actualPngPath": "E:\\Desktop\\OTHER\\1A-STAR_Hira\\1A-STAR_Hira_NG\\tests\\ui\\output\\1789742735128\\actual\\state-001-light-window-empty.png",
+  "diffPngPath": "E:\\Desktop\\OTHER\\1A-STAR_Hira\\1A-STAR_Hira_NG\\tests\\ui\\output\\1789742735128\\diff\\state-001-light-window-empty.png",
+  "width": 1936,
+  "height": 1292,
+  "actualWidth": 1935,
+  "actualHeight": 1293,
+  "threshold": 0.1,
+  "diffPixels": 46039,
+  "totalPixels": 2501312,
+  "matchRate": 0.9815940594376071,
+  "passRate": 0.95,
+  "pass": true
+}

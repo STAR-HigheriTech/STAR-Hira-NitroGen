@@ -1,0 +1,72 @@
+{
+  "id": "theme-pack-nord",
+  "name": {
+    "zh-CN": "主题包 · Nord",
+    "en-US": "Theme Pack · Nord"
+  },
+  "version": "1.0.0",
+  "type": "theme-plugin",
+  "trustLevel": "internal",
+  "description": "Nord 主题包：提供深色与浅色两套配色。",
+  "contributes": {
+    "themes": [
+      {
+        "id": "nord-dark",
+        "name": "Nord · 极地夜",
+        "author": "Hira",
+        "mode": "dark",
+        "colors": {
+          "bg": "#2e3440",
+          "surface": "#3b4252",
+          "fg": "#eceff4",
+          "accent": "#88c0d0",
+          "border": "#4c566a",
+          "muted": "#d8dee9"
+        },
+        "style": {
+          "transparency": 0.18,
+          "blur": 14,
+          "contrast": 0.1,
+          "cornerRadius": 10,
+          "colorizeMode": "unified"
+        },
+        "background": {
+          "kind": "css",
+          "css": "radial-gradient(120% 90% at 12% 0%, rgba(136,192,208,0.22), transparent 55%), radial-gradient(110% 80% at 100% 100%, rgba(180,142,173,0.18), transparent 60%), linear-gradient(160deg, #2e3440 0%, #242933 100%)",
+          "overlay": 0.22,
+          "overlayColor": "#2e3440",
+          "applyTo": ["window", "newtab"]
+        }
+      },
+      {
+        "id": "nord-light",
+        "name": "Nord · 雪原日",
+        "author": "Hira",
+        "mode": "light",
+        "colors": {
+          "bg": "#eceff4",
+          "surface": "#e5e9f0",
+          "fg": "#2e3440",
+          "accent": "#5e81ac",
+          "border": "#d8dee9",
+          "muted": "#4c566a"
+        },
+        "style": {
+          "transparency": 0.12,
+          "blur": 12,
+          "contrast": 0,
+          "cornerRadius": 10,
+          "colorizeMode": "unified"
+        },
+        "background": {
+          "kind": "css",
+          "css": "radial-gradient(120% 90% at 8% 0%, rgba(94,129,172,0.16), transparent 55%), linear-gradient(160deg, #f4f6fa 0%, #e5e9f0 100%)",
+          "overlay": 0.12,
+          "overlayColor": "#ffffff",
+          "applyTo": ["newtab"]
+        }
+      }
+    ]
+  },
+  "dependsOn": []
+}

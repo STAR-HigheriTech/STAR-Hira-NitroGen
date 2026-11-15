@@ -1,0 +1,129 @@
+/* History 页特有规则。公共骨架见 hira://shared/base.css
+ *
+ * 排版：页头（标题 + 破坏性动作）→ 筛选工具条 → 主体列表 + 最近关闭侧栏。
+ * 零描边：侧栏与分组抬头只靠底色与留白分层。
+ */
+
+/* ── 筛选工具条 ───────────────────────────────────────────────────────── */
+.history-toolbar {
+  margin-bottom: 12px;
+}
+.history-toolbar .search {
+  flex: 1 1 260px;
+}
+/* 时间段输入只需要更宽：底色 / 圆角 / 聚焦一律走骨架的字段原语。 */
+.date-input {
+  flex: 0 0 auto;
+  min-width: 168px;
+}
+/* 「最近 N 天」快捷时间段：宽度对齐日期输入的一半多一点 */
+.quick-range {
+  flex: 0 0 auto;
+  min-width: 104px;
+}
+.history-select {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+}
+
+/* ── 列表行 ───────────────────────────────────────────────────────────── */
+/* 时间列：定宽右对齐，让标题起始线在整页一致 */
+.row .time {
+  flex: 0 0 64px;
+  font-size: 11.5px;
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+/* 标题 + 正文摘要两列（摘要只在正文命中时才有） */
+.row .main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.row .main .title {
+  flex: none;
+}
+.row .snippet {
+  font-size: 11.5px;
+  color: var(--text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 日期分组抬头：轻量、粘顶，滚动时仍能判断时间段 */
+.history-group {
+  position: sticky;
+  top: 0;
+  z-index: var(--hira-z-elevated);
+  padding: 14px 10px 6px;
+  background: var(--bg);
+  color: var(--text-soft);
+  font-size: 11px;
+  /* 分组抬头是弱化标签，不是标题：用常规字重，避免整页都是粗体。 */
+  font-weight: var(--fw-medium, 500);
+  letter-spacing: 0.04em;
+}
+
+/* ── 最近关闭侧栏（对齐 Edge 历史页）：与主列表并排，窄屏（< 900px）落到下方 ──
+   侧栏只展示「撤销栈」这一件事，因此不参与搜索/筛选；标题与操作同一行。 */
+.history-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.history-main {
+  flex: 1;
+  min-width: 0;
+}
+.recent-panel {
+  flex: 0 0 280px;
+  width: 280px;
+  position: sticky;
+  top: 24px;
+  padding: 12px;
+  background: var(--plane-bg);
+  border-radius: var(--r-lg);
+}
+.recent-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px 6px;
+}
+.recent-head .section-title {
+  margin-bottom: 0;
+}
+.recent-panel .icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+  background: transparent;
+}
+/* 行高 / 内边距由骨架的 .row 统一给，这里只换单行 URL 的弱化样式 */
+.recent-list .row .url {
+  font-size: 11.5px;
+  color: var(--text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 侧栏空态：骨架的居中 40px 内边距在这里太高，压到 16px 并左对齐（与标题同起点） */
+.recent-list .empty {
+  padding: 16px 8px;
+  text-align: left;
+}
+@media (max-width: 900px) {
+  .history-layout {
+    flex-direction: column;
+  }
+  .recent-panel {
+    position: static;
+    width: 100%;
+    flex-basis: auto;
+  }
+}

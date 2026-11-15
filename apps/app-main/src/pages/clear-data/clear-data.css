@@ -1,0 +1,86 @@
+/* ClearData 页特有规则。公共骨架见 hira://shared/base.css
+   分区是卡片（.card / .card-title），复选框与时间范围是本页唯一自建控件。 */
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.card-head .card-title {
+  margin: 0;
+}
+.card-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.types {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px 16px;
+  margin-top: 12px;
+}
+
+/* 时间范围：分段控件的变体 —— 一个软底槽，选中项用卡片底色浮起 */
+.ranges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  background: var(--tint-bg);
+  border-radius: var(--r-md);
+}
+.range {
+  height: var(--ctl-h-sm);
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--text-soft);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.range:hover {
+  color: var(--text);
+}
+.range[aria-pressed='true'] {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+}
+.range:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+.toolbar .state {
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.result .mark {
+  width: 14px;
+  flex: none;
+  text-align: center;
+}
+/* 成功标记：没有独立的 success 令牌，用「绿 + 当前文本色」混合，
+   深色主题下自动提亮，不再另写 html[data-theme='dark'] 覆盖块。 */
+.result-ok .mark {
+  color: color-mix(in srgb, #1a9c53 78%, var(--text));
+}
+.result-fail {
+  color: var(--danger);
+}

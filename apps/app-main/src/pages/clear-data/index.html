@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>清除浏览数据</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="./clear-data.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="page-heading">
+        <h1>清除浏览数据</h1>
+      </div>
+    </header>
+
+    <section class="card">
+      <div class="card-head">
+        <h2 class="card-title">要清除的数据</h2>
+        <div class="card-actions">
+          <button class="btn btn-sm" id="select-all" type="button">全选</button>
+          <button class="btn btn-sm" id="select-none" type="button">全不选</button>
+        </div>
+      </div>
+      <div class="types" id="types"></div>
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">时间范围</h2>
+      <div class="ranges" id="ranges"></div>
+    </section>
+
+    <div class="toolbar">
+      <button class="btn btn-primary" id="run">清除数据</button>
+      <span class="state" id="state"></span>
+    </div>
+
+    <section class="card" id="result-section" hidden>
+      <h2 class="card-title">清理结果</h2>
+      <div class="results" id="results"></div>
+    </section>
+
+    <script type="module" src="./clear-data.js"></script>
+  </body>
+</html>

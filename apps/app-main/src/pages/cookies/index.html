@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Cookie 管理</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="./cookies.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="page-heading">
+        <h1>Cookie 管理</h1>
+      </div>
+      <div class="toolbar">
+        <input
+          class="search"
+          id="filter"
+          type="text"
+          placeholder="搜索域名，如 example.com"
+          autocomplete="off"
+        />
+        <button class="btn" id="refresh">刷新</button>
+        <button class="btn btn-danger" id="clear">清空全部</button>
+      </div>
+    </header>
+    <p class="summary" id="summary"></p>
+    <div class="list" id="list"></div>
+    <script type="module" src="./cookies.js"></script>
+  </body>
+</html>

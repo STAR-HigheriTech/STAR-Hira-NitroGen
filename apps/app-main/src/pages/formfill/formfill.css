@@ -1,0 +1,42 @@
+/* FormFill 页特有规则。公共骨架见 hira://shared/base.css
+   （页头 / 分区 / 计数 / 表单 / 按钮 / 列表行全走骨架；本文件只留本页独有的间距）。
+
+   ⚠ 原来这些规则是**内联在 index.html 的 <style> 里**的 —— 与 bookmarks /
+   settings「页面规则放同目录 <host>.css」的约定不一致，抽出来。 */
+
+/* 新增区：展开态用骨架的 .panel（下沉工作面色 + 淡入），本文件只管与列表的间距。
+   收起时由 [hidden] 完全消失；展开/收起的视觉语言由 base.css 统一，不在页面重写。 */
+.ff-editor {
+  margin-bottom: 20px;
+}
+
+/* 动态字段区：与上方「类型 / 备注名」拉开一段，网格由骨架的 .form-grid 负责 */
+.ff-fields {
+  margin-top: 14px;
+}
+.ff-fields:empty {
+  display: none;
+}
+
+/* 保存按钮单独一行，右对齐（与表单区收口） */
+.form-actions {
+  margin: 14px 0 0;
+  justify-content: flex-end;
+}
+
+/* 反馈行是提示而不是可点条目 */
+#message {
+  margin: 10px 0;
+}
+#message .row {
+  min-height: 0;
+  padding: 6px 10px;
+  cursor: default;
+}
+#message .row:hover {
+  background: transparent;
+}
+#message .meta {
+  font-size: 12px;
+  color: var(--text-soft);
+}

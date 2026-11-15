@@ -1,0 +1,28 @@
+{
+  "name": "@hira-ng/infra-db",
+  "version": "0.0.1",
+  "private": true,
+  "main": "dist/index.cjs",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.cjs",
+      "default": "./dist/index.cjs"
+    },
+    "./schema": {
+      "types": "./src/schema.ts",
+      "require": "./dist/schema.cjs",
+      "import": "./dist/schema.cjs",
+      "default": "./dist/schema.cjs"
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/schema.ts --bundle --format=cjs --platform=node --packages=external --outfile=dist/schema.cjs && esbuild src/index.ts --bundle --format=cjs --platform=node --packages=external --outfile=dist/index.cjs"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "drizzle-orm": "^0.45.2"
+  }
+}

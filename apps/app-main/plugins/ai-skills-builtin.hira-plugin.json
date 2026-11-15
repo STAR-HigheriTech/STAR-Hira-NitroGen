@@ -1,0 +1,157 @@
+{
+  "id": "ai-skills-builtin",
+  "name": "AI 技能 · 内置",
+  "version": "1.0.0",
+  "type": "ai-skill-plugin",
+  "trustLevel": "internal",
+  "description": "内置的 AI 技能（提示词 / 只读脚本 / 自动指令）。",
+  "dependsOn": ["ai-engine"],
+  "contributes": {
+    "skills": [
+      {
+        "id": "summarize-page",
+        "group": "阅读提炼",
+        "label": "总结此页",
+        "icon": "List",
+        "kind": "prompt",
+        "description": "把当前页面压缩成要点清单",
+        "prompt": "请总结下面这个页面：先用一句话给出结论，再按主题列出 5-8 条关键要点（每条用短标签概括后补充一句解释），最后列出行动项、风险或待确认项：\n\n{{page}}"
+      },
+      {
+        "id": "key-points",
+        "group": "阅读提炼",
+        "label": "三句话讲清",
+        "icon": "Zap",
+        "kind": "prompt",
+        "description": "用三句话说明这个页面在讲什么",
+        "prompt": "请用三句话讲清下面这个页面：核心是什么、为什么重要、以及我能用它做什么。\n\n{{page}}"
+      },
+      {
+        "id": "translate-page",
+        "group": "语言处理",
+        "label": "翻译此页",
+        "icon": "Globe",
+        "kind": "prompt",
+        "description": "把页面主要内容译成中文",
+        "prompt": "请把下面这个页面的主要内容翻译成简体中文，保留段落结构：\n\n{{page}}"
+      },
+      {
+        "id": "translate-selection",
+        "group": "语言处理",
+        "label": "翻译选中",
+        "icon": "Type",
+        "kind": "prompt",
+        "description": "只翻译当前选中的那段文字",
+        "prompt": "请把下面这段选中的内容翻译成简体中文，尽量保留语气与术语：\n\n{{selection}}"
+      },
+      {
+        "id": "explain-selection",
+        "group": "语言处理",
+        "label": "解释这段话",
+        "icon": "MessageSquare",
+        "kind": "prompt",
+        "description": "用通俗语言解释选中的内容",
+        "prompt": "请用通俗易懂的语言解释下面这段话（必要时给一个例子）：\n\n{{selection}}"
+      },
+      {
+        "id": "compare-tabs",
+        "group": "多源研究",
+        "label": "对比这些标签",
+        "icon": "Layers",
+        "kind": "prompt",
+        "description": "比较当前打开的若干页面",
+        "prompt": "请对比下面这些页面的核心观点，指出相同点与主要分歧：\n\n{{context}}"
+      },
+      {
+        "id": "extract-todos",
+        "group": "阅读提炼",
+        "label": "提取待办",
+        "icon": "Check",
+        "kind": "prompt",
+        "description": "从页面里抽出可执行的行动项",
+        "prompt": "请从下面页面内容里提取可执行的行动项（待办），每条以动词开头：\n\n{{page}}"
+      },
+      {
+        "id": "deep-read-page",
+        "group": "阅读提炼",
+        "label": "深读此页",
+        "icon": "Search",
+        "kind": "agent",
+        "description": "通读页面，先给结论再给原文依据（直接发送）",
+        "prompt": "请通读下面这个页面：先给出一句话结论；再按主题列出支撑结论的关键事实，每条附上原文片段；最后单独列出反向证据、风险与未确认项：\n\n{{page}}"
+      },
+      {
+        "id": "outline-page",
+        "group": "阅读提炼",
+        "label": "生成目录",
+        "icon": "Network",
+        "kind": "script",
+        "description": "把页面的标题层级抽成大纲（只读，不改页面）",
+        "prompt": "const clean = (text) => String(text || \"\").replace(/\\s+/g, \" \").trim()\nreturn Array.from(document.querySelectorAll(\"h1,h2,h3,h4\"))\n  .slice(0, 120)\n  .map((el) => ({ level: Number(String(el.tagName).slice(1)) || 2, text: clean(el.textContent) }))\n  .filter((item) => item.text)"
+      },
+      {
+        "id": "read-main",
+        "group": "阅读提炼",
+        "label": "只看正文",
+        "icon": "List",
+        "kind": "script",
+        "description": "抽出页面正文区域（去掉导航与侧栏，只读）",
+        "prompt": "const textOf = (el) => {\n  if (!el) return \"\"\n  const clone = el.cloneNode(true)\n  clone.querySelectorAll(\"script,style,noscript,nav,aside,footer\").forEach((n) => n.remove())\n  clone.querySelectorAll(\"br\").forEach((n) => n.replaceWith(\"\\n\"))\n  clone.querySelectorAll(\"p,div,li,h1,h2,h3,h4,h5,h6,tr,section,article\").forEach((n) => n.append(\"\\n\"))\n  return String(clone.textContent || \"\").replace(/[ \\t]+/g, \" \").replace(/\\n{3,}/g, \"\\n\\n\").trim()\n}\nlet best = \"\"\nfor (const sel of [\"article\", \"main\", \"[role=main]\", \".post\", \".article\", \".content\", \"#content\"]) {\n  for (const el of Array.from(document.querySelectorAll(sel))) {\n    const text = textOf(el)\n    if (text.length > best.length && text.length > 200) best = text\n  }\n}\nif (!best) best = textOf(document.body)\nreturn best.slice(0, 12000)"
+      },
+      {
+        "id": "clean-outline",
+        "group": "阅读提炼",
+        "label": "去订阅栏 + 目录",
+        "icon": "Layers",
+        "kind": "script",
+        "description": "先在页面快照里删掉订阅栏，再抽出标题大纲（源页面零改动）",
+        "prompt": "// document 是页面副本：这里删什么都不会影响真实页面\nconst junk = [\".subscribe\", \"#subscribe\", \".newsletter\", \".sidebar\", \"aside\",\n  \"[class*=subscribe]\", \"[class*=newsletter]\", \"[class*=paywall]\"]\nfor (const sel of junk) document.querySelectorAll(sel).forEach((el) => el.remove())\nconst textOf = (el) => String(el.textContent || \"\").replace(/\\s+/g, \" \").trim()\nreturn Array.from(document.querySelectorAll(\"h1,h2,h3\"))\n  .map((el) => ({ level: Number(String(el.tagName).slice(1)) || 2, text: textOf(el) }))\n  .filter((item) => item.text)\n  .slice(0, 120)"
+      },
+      {
+        "id": "browser-butler",
+        "group": "浏览器操作",
+        "label": "浏览器管家",
+        "icon": "Settings2",
+        "kind": "prompt",
+        "description": "改设置、开关面板、打开内部页、查历史 / 书签 / 集锦（先查后改）",
+        "prompt": "你是这台 Hira 浏览器的管家。请按我的请求操作浏览器本身（不是网页内容）：\n· 改设置：先用 settings_list / settings_get 找到准确键名与当前值，再 settings_set；只改我明确要求的那几项。\n· 开面板：用 panel_list 看有哪些面板、现在开在哪一侧，再 panel_control。\n· 开页面：用 internal_page_list 找 host，再用 internal_page_open 打开设置、历史、书签、下载、扩展等内部页。\n· 查数据：history_list 看最近访问，bookmark_list 看书签，collection_list 看集锦。\n· 多步任务：需要「先查几处再回答」或「连着做几步操作」时，可先用 agent_delegate 交给子智能体（research / operate / writing），再把结论汇总给我。\n\n规矩：先查后改；动任何设置前先用一句话说明「要改哪一项、从什么改成什么」；\n需要重启才生效的项（effect=restart）要明确告诉我；做完用中文分条汇报，失败就说清原因。\n\n我的请求："
+      },
+      {
+        "id": "bookmark-digest",
+        "group": "知识管理",
+        "label": "补收藏摘要",
+        "icon": "Star",
+        "kind": "prompt",
+        "description": "给还没有摘要的收藏补一段 AI 摘要（写回收藏页可见）",
+        "prompt": "请帮我给收藏补 AI 摘要（摘要写进收藏的「摘要」字段，收藏页会直接显示）：\n· 先用 bookmark_list 找出 hasSummary=false 的条目（limit 不要超过 40，只看一页）。\n· 再用 bookmark_digest 处理，一次最多 3 条；返回的 digested / skipped 会说明每条结果与原因。\n· 还有剩余就再调一次 bookmark_digest，最多连做 3 批，之后停下来汇报。\n· 已有摘要的条目不要重写（除非我明确说「重写」）。\n做完用中文汇报：补了几条、跳过几条、分别是什么原因（取页失败 / 正文过短 / 未配置模型）。\n\n我的请求："
+      },
+      {
+        "id": "agent-research",
+        "group": "Agent 研究",
+        "label": "深度研究",
+        "icon": "Search",
+        "kind": "agent",
+        "description": "交给「研究」子智能体：只读查证多处来源后给结论（直接发送）",
+        "prompt": "请用 agent_delegate（role=research）帮我查证下面这件事：\n· 先把任务说清，并把已知材料（当前页 / 选中内容 / 我的原话）作为 context 一起交给它，避免它重复劳动。\n· 它只用只读工具（页面 / 书签 / 历史 / 集锦 / 标签），不会改动任何数据。\n· 拿到结论后用中文分条回答我，每条注明来源（标题或地址）；查不到就直说没查到，不要猜。\n\n我的请求："
+      },
+      {
+        "id": "agent-writing",
+        "group": "Agent 写作",
+        "label": "帮我成文",
+        "icon": "Pencil",
+        "kind": "agent",
+        "description": "交给「写作」子智能体：把材料整理成可直接使用的成稿（直接发送）",
+        "prompt": "请用 agent_delegate（role=writing）把下面的材料写成成稿：\n· 把材料与我的要求在 task 里写清，材料原文放 context；材料多的话标明各自出处。\n· task 里要写清产出形态（邮件 / 报告 / 文案 / 总结）、长度与语气。\n· 直接给我它产出的成稿；要改长度或语气就再委托一次。\n\n我的请求："
+      },
+      {
+        "id": "plugin-author",
+        "group": "Agent 创作",
+        "label": "插件创作",
+        "icon": "Package",
+        "kind": "prompt",
+        "description": "为浏览器现场写插件 / 主题 / 用户脚本 / 技能，并直接装进插件列表（可一句话下单）",
+        "prompt": "你是 Hira 的插件作者，可以直接为浏览器**生产并安装**插件 / 主题 / 用户脚本 / 技能。\n\n开工前先调 studio_capabilities，看清可以申请的权限 scope、体积与文件数上限；不确定权限名就查，不要猜。\n\n按类型调用 studio_create：\n· 功能插件（kind=plugin）：files 里每个文件给 { path, content }（文本，≤256KB，≤40 个）；入口写进 manifest.main（如 main.cjs）。插件代码运行在沙箱里，只能 require events / util / url / querystring / string_decoder（声明 network 级时另有 http / https / net / tls / zlib / stream），不能用 electron。只用声明式贡献（contributes）的插件可以没有 main。要申请能力就填 permissions（必须来自 capabilities.permissions）。\n· 主题（kind=theme）：theme 给 { mode: light|dark, colors: { bg, fg, accent, ... }, style, background }；背景只支持 color / css，不能带图片或视频。\n· 用户脚本（kind=userscript）：userscript 给完整脚本，必须有 // ==UserScript== 头、@name，以及至少一条 @match 或 @include。\n· 技能（kind=skill）：skill 给 { id, label, prompt, kind: prompt|script|agent }。\n\n规矩：\n- manifest 一律会被强制为 trustLevel=local、permissionLevel 只能是 none/ui/network；不要写 internal 或 full，也不要写 hira-plugin.json（系统生成）。\n- 先查 studio_list 看同 id 是否已存在；默认不覆盖。要更新就先告诉我，得到确认后再用 overwrite=true。\n- 卸载用 studio_remove（内置插件不可卸）；技能用 skill_list / skill_save / skill_remove / skill_toggle 管理。\n- 装完用中文汇报：装了什么、id 是什么、在插件列表 / 主题库 / 技能面板哪里能看到、需要授权哪些权限；失败就原样说清原因。\n\n我的需求："
+      }
+    ]
+  }
+}

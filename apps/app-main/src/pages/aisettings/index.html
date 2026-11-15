@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI 设置</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="./aisettings.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="page-heading">
+        <h1>AI 设置</h1>
+      </div>
+      <div class="toolbar">
+        <div class="segmented" id="tabs" role="tablist" aria-label="AI 设置分区"></div>
+      </div>
+    </header>
+
+    <a id="skill-link" class="ai-skill-cta" href="hira://plugins#ai-skill-plugin">
+      <span id="skill-link-icon" class="ai-skill-cta__icon" aria-hidden="true"></span>
+      <span class="ai-skill-cta__body">
+        <span class="ai-skill-cta__title">AI 技能</span>
+      </span>
+      <span class="ai-skill-cta__go" aria-hidden="true"></span>
+    </a>
+
+    <div id="feedback" class="feedback" role="status" aria-live="polite" hidden></div>
+
+    <div id="shared-state" class="ai-shared" hidden></div>
+
+    <main id="pane" class="ai-pane"></main>
+
+    <script type="module" src="./aisettings.js"></script>
+  </body>
+</html>

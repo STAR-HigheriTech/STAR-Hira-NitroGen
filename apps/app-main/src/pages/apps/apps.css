@@ -1,0 +1,54 @@
+/* 已安装应用页特有规则。公共骨架见 hira://shared/base.css
+ *
+ * 行 / 图标 / 标题 / 徽标 / 开关 / 详情 / 空态 / 反馈条全部走 base.css 的
+ * .item-* / .badge / .switch / .empty-* / .feedback，本文件只留「应用」这一页
+ * 真正独有的部分：快捷方式的弱化处理、详情动作行的换行行为。 */
+
+/* 快捷方式：视觉上略弱一档，与「真正的应用」区分开 */
+.item-row.apps-row-shortcut {
+  opacity: 0.86;
+}
+
+.apps-toolbar .search {
+  flex: 1 1 320px;
+  max-width: 540px;
+}
+.apps-host {
+  color: var(--text-soft);
+}
+.apps-meta-separator {
+  margin: 0 6px;
+  color: var(--text-muted);
+}
+
+.item-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+.item-meta > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.item-row [data-busy='true'] {
+  opacity: 0.62;
+  cursor: progress;
+}
+.empty > .btn {
+  margin-top: 12px;
+}
+
+/* 窄窗时动作行整行落下、右对齐，不把标题挤成一条线 */
+@media (max-width: 680px) {
+  .apps-toolbar .search {
+    flex-basis: 100%;
+    max-width: none;
+  }
+  .apps-toolbar .toolbar-note {
+    margin-left: 0;
+  }
+  .item-row .item-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

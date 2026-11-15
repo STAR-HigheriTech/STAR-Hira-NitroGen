@@ -1,0 +1,82 @@
+.passkeys {
+  max-width: 720px;
+}
+
+.passkey-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.passkey-status__icon {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-size: 16px;
+}
+
+.passkey-status__body {
+  min-width: 0;
+}
+
+.passkey-status__body .card-title {
+  margin-bottom: 6px;
+}
+
+.passkey-status__body p {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.65;
+}
+
+.passkey-status.is-error .passkey-status__icon {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger);
+}
+
+.passkey-facts {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.42fr) minmax(0, 1fr);
+  gap: 10px 18px;
+  margin: 0;
+}
+
+.passkey-facts dt {
+  color: var(--text-soft);
+}
+
+.passkey-facts dd {
+  margin: 0;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.passkey-steps {
+  margin: 0;
+  padding-left: 1.5em;
+  color: var(--text-soft);
+  line-height: 1.8;
+}
+
+.passkey-note {
+  margin: 14px 2px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+@media (max-width: 560px) {
+  .passkey-facts {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .passkey-facts dd {
+    margin-bottom: 9px;
+  }
+}

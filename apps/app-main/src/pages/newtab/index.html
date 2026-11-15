@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>新标签页</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="hira://shared/layers.css" />
+    <link rel="stylesheet" href="./newtab.css" />
+  </head>
+  <body>
+    <main class="ntp">
+      <div class="ntp__topbar">
+        <div class="ntp-clock" id="ntp-clock"></div>
+        <nav class="ntp__sections" id="ntp-sections" role="tablist" aria-label="起始页分区"></nav>
+        <nav class="ntp__quicklinks" id="ntp-quicklinks" aria-label="内部页快捷入口"></nav>
+      </div>
+
+      <div class="ntp__views" id="ntp-views"></div>
+    </main>
+
+    <script type="module" src="./newtab.js"></script>
+  </body>
+</html>

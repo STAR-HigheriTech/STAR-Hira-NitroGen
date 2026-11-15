@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>需要登录</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="./http-auth.css" />
+  </head>
+  <body>
+    <div class="ha">
+      <div class="ha-head">
+        <div class="ha-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20">
+            <path
+              fill="currentColor"
+              d="M12 1L3 6v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V6l-9-5zm0 3.2l6 3.3v3.5c0 4.6-3.1 8.95-6 10.5-2.9-1.55-6-5.9-6-10.5V7.5l6-3.3z"
+            />
+          </svg>
+        </div>
+        <div class="ha-title">
+          <span class="ha-title-text" id="ha-title">需要登录</span>
+          <span class="ha-host" id="ha-host"></span>
+        </div>
+      </div>
+      <div class="ha-realm" id="ha-realm" hidden></div>
+      <div class="ha-note" id="ha-note" hidden></div>
+      <div class="ha-fields" id="ha-fields">
+        <label class="ha-field">
+          <span class="ha-label">用户名</span>
+          <input
+            id="ha-username"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </label>
+        <label class="ha-field">
+          <span class="ha-label">密码</span>
+          <input id="ha-password" type="password" autocomplete="off" />
+        </label>
+      </div>
+      <div class="ha-actions">
+        <button id="ha-cancel" class="btn ha-btn-ghost" type="button">
+          取消
+        </button>
+        <button
+          id="ha-submit"
+          class="btn btn-primary ha-btn-primary"
+          type="button"
+        >
+          登录
+        </button>
+      </div>
+    </div>
+    <script type="module" src="./http-auth.js"></script>
+  </body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "id": "dino",
+  "name": "Chrome 恐龙",
+  "description": "Google Chrome 断网小恐龙。空格/↑ 起跳，↓ 下蹲，躲开仙人掌与翼龙。",
+  "category": "经典",
+  "icon": "🦖",
+  "accent": "#9aa4b2",
+  "entry": "index.html",
+  "tags": ["跑酷", "无尽", "键盘"],
+  "source": "yell0wsuit/chrome-dino-enhanced",
+  "license": "BSD-3-Clause",
+  "variants": [
+    { "name": "奥运 · 跨栏", "entry": "1_hurdling.html", "icon": "🏃" },
+    { "name": "奥运 · 体操", "entry": "2_gymnastics.html", "icon": "🤸" },
+    { "name": "奥运 · 冲浪", "entry": "3_surfing.html", "icon": "🏄" },
+    { "name": "奥运 · 游泳", "entry": "4_swimming.html", "icon": "🏊" },
+    { "name": "奥运 · 马术", "entry": "5_equestrian.html", "icon": "🐎" }
+  ]
+}

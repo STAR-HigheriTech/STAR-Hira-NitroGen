@@ -1,0 +1,17 @@
+{
+  "name": "@hira-ng/domain-layout",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.mjs",
+  "exports": {
+    ".": "./dist/index.mjs"
+  },
+  "dependencies": {
+    "@hira-ng/layout-model": "workspace:*"
+  },
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --format=esm --platform=neutral --external:@hira-ng/layout-model --outfile=dist/index.mjs"
+  }
+}
+

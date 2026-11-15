@@ -1,0 +1,199 @@
+/* 快捷键页特有规则。公共骨架（页头 / 工具条 / 卡片 / 反馈条 / 空态）见
+   hira://shared/base.css —— 这里只补「组合键胶囊 + 行内动作」这一组页面专有几何。
+
+   行布局：名称（弹性） | 组合键（定宽胶囊） | 动作（右对齐）
+   与面板列表同一条口径：无描边、层次只靠底色；改状态只换底色，不画框。 */
+
+.kb-toolbar {
+  margin-bottom: 14px;
+}
+
+/* 分组：组标题 + 一组行。行组共用一张 surface 底，组内行 hover 提亮。 */
+.kb-group + .kb-group {
+  margin-top: 20px;
+}
+
+.kb-list {
+  padding: 4px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.kb-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 168px auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 4px 10px;
+  border-radius: var(--r-md);
+  transition: background-color 0.12s ease;
+}
+
+.kb-row:hover {
+  background: var(--hover-bg);
+}
+
+/* 已修改：只加一层 accent 软底（与按钮 / 选中态同一组令牌，不描边）。 */
+.kb-row.is-modified {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.kb-row.is-modified:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+/* 正在编辑 / 录制：沉成工作面，让「这一行现在归我操作」一眼可见。 */
+.kb-row.is-editing {
+  background: var(--panel-bg);
+  box-shadow: var(--ring);
+}
+
+.kb-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.kb-name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 组合键胶囊：等宽、居中、可点击 —— 它既是展示也是编辑入口。 */
+.kb-combo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  height: var(--ctl-h-sm);
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: var(--tint-bg);
+  color: var(--text);
+  font-family: var(--hira-font-mono, ui-monospace, Consolas, "Courier New", "Microsoft YaHei UI", "Microsoft YaHei", monospace);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.kb-combo:hover {
+  background: var(--tint-bg-strong);
+}
+
+.kb-combo:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+.kb-combo.is-modified {
+  background: var(--hira-accent-soft, rgba(59, 130, 246, 0.14));
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* 默认值提示：处于「已修改」时才在名字右侧挂一行小小的默认键位，便于对照。 */
+.kb-default {
+  flex-shrink: 0;
+  font-family: var(--hira-font-mono, ui-monospace, Consolas, "Courier New", "Microsoft YaHei UI", "Microsoft YaHei", monospace);
+  font-size: 11px;
+  color: var(--text-muted);
+  text-decoration: line-through;
+  white-space: nowrap;
+}
+
+/* 录制态：accent 描边感只靠底色 + 呼吸，不画边框。 */
+.kb-combo.is-recording {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+  animation: kb-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes kb-pulse {
+  0%,
+  100% {
+    opacity: 0.62;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* 录制输入框：与胶囊同几何，回车/退格由页面处理（readonly，不让输入法改内容）。 */
+.kb-combo-input {
+  text-align: center;
+  cursor: text;
+  background: var(--field-bg);
+}
+
+.kb-combo-input:focus {
+  background: var(--field-bg-focus);
+  box-shadow: var(--ring);
+}
+
+.kb-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+/* 确认对话框（恢复全部默认）：与卡片同语言 —— surface 底、大圆角、无描边。 */
+.kb-dialog {
+  width: min(420px, calc(100vw - 48px));
+  padding: 20px 22px;
+  border: 0;
+  border-radius: var(--r-lg);
+  background: var(--surface-solid);
+  color: var(--text);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.24);
+}
+
+.kb-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.42);
+}
+
+.kb-dialog-title {
+  font-size: 15px;
+  font-weight: 650;
+  margin-bottom: 8px;
+}
+
+.kb-dialog-text {
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.kb-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+/* 窄窗：组合键落到第二行，动作仍贴右 —— 不把三列硬挤成一列看不见的东西。 */
+@media (max-width: 560px) {
+  .kb-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 6px;
+  }
+  .kb-combo {
+    grid-column: 1 / -1;
+  }
+  .kb-actions {
+    grid-column: 1 / -1;
+  }
+}

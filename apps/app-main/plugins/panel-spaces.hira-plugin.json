@@ -1,0 +1,25 @@
+{
+  "id": "panel-spaces",
+  "name": "空间面板",
+  "version": "0.0.1",
+  "type": "ui-panel-plugin",
+  "trustLevel": "internal",
+  "description": "侧栏内列出空间并支持切换、重命名与删除。",
+  "main": "./panel-generic.cjs",
+  "contributes": {
+    "panels": [
+      {
+        "id": "spaces-panel",
+        "title": "空间",
+        "icon": "Layers",
+        "order": 170,
+        "segment": "panel"
+      }
+    ]
+  },
+  "dependsOn": [
+    "side-panel-skeleton",
+    "profile-service",
+    "space-service"
+  ]
+}

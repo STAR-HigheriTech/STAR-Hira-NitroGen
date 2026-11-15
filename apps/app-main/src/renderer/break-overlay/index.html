@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hira Break Overlay</title>
+    <style>
+      /*
+       * 专注模式整窗浮层的**唯一一份样式**。
+       *
+       * 设计口径：浏览器自带页面的写法 —— 中性底色、1px 分隔线、8px 圆角、
+       * 单一强调色。**没有**玻璃拟态（无 backdrop-filter / 半透明叠层）、
+       * **没有**渐变色（无 linear/radial-gradient）、**没有**装饰性光斑与大字标语；
+       * 界面上的每一行字都必须是"事实"（阶段、剩余、结束时刻、时长）。
+       *
+       * 颜色一律来自主题令牌（`--hira-*`）：页面不自己判断浅色 / 深色。
+       * `--phase-color` 是唯一的阶段差分点：专注取 accent，休息取 success。
+       *
+       * 拖动：**只在浮层真正"在场"时**整层才是窗口拖动区（`body.entered #app`）。
+       * `-webkit-app-region` 是 Chromium 按**整个窗口**合并所有 WebContentsView 的命中区，
+       * 而且浮层的 drag 无法被下层"盖回去"：收起时若还留着 drag，窗口会一直停在
+       * "整窗都是标题栏"的状态（关掉浮层后点标签、点菜单都变成拖窗口）。
+       * 所以默认 no-drag，`entered` 才打开；退场（`leaving` 移除 `entered`）时先清空
+       * 命中区，再让主进程把 bounds 收成 0×0 —— 两条顺序不能颠倒。
+       * 只有真正要点的控件是 no-drag。
+       */
+      :root {
+        --phase-color: var(--hira-accent, #3b82f6);
+        --fg: var(--hira-text-primary, #1a1a1a);
+        --fg-2: var(--hira-text-secondary, #6b7280);
+        --fg-3: var(--hira-text-tertiary, #9ca3af);
+        --bg: var(--hira-bg-surface, #f9fafb);
+        --bg-subtle: var(--hira-bg-subtle, #f3f4f6);
+        --stroke: var(--hira-border-subtle, rgba(0, 0, 0, 0.1));
+        --radius-sm: var(--hira-radius-sm, 8px);
+        --radius-md: var(--hira-radius-md, 10px);
+      }
+      body.is-break {
+        --phase-color: var(--hira-success, #16a34a);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        overflow: hidden;
+        color: var(--fg);
+        /* 字体栈走唯一令牌（shared-types/theme.mjs#UI_FONT_STACK）；兜底串与它同值。 */
+        font-family: var(--hira-font-ui, 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI',
+            'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans SC',
+            system-ui, -apple-system, sans-serif);
+        -webkit-font-smoothing: antialiased;
+        user-select: none;
+      }
+
+      /* 首帧与退场都只改透明度，翻页瞬间不会先闪一下空底。 */
+      #app {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--bg);
+        opacity: 0;
+        transition: opacity 0.18s ease;
+        /* 默认不声明拖动区：只有 entered（真正显示中）才整层可拖，理由见文件头。 */
+        -webkit-app-region: no-drag;
+      }
+      body.entered #app {
+        opacity: 1;
+        -webkit-app-region: drag;
+      }
+      body.leaving #app {
+        opacity: 0;
+        transition-duration: 0.14s;
+      }
+
+      /* ── 顶部信息条（对齐浏览器自带的页面头部：一行标题 + 右侧元信息）── */
+      .topbar {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 48px;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--stroke);
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--phase-color);
+        flex: none;
+      }
+      body.is-paused .dot {
+        opacity: 0.4;
+      }
+      .title {
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+      }
+      .duration {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--fg-3);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ── 主体：居中一列。窗口再小也不出现横向滚动 ────────────────── */
+      .stage {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        padding: 24px;
+      }
+
+      .time {
+        /* 数字固定用无衬线体：Windows 上少一层字体回退，避免落到宋体一类的衬线字形。 */
+        font-family: inherit;
+        font-size: clamp(56px, 12vh, 112px);
+        font-weight: 400;
+        line-height: 1;
+        letter-spacing: -0.03em;
+        font-variant-numeric: tabular-nums;
+        font-feature-settings: 'tnum' 1;
+        color: var(--fg);
+      }
+      body.is-paused .time {
+        color: var(--fg-2);
+      }
+
+      .progress {
+        width: min(360px, 76vw);
+        height: 4px;
+        border-radius: 2px;
+        background: var(--bg-subtle);
+        overflow: hidden;
+      }
+      .progress-fill {
+        width: 100%;
+        height: 100%;
+        border-radius: 2px;
+        background: var(--phase-color);
+        /* 每秒一帧 + 0.9s 线性补间：数字跳秒，进度是连续走的。 */
+        transition: width 0.9s linear;
+      }
+      .progress.no-anim .progress-fill {
+        transition: none;
+      }
+
+      .meta {
+        margin: 0;
+        min-height: 18px;
+        font-size: 13px;
+        color: var(--fg-3);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .message {
+        margin: 0;
+        max-width: 46ch;
+        font-size: 14px;
+        line-height: 1.6;
+        text-align: center;
+        color: var(--fg-2);
+      }
+      .message[hidden] {
+        display: none;
+      }
+
+      /* ── 暂停时才出现的时长微调（只在暂停态有意义，故用状态驱动显隐）── */
+      .adjust {
+        display: flex;
+        gap: 8px;
+      }
+      body:not(.is-paused) .adjust {
+        display: none;
+      }
+
+      /* ── 操作区 ───────────────────────────────────────────────── */
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 2px;
+      }
+      .btn {
+        height: 36px;
+        padding: 0 16px;
+        border: 1px solid var(--stroke);
+        border-radius: var(--radius-sm);
+        background: transparent;
+        color: var(--fg);
+        font: inherit;
+        font-size: 13.5px;
+        font-weight: 500;
+        cursor: pointer;
+        -webkit-app-region: no-drag;
+        transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+      }
+      .btn:hover {
+        background: var(--bg-subtle);
+      }
+      .btn:active {
+        background: var(--hira-accent-soft, rgba(59, 130, 246, 0.12));
+      }
+      .btn:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--phase-color) 55%, transparent);
+        outline-offset: 2px;
+      }
+      .btn.small {
+        height: 30px;
+        padding: 0 12px;
+        font-size: 12.5px;
+        color: var(--fg-2);
+      }
+      .btn.quiet {
+        border-color: transparent;
+        color: var(--fg-2);
+      }
+      .btn.quiet:hover {
+        color: var(--fg);
+      }
+      .btn.primary {
+        border-color: transparent;
+        background: var(--phase-color);
+        color: var(--hira-on-accent, #ffffff);
+      }
+      .btn.primary:hover {
+        background: var(--phase-color);
+        filter: brightness(0.95);
+      }
+
+      /* ── 页脚：唯一一处常驻的键盘提示 ───────────────────────────── */
+      .foot {
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 40px;
+        border-top: 1px solid var(--stroke);
+        font-size: 12px;
+        color: var(--fg-3);
+      }
+      .foot kbd {
+        font: inherit;
+        font-size: 11px;
+        padding: 1px 5px;
+        margin: 0 3px;
+        border: 1px solid var(--stroke);
+        border-radius: var(--hira-radius-xs, 6px);
+        color: var(--fg-2);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        #app,
+        .progress-fill {
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body class="booting">
+    <div id="app">
+      <header class="topbar">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="title" id="phase-text">专注</span>
+        <span class="duration" id="duration">25 分钟</span>
+      </header>
+
+      <main class="stage">
+        <div class="time" id="time" role="timer">25:00</div>
+        <div
+          class="progress"
+          id="progress"
+          role="progressbar"
+          aria-label="剩余时间"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow="100"
+        >
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <p class="meta" id="meta"></p>
+        <p class="message" id="message" hidden></p>
+        <div class="adjust">
+          <button class="btn small" id="minus" type="button">−1 分钟</button>
+          <button class="btn small" id="plus" type="button">+1 分钟</button>
+        </div>
+        <div class="actions">
+          <button class="btn primary" id="pause" type="button">暂停</button>
+          <button class="btn" id="skip" type="button">跳过</button>
+          <button class="btn quiet" id="exit" type="button">结束专注</button>
+        </div>
+      </main>
+
+      <footer class="foot"><kbd>Esc</kbd> 结束专注</footer>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
+

@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowJs": true,
+    "checkJs": false,
+    "strict": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@hira-ng/shared-types/src/*.mjs": ["packages/shared-types/dist/types/*.d.ts"],
+      "@hira-ng/shared-types/src/*.js": ["packages/shared-types/dist/types/*.d.ts"],
+      "@hira-ng/shared-types/src/*": ["packages/shared-types/dist/types/*.d.ts"]
+    },
+    "types": ["node"]
+  }
+}

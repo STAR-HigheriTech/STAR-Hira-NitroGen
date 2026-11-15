@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Passkey</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="./passkeys.css" />
+  </head>
+  <body>
+    <main class="passkeys">
+      <header class="page-header">
+        <div class="page-heading">
+          <h1>Passkey</h1>
+          <p>用指纹、人脸、PIN 或安全密钥登录，不保存站点密码。</p>
+        </div>
+      </header>
+
+      <section class="card passkey-status">
+        <div class="passkey-status__icon" aria-hidden="true">◆</div>
+        <div class="passkey-status__body">
+          <h2 class="card-title" id="status-title">正在检查系统认证器</h2>
+          <p id="status-copy">Passkey 凭据由操作系统保管，Hira 只负责发起请求和显示账户选择。</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">当前能力</h2>
+        <dl class="passkey-facts">
+          <dt>平台</dt><dd id="fact-platform">读取中</dd>
+          <dt>平台认证器</dt><dd id="fact-authenticator">读取中</dd>
+          <dt>多账户选择器</dt><dd id="fact-picker">读取中</dd>
+          <dt>Touch ID</dt><dd id="fact-touch-id">读取中</dd>
+        </dl>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">如何使用</h2>
+        <ol class="passkey-steps">
+          <li>在支持 Passkey 的网站点击“使用 Passkey 登录”。</li>
+          <li>由 Windows Hello、Touch ID 或安全密钥完成本机验证。</li>
+          <li>出现多个账户时，在 Hira 的选择窗口里选中要使用的身份。</li>
+        </ol>
+      </section>
+
+      <p class="passkey-note">
+        设备绑定 Passkey 不会上传到 Hira。跨设备同步由操作系统或站点自己的账户体系负责。
+      </p>
+    </main>
+    <script type="module" src="./passkeys.js"></script>
+  </body>
+</html>

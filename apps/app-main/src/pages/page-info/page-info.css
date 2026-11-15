@@ -1,0 +1,45 @@
+/* PageInfo 页特有规则。公共骨架见 hira://shared/base.css
+   页头走骨架（.page-header/.page-heading/.page-sub），卡片与「标签—值」网格
+   走骨架的 .card / .def-grid（无描边，层次只靠底色），本页不再另画一套框。
+   本页只保留卡片头部（图标 + 标题）与说明行。 */
+
+/* 头部：文字按基线对齐；图标自身垂直居中（20px 图标不把基线撑歪）。 */
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.favicon-slot {
+  display: inline-flex;
+  flex: none;
+  align-self: center;
+}
+.favicon-slot .favicon-wrap {
+  display: inline-flex;
+}
+.favicon-slot .favicon,
+.favicon-slot .favicon-fallback {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+}
+.favicon-slot .favicon {
+  object-fit: cover;
+}
+.head-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 说明行：提示语（含失败提示）统一走最淡一档，不再抢标题。 */
+.note {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}

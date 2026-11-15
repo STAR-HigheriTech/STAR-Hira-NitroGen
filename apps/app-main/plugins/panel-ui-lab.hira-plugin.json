@@ -1,0 +1,49 @@
+{
+  "id": "panel-ui-lab",
+  "name": "UI 实验室",
+  "version": "0.0.1",
+  "type": "ui-panel-plugin",
+  "trustLevel": "internal",
+  "description": "声明式面板示例：一个 HTML 与一个 XAML 面板，演示 hira.* 能力与持久化存储。默认关闭。",
+  "defaultDisabled": true,
+  "contributes": {
+    "panels": [
+      {
+        "id": "ui-lab-html",
+        "title": "UI 实验室 · HTML",
+        "icon": "Blocks",
+        "order": 960,
+        "segment": "panel",
+        "ui": "./panel-ui-lab.html",
+        "bangs": [
+          "实验室",
+          "lab",
+          "html",
+          "面板",
+          "示例"
+        ]
+      },
+      {
+        "id": "ui-lab-xaml",
+        "title": "UI 实验室 · XAML",
+        "icon": "LayoutGrid",
+        "order": 961,
+        "segment": "panel",
+        "ui": {
+          "entry": "./panel-ui-lab.xaml",
+          "kind": "xaml"
+        },
+        "bangs": [
+          "实验室",
+          "lab",
+          "xaml",
+          "面板",
+          "示例"
+        ]
+      }
+    ]
+  },
+  "dependsOn": [
+    "side-panel-skeleton"
+  ]
+}

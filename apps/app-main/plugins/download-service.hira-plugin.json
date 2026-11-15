@@ -1,0 +1,25 @@
+{
+  "id": "download-service",
+  "name": "下载引擎",
+  "version": "0.0.1",
+  "type": "feature-plugin",
+  "trustLevel": "internal",
+  "description": "提供下载记录、进度、状态机与危险文件校验能力。",
+  "main": "./download-service.cjs",
+  "capabilities": [
+    "download.create",
+    "download.updateProgress",
+    "download.complete",
+    "download.cancel",
+    "download.list",
+    "download.get",
+    "download.remove",
+    "download.removeMany",
+    "download.clearCompleted",
+    "download.pause",
+    "download.resume",
+    "download.open",
+    "download.showInFolder"
+  ],
+  "dependsOn": []
+}

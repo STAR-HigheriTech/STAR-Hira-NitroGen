@@ -1,0 +1,17 @@
+{
+  "id": "keybindings-service",
+  "name": "快捷键引擎",
+  "version": "0.0.1",
+  "type": "feature-plugin",
+  "trustLevel": "internal",
+  "description": "提供快捷键映射的读取、写入与重置。",
+  "main": "./keybindings-service.cjs",
+  "capabilities": [
+    "keybindings.get",
+    "keybindings.defaults",
+    "keybindings.set",
+    "keybindings.reset-one",
+    "keybindings.reset"
+  ],
+  "dependsOn": []
+}

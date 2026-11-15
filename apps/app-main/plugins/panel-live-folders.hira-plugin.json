@@ -1,0 +1,25 @@
+{
+  "id": "panel-live-folders",
+  "name": "实时更新面板",
+  "version": "0.0.1",
+  "type": "ui-panel-plugin",
+  "trustLevel": "internal",
+  "description": "在侧栏查看订阅源的实时条目。默认关闭。",
+  "main": "./panel-generic.cjs",
+  "defaultDisabled": true,
+  "contributes": {
+    "panels": [
+      {
+        "id": "live-folders-panel",
+        "title": "实时更新",
+        "icon": "Rss",
+        "order": 156,
+        "segment": "panel"
+      }
+    ]
+  },
+  "dependsOn": [
+    "side-panel-skeleton",
+    "tabs-service"
+  ]
+}

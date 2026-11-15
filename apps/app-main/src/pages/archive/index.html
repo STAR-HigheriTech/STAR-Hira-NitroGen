@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>离线归档</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="./archive.css" />
+  </head>
+  <body class="archive-page">
+    <header class="page-header archive-header">
+      <div class="page-heading archive-heading">
+        <h1 id="archive-title">离线归档</h1>
+        <a id="archive-origin" class="archive-origin" hidden></a>
+      </div>
+      <div class="toolbar">
+        <button class="btn" id="archive-back">返回</button>
+      </div>
+    </header>
+    <main class="archive-reader" id="archive-reader">
+      <div class="archive-loading" id="archive-loading">正在读取离线页面…</div>
+    </main>
+    <script type="module" src="./archive.js"></script>
+  </body>
+</html>

@@ -1,0 +1,23 @@
+{
+  "id": "history-service",
+  "name": "历史引擎",
+  "version": "0.0.1",
+  "type": "feature-plugin",
+  "trustLevel": "internal",
+  "description": "提供访问记录的写入、检索、范围查询与清理能力。",
+  "main": "./history-service.cjs",
+  "capabilities": [
+    "history.addVisit",
+    "history.remove",
+    "history.removeMany",
+    "history.removeBefore",
+    "history.search",
+    "history.listRecent",
+    "history.clearAll",
+    "history.queryRange",
+    "history.listVisits",
+    "history.countVisits",
+    "history.compact"
+  ],
+  "dependsOn": []
+}

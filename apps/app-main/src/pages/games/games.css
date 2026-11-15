@@ -1,0 +1,162 @@
+/* ============================================================================
+ * hira://games · 游戏库
+ * 页面特有规则。公共骨架（背景/字号/按钮/空状态）来自 hira://shared/base.css。
+ * 配色统一于设置页同源 token（--surface/--border/--text…），深色随 app.theme。
+ *
+ * 性能取向（对齐「极致流畅 / 极致内存」主旨）：
+ *  - 交互只动背景 / box-shadow（不触发重排，也不为 2px 位移付合成层代价）
+ *  - 每张卡片 contain: content，把布局/绘制影响面锁在卡片内
+ *  - 不给静态元素挂 will-change（那是常驻图层，白吃 GPU 显存）
+ *  - 尊重 prefers-reduced-motion
+ * ========================================================================= */
+
+/* 页头（.page-header/.page-heading/.page-sub）与分区标题（.section/.section-title）
+   一律走骨架 —— 本页此前各写了一套，只是名字不同（.page-head/.sub），值也不同。 */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
+  gap: 12px;
+}
+
+/* ── 卡片 ─────────────────────────────────────────────────────────────── */
+.game-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: var(--surface);
+  border: 0;
+  border-radius: var(--r-lg);
+  contain: content;
+  transition: background-color 0.13s ease;
+}
+/* hover 只把底色抬一点，不做位移 / 不加阴影（桌面应用里卡片跳动比网页更刺眼） */
+.game-card:hover {
+  background: color-mix(in srgb, var(--text) 2.5%, var(--surface));
+}
+
+/* 主区整体可点：用原生 <a>，键盘/中键/修饰键行为全部免费 */
+.game-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  text-decoration: none;
+  color: inherit;
+  border-radius: var(--r-sm);
+}
+.game-main:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+.game-icon {
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  line-height: 1;
+  border-radius: var(--r-md);
+  background: var(--accent-soft, var(--tint-bg));
+  user-select: none;
+}
+
+.game-meta {
+  min-width: 0;
+}
+
+.game-name {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+
+.game-desc {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-soft);
+}
+
+/* 标签：与面板徽标同几何（18px / 6px），不做成描边药丸 */
+.game-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 7px;
+}
+.game-tags i {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  font-style: normal;
+  font-size: 11px;
+  line-height: 1;
+  border-radius: var(--r-xs);
+  background: var(--tint-bg);
+  color: var(--text-soft);
+}
+
+/* ── 底部操作 ─────────────────────────────────────────────────────────── */
+.game-foot {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+/* 按钮几何与主/次层级全部走骨架（.btn / .btn-primary），这里只让次按钮吃掉余量 */
+.game-foot .btn {
+  text-decoration: none;
+}
+.game-foot .btn:not(.btn-primary) {
+  flex: 1;
+}
+
+/* ── 变体（同一 bundle 内的多个玩法 / 关卡）─────────────────────────── */
+.game-variants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 10px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  height: var(--ctl-h-sm);
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: var(--tint-bg);
+  color: var(--text-soft);
+  font-size: 12px;
+  text-decoration: none;
+}
+.chip:hover {
+  background: var(--hover-bg);
+  color: var(--text);
+}
+/* 按下（正在打开）与面板 .hp-chip--active 同口径；本页无持久选中态 */
+.chip:active {
+  background: var(--accent-soft, var(--selected-bg));
+  color: var(--accent);
+}
+.chip:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+.src {
+  font-size: 11px;
+  color: var(--text-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-card {
+    transition: none;
+  }
+}

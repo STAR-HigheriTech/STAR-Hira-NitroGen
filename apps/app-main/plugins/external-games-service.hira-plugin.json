@@ -1,0 +1,11 @@
+{
+  "id": "external-games-service",
+  "name": "外置游戏引擎",
+  "version": "0.0.1",
+  "type": "feature-plugin",
+  "trustLevel": "internal",
+  "description": "提供 hira-game:// 外部资源包的目录清单能力。",
+  "main": "./external-games-service.cjs",
+  "capabilities": ["external-games.list"],
+  "dependsOn": []
+}

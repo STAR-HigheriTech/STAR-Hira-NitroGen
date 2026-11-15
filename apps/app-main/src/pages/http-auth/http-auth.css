@@ -1,0 +1,113 @@
+/* HTTP 认证弹窗 —— 覆盖 base.css 的内边距：窗口本身很小，不要 24px 外框。
+   控件与字段走骨架口径：30px 高、零描边、软底、focus 单层 ring。 */
+
+body {
+  padding: 0;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.ha {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100vh;
+  padding: 16px 18px;
+  box-sizing: border-box;
+}
+
+.ha-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ha-icon {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  line-height: 0;
+}
+
+.ha-title {
+  min-width: 0;
+}
+
+.ha-title-text {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ha-host {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* 域 / 提示：软底分区，靠圆角与底色分层，不画描边。 */
+.ha-realm,
+.ha-note {
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+  background: var(--tint-bg);
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ha-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ha-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ha-label {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+/* 字段原语（与 base.css 的 input 同口径；写全是为了弹窗页可独立成立）：
+   30px、无描边、软底，聚焦只加一圈 ring，绝不 border + shadow 双层。 */
+.ha-field input {
+  width: 100%;
+  height: var(--ctl-h);
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--field-bg);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+}
+
+.ha-field input:focus {
+  background: var(--field-bg-focus);
+  box-shadow: var(--ring);
+}
+
+.ha-actions {
+  margin-top: auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* .ha-btn-ghost 不再覆盖任何东西：骨架的 .btn 本身就是「透明底 + text-soft
+   + hover 软底」，页面层不重复声明，避免两处口径漂移。 */

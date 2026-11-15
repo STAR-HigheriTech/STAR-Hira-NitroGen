@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>任务管理器</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="./task-manager.css" />
+  </head>
+  <body>
+    <header class="page-header task-header">
+      <div class="page-heading">
+        <h1>任务管理器</h1>
+        <p class="page-sub">查看 Hira 进程的 CPU、内存与归属。数据每 2 秒更新一次。</p>
+      </div>
+      <div class="toolbar">
+        <label class="search-field">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="6.5"></circle>
+            <path d="m16 16 4 4"></path>
+          </svg>
+          <input id="search" type="search" placeholder="筛选进程或归属" autocomplete="off" />
+        </label>
+        <button class="btn" id="pause" type="button">暂停</button>
+        <button class="btn btn-primary" id="refresh" type="button">刷新</button>
+      </div>
+    </header>
+
+    <section class="summary" aria-label="进程汇总">
+      <div class="summary-item">
+        <span class="summary-label">进程</span>
+        <strong id="process-count">—</strong>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">累计 CPU</span>
+        <strong id="cpu-total">—</strong>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">独占内存</span>
+        <strong id="memory-total">—</strong>
+      </div>
+      <span class="stamp" id="stamp" role="status" aria-live="polite"></span>
+    </section>
+
+    <div class="table task-table">
+      <div class="thead" role="row">
+        <button class="sort-head" type="button" data-sort="type">进程类型</button>
+        <button class="sort-head" type="button" data-sort="owner">归属</button>
+        <span class="pid-head">PID</span>
+        <button class="sort-head num" type="button" data-sort="cpu">CPU</button>
+        <button class="sort-head num" type="button" data-sort="memory">内存</button>
+        <span class="action-head">操作</span>
+      </div>
+      <div class="rows" id="list" role="rowgroup"></div>
+    </div>
+
+    <div class="task-foot">
+      <span>结束进程会立即关闭对应页面或后台任务，未保存的内容可能丢失。</span>
+      <kbd>/</kbd><span>快速筛选</span>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+    <script type="module" src="./task-manager.js"></script>
+  </body>
+</html>

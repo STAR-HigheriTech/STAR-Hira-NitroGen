@@ -1,0 +1,103 @@
+/* Extensions 页特有规则。公共骨架见 hira://shared/base.css
+ *
+ * 行 / 图标 / 标题 / 徽标 / 开关 / 详情 / 空态全部走 base.css 的 .item-* /
+ * .badge / .switch / .empty-*，本文件只留「扩展」这一页真正独有的部分：
+ * 运行时状态着色、开发者视图（检查视图 / 重新加载）、权限清单。 */
+
+/* 停用项整体降权：一眼区分「没在跑」与「跑着」 */
+.item-row.ext-status-disabled {
+  opacity: 0.68;
+}
+/* 缺失（运行时里没了）/ 加载失败：不画红框，只让图标与徽标说明问题 */
+.item-row.ext-status-missing .item-icon,
+.item-row.ext-status-error .item-icon {
+  opacity: 0.55;
+}
+
+/* 运行时状态徽标：运行中 = 成功色，停用 = 中性，其余 = 危险色 */
+.badge.ext-status-loaded {
+  background: var(--hira-success-bg);
+  color: var(--hira-success);
+}
+.badge.ext-status-disabled {
+  background: var(--tint-bg);
+  color: var(--text-soft);
+}
+.badge.ext-status-missing,
+.badge.ext-status-error {
+  background: var(--hira-danger-bg, color-mix(in srgb, var(--danger) 12%, transparent));
+  color: var(--danger);
+}
+
+/* 详情里的「重新加载」：跟在信息行下面，左对齐，不撑满 */
+.ext-dev-reload {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+/* 权限清单：详情里逐条列出（中文可读文本），多行时与值列左对齐 */
+.ext-perms {
+  word-break: normal;
+}
+.ext-perm-list {
+  margin: 0;
+  padding-left: 16px;
+}
+.ext-perm-list li {
+  line-height: 1.65;
+}
+
+/* ── 检查视图（开发者模式）：可调试的用链接式按钮，不可调试的置灰 + 原因 ── */
+.ext-inspect-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ext-inspect-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ext-inspect-item .btn-mini {
+  align-self: flex-start;
+  height: auto;
+  padding: 0;
+  background: none;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ext-inspect-item .btn-mini:hover {
+  background: none;
+  color: var(--accent-strong);
+}
+.ext-inspect-static {
+  align-self: flex-start;
+  color: var(--text-soft);
+  text-decoration: line-through;
+}
+.ext-inspect-url {
+  color: var(--text-soft);
+  font-size: 10px;
+  word-break: break-all;
+}
+.ext-inspect-note {
+  color: var(--text-soft);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+/* JS 用 el.hidden 控制显隐；骨架 .btn 的 display:inline-flex 会压过 UA 的 [hidden] */
+#update-btn[hidden] {
+  display: none;
+}
+
+/* 工具栏上的开发者模式开关：打开态用品牌强调色软底标记（不画描边） */
+#dev-mode-btn[aria-pressed='true'] {
+  background: var(--hira-accent-soft, rgba(59, 130, 246, 0.14));
+  color: var(--accent);
+}
+#dev-mode-btn[aria-pressed='true']:hover {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent-strong);
+}

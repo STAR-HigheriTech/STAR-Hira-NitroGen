@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": "../..",
+    "noEmit": true,
+    "allowJs": false,
+    "moduleDetection": "force",
+    "verbatimModuleSyntax": false,
+    "forceConsistentCasingInFileNames": true,
+    "paths": {
+      "hira://shared/*.js": ["apps/app-main/src/pages/_shared/*.ts"],
+      "hira://shared/*.mjs": ["packages/shared-types/dist/types/*.d.ts"],
+      "hira://shared/*": ["apps/app-main/src/pages/_shared/*"]
+    }
+  },
+  "include": ["src/renderer/**/*.ts"],
+  "exclude": ["node_modules", "**/dist/**", "src/external/**"]
+}

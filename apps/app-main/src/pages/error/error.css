@@ -1,0 +1,256 @@
+/* ============================================================================
+ * 错误页（hira://error）—— 标签导航失败 / NETWORK_ERROR 子窗口共用。
+ *
+ * 本页按「自包含内部页」维护：不依赖其它样式表也能正确渲染，因此在这里镜像一份
+ * 与 _shared/base.css 完全同名同值的 :root 令牌（浅 / 深两套）与控件原语。
+ * ⚠ 令牌真源仍是 base.css（其上游是 theme.mjs）；base.css 改值时这里必须同步，
+ *   不得在此引入第二套取值。
+ *
+ * 口径同内部页骨架：零描边、32px 控件、四级圆角、层次只靠底色分层
+ * （--bg < --plane-bg < --surface < --tint-bg），focus 只加一圈 ring。
+ * ========================================================================= */
+
+:root {
+  /* 中性色（兜底值：浅色） */
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --text: #1a1a1a;
+  --text-soft: #5f6673;
+  --text-muted: #8a9099;
+  --accent: var(--hira-accent, #3b82f6);
+  --accent-strong: var(--accent-hover, #2563eb);
+  /* 焦点色：跟随主题强调色（与 base.css 同口径，注入的 --focus 为准） */
+  --focus: color-mix(in srgb, var(--hira-accent, #3b82f6) 35%, transparent);
+
+  /* 几何令牌 */
+  --ctl-h: 32px;
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 14px;
+
+  /* 底色分层：与 base.css 同一公式，深浅主题零分支 */
+  --plane-bg: color-mix(in srgb, var(--text) 2.5%, var(--bg));
+  --tint-bg: color-mix(in srgb, var(--text) 4%, transparent);
+  --tint-bg-strong: color-mix(in srgb, var(--text) 6%, transparent);
+
+  --field-bg: var(--hira-field-bg, rgba(15, 23, 42, 0.045));
+  --field-bg-focus: var(--hira-field-bg-focus, rgba(15, 23, 42, 0.06));
+  --hover-bg: var(--hira-hover-bg, rgba(15, 23, 42, 0.05));
+  --ring: var(--hira-focus-ring, 0 0 0 2px var(--focus));
+  --hira-on-accent: #ffffff;
+}
+
+html[data-theme='dark'] {
+  --bg: #1e1e1e;
+  --surface: #252525;
+  --text: #e8e8e8;
+  --text-soft: #9a9a9a;
+  --text-muted: #838383;
+  --accent: var(--hira-accent, #74b2fc);
+  --accent-strong: var(--accent-hover, #9cc7ff);
+  --focus: color-mix(in srgb, var(--hira-accent, #74b2fc) 45%, transparent);
+
+  --field-bg: var(--hira-field-bg, rgba(255, 255, 255, 0.06));
+  --field-bg-focus: var(--hira-field-bg-focus, rgba(255, 255, 255, 0.09));
+  --hover-bg: var(--hira-hover-bg, rgba(255, 255, 255, 0.07));
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  /* 字体栈走唯一令牌（shared-types/theme.mjs#UI_FONT_STACK）；兜底串与它同值。 */
+  font-family: var(--hira-font-ui, 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans SC', system-ui, -apple-system, sans-serif);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.container {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  animation: fadeIn 0.4s ease;
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 图标：软底方块，无描边 —— 与卡片的层次语言一致 */
+.icon {
+  width: 64px;
+  height: 64px;
+  padding: 16px;
+  margin-bottom: 20px;
+  border-radius: var(--r-lg);
+  background: var(--tint-bg);
+  color: var(--text-soft);
+}
+
+h1 {
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.012em;
+  margin-bottom: 8px;
+}
+
+.desc {
+  font-size: 14px;
+  color: var(--text-soft);
+  line-height: 1.65;
+  word-break: break-word;
+  max-width: 360px;
+}
+.desc b {
+  color: var(--text);
+  font-weight: 600;
+}
+.desc ul {
+  display: inline-block;
+  text-align: left;
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+/* 错误码：软底药丸，弱化但可读 */
+.code {
+  display: inline-flex;
+  align-items: center;
+  height: var(--ctl-h);
+  padding: 0 12px;
+  margin-top: 14px;
+  border-radius: var(--r-sm);
+  background: var(--tint-bg);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: var(--hira-font-mono, "SF Mono", Consolas, "Microsoft YaHei UI", "Microsoft YaHei", monospace);
+  letter-spacing: 0.02em;
+}
+.code:empty {
+  display: none;
+}
+
+.buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+/* 按钮：与 base.css 的 .btn 同口径 —— 32px、零描边、text-soft 前景，
+   hover 只提亮软底。 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--ctl-h);
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-soft);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    transform 0.1s;
+}
+.btn:hover {
+  background: var(--hover-bg);
+  color: var(--text);
+}
+.btn:active {
+  background: var(--field-bg-focus);
+  transform: scale(0.97);
+}
+.btn:disabled {
+  cursor: default;
+  opacity: 0.55;
+  transform: none;
+}
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+/* 主按钮：accent 软底 + accent 前景（与内部页主按钮一致，不用实心块）。 */
+.btn-primary {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+.btn-primary:hover {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent-strong);
+}
+.btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* 游戏库入口：与主体内容拉开距离，整块软底，弱化次要入口的视觉权重 */
+.games {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 28px;
+  padding: 18px;
+  border-radius: var(--r-lg);
+  background: var(--plane-bg);
+}
+.games p {
+  font-size: 13px;
+  color: var(--text-soft);
+}
+/* 游戏库入口是刻意的品牌紫（与站点图标/游戏库页同族），深浅两色都成立，
+   因此不绑主题令牌；其余交互件一律消费令牌。 */
+.games .btn {
+  background: #8b5cf6;
+  color: var(--hira-on-accent);
+}
+.games .btn:hover {
+  background: #7c3aed;
+  color: var(--hira-on-accent);
+}
+
+.hidden {
+  display: none;
+}
+
+@media (max-width: 420px) {
+  .buttons {
+    flex-direction: column;
+    width: 100%;
+  }
+  .buttons .btn {
+    width: 100%;
+  }
+}

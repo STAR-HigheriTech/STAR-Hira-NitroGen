@@ -1,0 +1,329 @@
+/* ============================================================================
+ * hira://aisettings · 页面特有样式
+ *
+ * 只写「AI 设置这一页」自己的几何；控件原语（按钮 / 字段 / 徽标 / 卡片 / 面板 /
+ * 分段页签）一律来自 base.css，这里不另造第二套刻度或第二套配色。
+ * 新增分区时优先复用下面的 .ai-* 原语，不要在分区文件里写 inline style。
+ * ========================================================================= */
+
+/* 分区容器：三个分区都挂在一个 pane 里，非当前分区由脚本 hidden 掉 */
+.ai-pane {
+  min-height: 200px;
+}
+.ai-view[hidden] {
+  display: none;
+}
+/* 卡片之间的间距由 base.css#.card + .card 给（14px），这里只补分区内元素间距 */
+.ai-view > * + * {
+  margin-top: 12px;
+}
+/* 分区首行是工具条：工具条自带 16px 下边距，别叠加 */
+.ai-view > .toolbar + * {
+  margin-top: 0;
+}
+
+/* ── 三宿主共享状态条 ────────────────────────────────────────────────
+   侧栏面板 / 独立窗口 / 本页读写的是主进程里同一份状态（会话 / 模型 /
+   推理档位 / 网页审批）。这里只做"肉眼可见"：一行小字，不抢主体注意力。 */
+.ai-shared {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0 0 14px;
+  padding: 7px 12px;
+  border-radius: var(--r-md);
+  background: var(--tint-bg);
+  color: var(--text-soft);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.ai-shared[hidden] {
+  display: none;
+}
+.ai-shared__label {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--tint-bg-strong);
+  color: var(--text);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.ai-shared__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.ai-shared__key {
+  color: var(--text-muted);
+}
+.ai-shared__value {
+  max-width: 32ch;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── AI 技能大号入口 ──────────────────────────────────────────────────
+   技能的清单与管理只在插件页（本页不放第二套 UI），这里是一块醒目的跳板：
+   大图标 + 大标题 + 一句说明 + 右箭头，整块可点。
+   配色只用强调色的低透明度混合，深浅主题同一套公式，不写死颜色。 */
+.ai-skill-cta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0 0 18px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border));
+  border-radius: var(--r-lg);
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--accent) 12%, var(--surface)),
+      color-mix(in srgb, var(--accent) 4%, var(--surface)));
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color .15s ease, background-color .15s ease, transform .15s ease;
+}
+.ai-skill-cta:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  transform: translateY(-1px);
+}
+.ai-skill-cta:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+.ai-skill-cta__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+.ai-skill-cta__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ai-skill-cta__title {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.ai-skill-cta__go {
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--text-soft);
+  transition: color .15s ease, transform .15s ease;
+}
+.ai-skill-cta:hover .ai-skill-cta__go {
+  color: var(--accent);
+  transform: translateX(2px);
+}
+
+/* ── 卡片（模型服务）──────────────────────────────────────────────── */
+.ai-card-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.ai-card-name {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.008em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-card-url {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+.ai-card-desc {
+  margin-top: 4px;
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.55;
+  word-break: break-word;
+}
+.ai-card-desc.ai-muted {
+  color: var(--text-muted);
+  font-family: var(--hira-font-mono, ui-monospace, Consolas, "Courier New", "Microsoft YaHei UI", "Microsoft YaHei", monospace);
+  font-size: 11.5px;
+}
+
+/* ── 动作行 ──────────────────────────────────────────────────────────
+   左对齐、允许换行；插在行里的输入框吃掉剩余宽度（「+ 添加模型」的内联输入）。 */
+.ai-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.ai-actions > input {
+  flex: 1 1 200px;
+  min-width: 0;
+  height: var(--ctl-h-sm);
+}
+/* 卡片里最后一块是「+ 添加模型」：紧跟动作行，不再叠一份上边距 */
+.ai-card > .btn {
+  margin-top: 6px;
+}
+
+/* ── 模型清单 ──────────────────────────────────────────────────────── */
+.ai-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 10px;
+}
+.ai-model-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--ctl-h-sm);
+  padding: 0 10px;
+  border-radius: var(--r-xs);
+  background: var(--tint-bg);
+  font-size: 12px;
+}
+.ai-model-row:hover {
+  background: var(--tint-bg-strong);
+}
+.ai-model-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-model-id {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-model-row > .btn {
+  flex: none;
+  height: 22px;
+  padding: 0 8px;
+}
+
+/* ── 表单 ────────────────────────────────────────────────────────────
+   .panel 负责底色与内边距（展开态下沉），这里只排字段与动作。 */
+.ai-form .form-grid {
+  margin-bottom: 12px;
+}
+.ai-form .check {
+  margin: 4px 0 10px;
+}
+.ai-form textarea {
+  width: 100%;
+  min-height: 120px;
+  font-family: var(--hira-font-mono, ui-monospace, Consolas, "Courier New", "Microsoft YaHei UI", "Microsoft YaHei", monospace);
+  font-size: 12.5px;
+  line-height: 1.55;
+  tab-size: 2;
+}
+
+/* 试运行输出：与输入框同一族等宽字体，超长时可滚动而不是把页面撑爆 */
+.ai-run-output {
+  margin-top: 10px;
+  max-height: 240px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--tint-bg);
+  color: var(--text-soft);
+  font-family: var(--hira-font-mono, ui-monospace, Consolas, "Courier New", "Microsoft YaHei UI", "Microsoft YaHei", monospace);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.ai-run-output[hidden] {
+  display: none;
+}
+
+/* ── 说明文字 ──────────────────────────────────────────────────────── */
+.ai-hint {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+/* ── 用量 ──────────────────────────────────────────────────────────── */
+.usage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+.usage-cell {
+  padding: 14px 16px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+.usage-value {
+  font-size: 22px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.usage-label {
+  margin-top: 2px;
+  color: var(--text-soft);
+  font-size: 11.5px;
+}
+.ai-usage-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--row-h);
+  padding: 0 10px;
+  border-radius: var(--r-md);
+}
+.ai-usage-row:hover {
+  background: var(--hover-bg);
+}
+.ai-usage-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-usage-tokens {
+  flex: none;
+  color: var(--text-soft);
+  font-size: 11.5px;
+}
+
+/* 数据区与上方统计之间留一档更大的呼吸（危险动作不该贴着数字） */
+.ai-data-section {
+  margin-top: 26px;
+  padding-top: 4px;
+}
+.ai-data-section .notice {
+  margin-top: 10px;
+}
+.ai-data-section .ai-actions {
+  margin-top: 8px;
+}

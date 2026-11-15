@@ -1,0 +1,11 @@
+{
+  "id": "side-panel-skeleton",
+  "name": "侧栏骨架",
+  "version": "0.0.1",
+  "type": "ui-panel-plugin",
+  "trustLevel": "internal",
+  "nonDisableable": true,
+  "description": "侧栏面板的载体插件：管理面板视图的创建与显隐，是其它面板插件的前置依赖。",
+  "main": "./side-panel-skeleton.cjs",
+  "dependsOn": []
+}

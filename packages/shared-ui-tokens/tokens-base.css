@@ -1,0 +1,481 @@
+:root {
+  /*
+   * 原生控件的渲染方案（`<select>` 弹出列表、滚动条、表单默认样式）。
+   * 默认 light；深色在 tokens-dark.css 的 body.dark 里改成 dark ——
+   * 否则即便给 `<select>` 上了深色底，弹出的候选列表依旧由 UA 按浅色画。
+   */
+  color-scheme: light;
+  /* chrome 表面统一中性色：与内部页(设置页)《--bg:#f9fafb》同值，去掉浅色底的蓝相 */
+  --main-bg-color: #f9fafb;
+  --no-main-bg-color: transparent;
+  --no-main-font-color: #1a1a1a;
+  --sys-btn-font-color: #1a1a1a;
+  --main-border-color: transparent;
+  --new-tab-btn-bg-color: transparent;
+  --new-tab-btn-bg-color-hover: rgba(0, 0, 0, 0.1);
+  --new-tab-btn-font-color: #1a1a1a;
+  --new-tab-label-hover-bg-color: rgba(0, 0, 0, 0.05);
+  --tab-label-box-shadow-color: rgba(0, 0, 0, 0.1);
+  --main-btn-bg-color-hover: rgba(0, 0, 0, 0.1);
+  --addr-bar-bg-color: rgba(255, 255, 255, 0.8);
+  --addr-bar-bg-color-hover: rgba(255, 255, 255, 0.9);
+  --addr-bar-bg-color-focus: rgba(255, 255, 255, 1);
+  --addr-bar-border-color: rgba(0, 117, 255, 0.5);
+  --tool-btn-color: #1a1a1a;
+  --tool-btn-dis-color: rgba(0, 0, 0, 0.5);
+  --more-container-bg-color: rgba(255, 255, 255, 0.8);
+  --filter-back: saturate(180%) blur(20px);
+  --badge-font-color: white;
+  --badge-bg-color: #007aff;
+  --msg-icon-color: #007aff;
+  --bg-color: #ffffff;
+  --text-color: #1a1a1a;
+  --border-color: rgba(0, 0, 0, 0.1);
+  --accent-color: #3b82f6;
+  --accent-hover: #2563eb;
+  --secondary-color: #8e8e93;
+  --secondary-hover: #6d6d70;
+
+  /* STAR Hira NitroGen component tokens (light defaults) */
+  --hira-bg-surface: #f9fafb;
+  --hira-bg-elevated: #f7f9fc;
+  --hira-text-primary: #1a1a1a;
+  --hira-text-secondary: #6b7280;
+  --hira-border-subtle: rgba(0, 0, 0, 0.1);
+  --hira-accent-bg: rgba(59, 130, 246, 0.12);
+  --hira-hover-bg: rgba(0, 0, 0, 0.05);
+  /*
+   * 下面这一组此前**只有 token 名、没有定义** —— 各 UI 包一直靠 `var(--hira-x, 浅色字面量)`
+   * 的兜底在跑。浅色下看不出来（兜底就是设计值），深色下则全线失守：半透明黑叠在深色底上
+   * 等于「不可见」，`--hira-surface` 兜底的 #fff 更是直接变成白块。
+   * 这里补齐单一真源：浅色取值与原先的兜底完全一致（浅色零变化），深色在 tokens-dark.css 覆盖。
+   */
+  --hira-surface: #ffffff; /* 不透明控件面（下拉、输入等需要实底的） */
+  --hira-surface-soft: rgba(0, 0, 0, 0.04); /* 软面：选中/高亮底 */
+  --hira-bg-subtle: #f3f4f6; /* 更弱的填充（占位底、轨道底） */
+  --hira-field-bg: rgba(0, 0, 0, 0.04); /* 输入框/搜索框底色 */
+  --hira-field-bg-focus: rgba(0, 0, 0, 0.05); /* 输入框/搜索框聚焦底色 */
+  --hira-track-bg: rgba(0, 0, 0, 0.1); /* 进度条轨道 */
+  --hira-switch-off: rgba(0, 0, 0, 0.16); /* 开关关闭态轨道 */
+  --hira-text-tertiary: #9ca3af; /* 三级文本（元信息、说明） */
+  --hira-accent-soft: rgba(59, 130, 246, 0.14);
+  --hira-accent-soft-strong: rgba(59, 130, 246, 0.22); /* 软底之上再一档（active hover） */
+  --hira-danger: #dc2626;
+  --hira-danger-bg: rgba(220, 38, 38, 0.08);
+  --hira-warn: #d97706;
+  --hira-warn-bg: rgba(245, 158, 11, 0.12);
+  --hira-success: #16a34a;
+  --hira-success-bg: rgba(22, 163, 74, 0.1);
+  --hira-on-accent: #ffffff; /* accent 实底上的前景（滑块 / 复选勾 / 实心徽标） */
+
+  /*
+   * ── 面板设计语言（Fluent / Win11 系）────────────────────────────────
+   * 所有侧边面板共用这一组几何与材质 token —— 圆角、描边、控件高度、
+   * 卡片底、hover 底、焦点环只在这里定义一次。各面板的局部样式引用它们，
+   * 因此「一体化」不是靠逐处对齐像素，而是靠同一个源头。
+   */
+  /* UI 字体栈（**唯一真源**：shared-types/theme.mjs#UI_FONT_STACK，运行时随主题下发；
+     这里是首帧 / 拿不到令牌时的静态兜底，必须与它逐字同值）。
+     要点：中文 UI 字体要显式写、且 `Microsoft YaHei UI` 排在文档版 `Microsoft YaHei`
+     之前 —— 否则小字号中文会按系统默认回退到宋体那一类点阵字形。 */
+  --hira-font-ui: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI",
+    "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC",
+    system-ui, -apple-system, sans-serif;
+  /* 等宽栈（同源：shared-types/font-stack.mjs#UI_MONO_STACK）。中文必须显式带 UI 字体，
+     否则会回退到 NSimSun（点阵宋）。 */
+  --hira-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas,
+    "Microsoft YaHei UI", "Microsoft YaHei", monospace;
+  /*
+   * ── 圆角刻度（**全部**由主题圆角派生，唯一一份公式）─────────────────
+   * `--hira-theme-radius` 由渲染层主题控制器写到 html 上（= 主题 style.cornerRadius，
+   * 见 shared-types#themeTokens）；这里给的是「主题还没下发」时的出厂缺省 6px。
+   *
+   * 基准就是**网页视图 / 浮层**用的那一个数（它们直接取 `--hira-theme-radius`）。
+   * 这组令牌是给"网页之外的表层"用的：以基准为中心、按**固定 1px 步长**往上往下取整数档
+   * （`r ± N 步`），所以同一数值下它们只比网页那一圈大 1~3px，是同一个量级。
+   *
+   * ⚠ 为什么是"加步长"而不是"乘系数"：乘法在大圆角时会翻倍 —— 曾经的 1×/1.33×/1.67×/2.33×
+   *   让 r=6 还看得过去，r=12 就变成"网页 12、标签 18、卡片 28"（用户原话"各处圆角偏大"）。
+   *   加法没有这个累积效应：r=12 时也只是 11/12/13/14/15/16。
+   *
+   * ⚠ 步长不是常量：`--hira-radius-step` 由 shared-types#themeTokens 下发，圆角为 0 时
+   *   **同时归零** —— 主题拉到 0 必须全身直角，不能出现"主题 0、卡片还剩 1px"。
+   *   这里的 1px 只是"主题令牌还没到"时的首帧兜底（配 r=6 用）。
+   *
+   * ⚠ 只有"表面"才用这些档；favicon 遮罩、进度条这类 1~3px 的微圆角不属于
+   *   主题圆角（它们不是 UI 容器的边），不要在那些地方套本组令牌。
+   */
+  --hira-theme-radius: 6px;
+  --hira-radius-step: 1px;
+  /* 5px：小色块 / 紧凑徽标（比基准收一档；max 兜住 r=0 时可能出现的负数） */
+  --hira-radius-2xs: max(0px, calc(var(--hira-theme-radius, 6px) - var(--hira-radius-step, 1px)));
+  /* 6px：徽标 / 极小控件 —— 与网页视图同档 */
+  --hira-radius-xs: var(--hira-theme-radius, 6px);
+  /* 7px：按钮 / 下拉 / 输入框 / 列表行 / 分组内件（网页之外最常用的一档） */
+  --hira-radius-sm: calc(var(--hira-theme-radius, 6px) + var(--hira-radius-step, 1px));
+  /* 见上：列表行与输入框不再比按钮更圆，与按钮同档（保留名字免得动上百处调用点） */
+  --hira-radius-md: calc(var(--hira-theme-radius, 6px) + var(--hira-radius-step, 1px));
+  /* 8px：卡片 / 分组容器 */
+  --hira-radius-lg: calc(var(--hira-theme-radius, 6px) + var(--hira-radius-step, 1px) * 2);
+  /* 9px：大卡片 / 编辑面板 */
+  --hira-radius-xl: calc(var(--hira-theme-radius, 6px) + var(--hira-radius-step, 1px) * 3);
+  /* 标签档：与按钮同档（不再比网页圆一圈）。 */
+  --hira-radius-tab: calc(var(--hira-theme-radius, 6px) + var(--hira-radius-step, 1px));
+  /* 控件按钮档：浮层里 28~32px 的方形 hover 按钮，与网页同档，才不显憨。 */
+  --hira-radius-control: var(--hira-theme-radius, 6px);
+  --hira-control-height: 30px; /* 面板里的标准控件高度（按钮 / 输入 / 下拉）：紧凑口径，不抢列表的行数 */
+  /* 列表行的最小高度：行是面板里最密的元素。36 是"指针稳、但不虚"的档 ——
+     再大就变成一项占两条的空白，反而不像列表。 */
+  --hira-row-height: 36px;
+
+  /*
+   * ── 面板排版节奏（**唯一一份**）──────────────────────────────────
+   * 侧边面板的呼吸感只由这组刻度决定；面板里不要再出现 10 / 14 / 18 这类
+   * 一次性 magic number —— 改这里一处，全站面板同步变松或变紧。
+   */
+  --hira-panel-pad-x: 14px;        /* 内容区左右内距：窄侧栏的常规档，不再往外堆白 */
+  --hira-panel-pad-top: 6px;
+  --hira-panel-pad-bottom: 20px;
+  --hira-panel-gap: 10px;          /* 同组元素之间 */
+  --hira-panel-gap-loose: 18px;    /* 组与组之间 */
+  --hira-node-gap: 4px;            /* 行内两行小字之间 */
+  --hira-panel-header-height: 46px;
+  --hira-section-gap-top: 16px;    /* 区块抬头之上 */
+  --hira-section-gap-bottom: 8px;  /* 区块抬头之下 */
+
+  /* 发丝描边：只在**必须**分层的地方用（分隔线），不再给每个行/按钮描边 */
+  --hira-hairline: rgba(0, 0, 0, 0.055);
+  /* 卡片底：叠在面板底色之上的一层极轻的表面（不是实心白块） */
+  --hira-panel-card-bg: rgba(255, 255, 255, 0.55);
+  --hira-panel-card-hover: rgba(0, 0, 0, 0.035);
+  /* 选中行：accent 软底 + 左侧强调条 */
+  --hira-panel-selected: var(--hira-accent-soft);
+  --hira-panel-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --hira-panel-shadow-flyout: 0 8px 24px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.08);
+  /* 键盘焦点环：Fluent 的 2px 外环，不改变布局 */
+  --hira-focus-ring: 0 0 0 2px rgba(59, 130, 246, 0.45);
+  /*
+   * 「活动面」框线**颜色**（分屏活动格 / 侧栏聚焦框 / 侧栏调宽把手共用）。
+   *
+   * ⚠ 与上面那条是**两件事**，别混：
+   *   `--hira-focus-ring` 是 **box-shadow 列表**（"0 0 0 2px 颜色"），只能喂给 box-shadow；
+   *   本变量是**颜色**，喂给 border-color / background / color-mix()。
+   * 拿 box-shadow 列表当颜色用不会报错，只会让整条声明「计算值非法」→ 落回 initial
+   * （背景透明、边框变 currentColor）—— 侧栏那条调宽线因此"调多少次透明度都不显示"。
+   * 主题 / 插件要改活动面配色，**只改这一条**即可。
+   */
+  --hira-split-focus-ring: rgba(74, 158, 255, 0.9);
+  /*
+   * ── 动效曲线（Fluent X）──────────────────────────────────────────────
+   * Fluent 的"流畅"来自曲线而不是时长：进场用减速曲线（快起慢收），
+   * 状态变化用标准曲线。时长只有两档（120 / 180ms），避免各处各调一个数。
+   */
+  --hira-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --hira-ease-decel: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --hira-dur-fast: 120ms;
+  --hira-dur-base: 180ms;
+
+  --webview-border: var(--hira-border-subtle);
+  /* 内容洞（.webview-container）的圆角 = **主题圆角**：主进程按同一字段裁原生网页视图
+     （LayoutCoordinator#_tabBorderRadius ← style.cornerRadius），此处只是它的别名，
+     数字不许在本文件另写一份（两处不同值 = 网页与洞错位）。 */
+  --webview-radius: var(--hira-theme-radius, 6px);
+
+  /*
+   * 顶部 chrome 行高。
+   * ⚠ 这个数**同时是系统窗口按钮带的高度**（主进程 WCO 的 titleBarOverlay.height，
+   *   真源 = shared-types 的 WINDOW_CONTROLS_OVERLAY_HEIGHT，同为 38）：系统把三颗按钮
+   *   垂直居中在这条带子里，两者不等就会出现「按钮比标签 / 地址栏高一截、顶部像贴死」。
+   *   改这里必须同时改那一处。
+   */
+  --ng-navbar-top-row-height: 38px;
+  --ng-navbar-bottom-row-height: 36px;
+  --ng-navbar-bottom-row-gap: 4px;
+  --ng-navbar-bottom-row-padding-x: 8px;
+  --ng-navbar-bottom-row-margin-top: 2px;
+
+  /* 侧栏（纵排宿主）里的按钮间距：窄栏只有 134px 可用宽，4px 的缝在按钮折行时
+     显得松散 —— 一路收到 **0**（按钮彼此相邻，只剩各自的圆角与内边距当留白；
+     这是间距的底，再"小"就没有了）。消费方是 ui-navbar 的纵排规则与侧栏底槽按钮簇；
+     横排导航栏仍用上面的 --ng-navbar-bottom-row-gap（两种形态各一条口径）。 */
+  --ng-navbar-column-gap: 0px;
+
+  /* 侧栏里的按钮**尺寸**：比原尺寸（32）收 3px —— 29px、图标等比（18 → 16）。
+     这一档是试出来的：26 / 28 嫌小，30 / 32 嫌大，29 是中间那条线。
+     两个宿主共用这组取值：纵排的导航栏块内部、借住到侧栏底槽的按钮簇。 */
+  --ng-navbar-action-btn-size-column: 29px;
+  --ng-navbar-action-btn-icon-size-column: 16px;
+
+  /* 侧栏底槽里「面板按钮簇」的高度护栏。面板是插件、数量会长，没有护栏就会一直
+     往下长、把标签列表挤没 —— 到这里为止，多出来的在簇**内部**滚动
+     （菜单按钮不可压缩，恒定留在可视区）。见 ui-navbar#PANEL_BUTTONS_CSS。 */
+  --ng-navbar-dock-buttons-max-height: 30vh;
+
+  /* 底部栏与窗口底缘之间的空隙：最低那一行不贴着边，观感上「有收口」。
+     由 ui-chrome-layout 的 #chrome-bottom 以内边距消费（内边距计入上报高度，
+     网页下边界随之抬起来，空隙不会被网页盖住）；底部一块 bar 都没有时容器为空、
+     整块 display:none，这条自然不生效。 */
+  --ng-chrome-bottom-gap: 6px;
+
+  --ng-navbar-action-btn-size: 32px;
+  /* chrome 里的 hover 按钮跟主题圆角（= 标准档，见上面 --hira-radius-sm；不再放大一档）。 */
+  --ng-navbar-action-btn-radius: var(--hira-radius-sm);
+  --ng-navbar-add-tab-width: 35px;
+  --ng-navbar-add-tab-font-size: 1.6em;
+
+  --ng-omnibox-height: 30px;
+  --ng-omnibox-padding-x: 12px;
+  --ng-omnibox-gap: 8px;
+  /* 地址栏字段圆角：**跟随主题**，取 chrome 里最常用的按钮档（r + 1）。
+     这里曾经写死 18px —— 30px 高的字段直接被裁成胶囊，主题圆角是 6 时它却圆 18，
+     是"网页之外到处比网页圆一圈"里最显眼的一处。改成跟随主题后一度用了大面档
+     （r + 3），30px 高的字段仍显圆；现在与标签 / 按钮同级（r=6 → 7），
+     主题拉到 0 时同样是直角。 */
+  --ng-omnibox-radius: var(--hira-radius-sm);
+  /* 字段内固定按钮与地址栏共用同一套圆角计算，主题变更时同步，不在组件里写死几何值。 */
+  --ng-omnibox-action-radius: var(--ng-omnibox-radius);
+  --ng-omnibox-field-border-width: 1px;
+  /* 按钮外缘到字段外缘的目标距离；高度和水平间距都由这一档推导。 */
+  --ng-omnibox-action-inset: 2px;
+  --ng-omnibox-action-size: calc(
+    var(--ng-omnibox-height)
+    + var(--ng-omnibox-field-border-width)
+    + var(--ng-omnibox-field-border-width)
+    - var(--ng-omnibox-action-inset)
+    - var(--ng-omnibox-action-inset)
+  );
+  --ng-omnibox-action-offset: calc(
+    var(--ng-omnibox-action-inset) - var(--ng-omnibox-field-border-width)
+  );
+  /* 地址栏的**宽度上限**（唯一真源）。
+     没有它时 .omnibox / .omnibox__field 都是 flex:1 —— 用户把两侧按钮删光后，
+     地址栏会跟着窗口一路撑满，宽屏上成了一条"没有理由这么长"的输入框。
+     窄窗口仍可自由收缩（flex:1; min-width:0 保留），只是不再无限变宽。
+     搜索建议下拉也读这条（ui-searchbar#getAnchorRect）：下拉比地址栏宽，
+     但同样不该越过这个上限。 */
+  --ng-omnibox-max-width: 720px;
+  /* 全功能侧栏里的地址栏很窄，但下拉仍是命令面板，需要完整显示标题与来源。
+     侧栏模式使用独立目标宽度，并受窗口朝向侧的可用空间夹取（见
+     ui-searchbar/src/anchor.ts）；横向导航栏仍按输入框宽度展开。 */
+  --ng-omnibox-side-dropdown-width: 600px;
+
+  --ng-tab-height: 32px;
+  /* 标签左右内边距：**恒定值**，不随标签密度变化。
+     曾经它随密度在 5~12px 之间收放，结果是同一排标签的内容前缘忽远忽近
+     （标签少时多出一截前方边距、标签多时反而紧贴）——观感不可预期。
+     现在固定为紧贴前缘的那一档，密度压力只由宽度与 2px 级的标签缝承担
+     （见 ui-tabbar/view/tabSizing.js 的说明）。 */
+  --ng-tab-padding-x: 5px;
+  --ng-tab-gap: 8px; /* 标签**内部** favicon 与标题的间距 */
+  --ng-tab-gap-x: 2px; /* 标签**之间**的间距（很小的呼吸缝，可随密度收窄到 0） */
+  --ng-tab-radius: var(--hira-radius-tab);
+  /*
+   * 标签宽度三档 —— Edge 式压缩（标签多起来先缩宽度、再收窄标签之间的缝，最后才滚动）：
+   *   --ng-tab-width         非选中标签的**偏好宽**（也是 flex 收缩的基准）
+   *   --ng-tab-active-width  选中标签的偏好宽（比普通标签宽一点，仍是收缩基准）
+   *   --ng-tab-min-width     **压缩下限**：再挤也留得住 favicon + 关闭键 + 一小截标题
+   * ⚠ 曾经 --ng-tab-min-width 被当成"默认宽"用（140px）—— 名字与语义不符，
+   *   已拆开：默认宽 = --ng-tab-width，下限才是 min-width（见 ui-tabbar/styles.js）。
+   */
+  --ng-tab-width: 140px;
+  --ng-tab-active-width: 160px;
+  --ng-tab-max-width: 200px;
+  /*
+   * **合体分屏（.in-split-run）整段的宽度系数**：两半各占「普通标签宽 × 系数 ÷ 2」。
+   * 半宽里 favicon、关闭键与两条内缝已吃掉大半，按 1.0 算标题只剩一个字符 —— 太挤；
+   * 1.45 是实测舒展、又不至于把「合体 = 一条标签」的视觉关系撑散的分寸。
+   * width / min / max 三档**同步乘**这个系数，压缩曲线与普通标签同一条
+   * （谁消费：ui-tabbar/styles.js 的 .in-split-run 规则 + view/tabSizing.js）。 */
+  --ng-tab-split-scale: 1.45;
+  /*
+   * 压缩下限取 90px 是**算出来的**，不是随手给的。挤到下限时标签里必须有：
+   *   favicon 槽 20px + 关闭键 24px + 两侧内边距 2×5px（见上面的 padding-x）
+   *   + **两条内部缝 2×8px**（--ng-tab-gap，⚠ 它**不参与压缩** —— 挤它只会让标题贴到图标上）
+   *   + 左右边框 2×1px  =  72px，
+   * 再加**标题至少要露出的部分**：13px 字号的一个汉字 + 省略号（约 18px）→ 90px。
+   * 于是挤到下限时：favicon / 关闭键完整可见，标题**至少能看见第一个字**（多出的带省略号），
+   * 而 favicon 与标题之间的呼吸缝一点都不少。
+   * 故意不学主流浏览器"再挤就把关闭键盖到 favicon 上"那一步 —— 那会让按钮变得难点。
+   */
+  --ng-tab-min-width: 90px;
+  /*
+   * **选中标签的下限**：压缩之后选中那条仍要比邻居宽一截（用户要的"展开"）——
+   * 但不必是平时的 160px。给 32px 的差额：刚好再容下两三个字，一眼就能认出当前标签。
+   * 它同时是「本条最晚被压缩」的下限，所以挤到极窄时先压邻居、最后才轮到它。
+   */
+  --ng-tab-active-min-width: 122px;
+  /*
+   * **有音频/静音按钮的标签，下限要再加这一截**：那个按钮（20px）与它前面那道缝（2px）
+   * 是**额外**占宽 —— 挤到普通下限时标题会被它顶成 0 宽（实测：图标区 42px 时标题宽度为 0），
+   * "至少看得见第一个字"就不成立了。故这类标签按同一口径把下限抬高 22px。
+   * 谁消费：ui-tabbar/styles.js 的 `:has()` 规则（按钮一显示，下限与宽度都跟着长 ——
+   * 宽度那条走 min-width 过渡，所以是滑过去的）。普通标签不受影响。
+   */
+  --ng-tab-audio-extra: 22px;
+  /*
+   * 标签之间那道缝的**下限**（跟随压缩系数连续收窄，见 ui-tabbar/view/tabSizing.js）：
+   * 标签挤到各自下限还放不下时，先把这 2px 的呼吸缝收掉，再轮到自己滚动。
+   * 内边距不参与这套映射（它是恒定值，理由见上面的 padding-x）。
+   */
+  --ng-tab-gap-x-min: 0px;
+  --ng-tab-separator-inset: 6px;
+  --ng-tab-active-border-color: rgba(100, 116, 139, 0.32);
+  /*
+   * 选中标签/选中行（tabbar + 打开标签面板 + 固定标签面板**共用同一组**）。
+   * 浅色下等价于原来的 `--bg-color` / `--accent-hover`，用引用而非字面量 → 各浅色主题
+   * 的强调色仍然生效；深色在 tokens-dark.css 里另行覆盖（深色要「提亮」而不是照搬）。
+   */
+  --ng-tab-active-bg: var(--bg-color);
+  --ng-tab-active-fg: var(--accent-hover);
+  --ng-tab-separator-color: rgba(148, 163, 184, 0.2);
+
+  --ng-tabs-container-padding-x: 8px;
+  --ng-tabs-after-min-width: 20px;
+  --ng-tabs-scrollbar-height: 4px;
+  /* 标签条横向滚动条滑块：**静息可见**，hover 再提亮一档。
+     为什么静息不透明：滚动条只在「标签溢出」时才存在（overflow-x: auto），
+     所以「一直可见」正好等于「标签一多就自动出现」，不必用 JS 去判溢出。 */
+  --ng-tabs-scrollbar-thumb: rgba(0, 0, 0, 0.2);
+  --ng-tabs-scrollbar-thumb-hover: rgba(0, 0, 0, 0.28);
+  --ng-tabs-drag-handle-color: rgba(
+    0,
+    0,
+    0,
+    0.25
+  ); /* 标签栏拖拽手柄（深色需转浅，见 tokens-dark） */
+
+  /*
+   * ── 动效基线（学 Hira）────────────────────────────────────────────────
+   * Hira 全库的动画语言只有一句话：`* { transition: 200ms }` —— 一条全局基线 +
+   * 少数关键处显式 `transition: none` 退出（拖拽镜像、滚动条滑块…）。
+   * 好处是**所有交互的速度天然一致**，不会有「这个按钮 0.1s、那个面板 0.3s」的散乱。
+   *
+   * 这里照搬这个思路，但不用 `*` 通配（那会把原生 view 的尺寸变化也拽进过渡），
+   * 而是给出同一组时长/缓动 token，由各组件显式引用；拖拽期间再按 Hira 的做法
+   * 显式关掉（见 tabbar/panel 的 drag 分支）。
+   *   fast —— hover / 颜色 / 透明度这类「即时反馈」
+   *   base —— 宽度 / 高度这类「结构性重排」（开合标签、行塌陷）
+   */
+  --ng-anim-fast: 120ms;
+  --ng-anim-base: 180ms;
+  --ng-anim-ease: ease;
+}
+
+body {
+  --control-space-top: 0px;
+  --control-space-left: 0.3em;
+  --control-space-right: 0.3em;
+  /* 系统原生窗口按钮（WCO）占宽的**兜底估值**（Windows 三颗 ≈ 138px）。
+     真实宽度由渲染层实测写入 --ng-wco-reserve —— 不同 DPI / 系统缩放下按钮宽度不同，
+     写死的数字只能是兜底（见 apps/app-main/src/renderer/app-shell/wco.js）。 */
+  --window-controls-width: 138px;
+  --navbar-extra-height: 0px;
+}
+
+/*
+ * 系统原生窗口按钮（WCO）：三颗按钮由**操作系统**画在窗口右上角，它们不在 DOM 里，
+ * 而是压在内容之上。因此**最顶那一行**必须把这段宽度让出来 —— 否则标签条 / 行末按钮
+ * 铺到窗口最右，会被压在系统按钮底下点不到。
+ *
+ * 为什么是"最顶那一行"而不是固定某一块：强制原生可以与**任何布局**共存
+ * （垂直标签 / 把导航栏放到顶部 / 底部栏…），那一条最靠上的行才是会被压住的那一行。
+ * 行容器由 ui-chrome-layout 按计划生成（#chrome-top 下的 .chrome-row），
+ * 所以这里只认"第一个行容器"这一个结构事实，不认识任何具体栏目。
+ *
+ * 让出的宽度取实测值（--ng-wco-reserve），拿不到时退回兜底估值。
+ * 这个标记由窗口自己回答（navigator.windowControlsOverlay.visible）——
+ * 不是读设置推断的，所以不会出现"设置说原生、窗口其实没启用"的分裂。
+ */
+body[data-window-controls='native'] #chrome-top > .chrome-row:first-child {
+  box-sizing: border-box;
+  padding-right: var(--ng-wco-reserve, var(--window-controls-width));
+}
+
+/*
+ * chrome（navbar / tabbar / searchbar / rail 等外壳件）的 hover 底色与描边。
+ *
+ * 这里**曾经**是 `--ui-hover-light` / `--ui-hover-dark` 一对静态取值、并且只在
+ * `#navbar, .tab-item …` 这几个选择器内生效。问题在于消费方（tab 的 hover、行 hover）
+ * 一律只引用 `-light`，主题切换时没人去换名字 —— 深色下就吃到了「深灰半透明」，
+ * 叠在 `#1e1e1e` 上等于没有 hover 反馈。
+ * 现在只保留**一组不带后缀的名字**，由主题在 tokens-dark.css 里覆盖取值。
+ */
+:root {
+  --ui-border: rgba(148, 163, 184, 0.14);
+  --ui-hover: rgba(15, 23, 42, 0.06);
+}
+
+body {
+  --navbar-base-height: 76px;
+}
+
+body.navbar-compact-mode {
+  --navbar-base-height: 42px;
+}
+
+#navbar.navbar-compact-mode {
+  --navbar-height: calc(44px + var(--control-space-top));
+}
+
+/*
+ * 原生表单控件的字体**不继承** —— UA 样式会给 button / input / select / textarea
+ * 指定系统控件字体，而那个默认字体在中文 Windows 上会落到宋体点阵。
+ * 「浮层里的按钮 / 输入框是粗点阵宋体」绝大多数不是组件自己写了字体，而是漏了这一步。
+ * 统一在令牌基线里归一：控件一律继承所在容器的 UI 字体（`--hira-font-ui` 已由各视图
+ * 的 body 落到继承链上）。
+ */
+button,
+input,
+select,
+textarea,
+optgroup {
+  font-family: inherit;
+}
+
+#task-overlay {
+  --task-overlay-global-rail-width: 44px;
+  --task-overlay-content-left-offset: calc(
+    var(--task-overlay-global-rail-width) + 20px
+  );
+  --task-sidebar-card-radius: 10px;
+  --task-sidebar-card-padding: 8px 10px;
+  --task-sidebar-card-padding-compact: 6px 8px;
+  --task-sidebar-card-font-size-compact: 14px;
+  --task-sidebar-card-min-height-compact: 30px;
+  --task-sidebar-card-margin-compact: 4px;
+  --task-sidebar-card-border-light: rgba(0, 0, 0, 0.04);
+  --task-sidebar-card-border-dark: rgba(255, 255, 255, 0.08);
+  --task-sidebar-card-bg-light: rgba(255, 255, 255, 0.66);
+  --task-sidebar-card-bg-dark: rgba(255, 255, 255, 0.08);
+  --task-sidebar-card-hover-bg-light: rgba(234, 239, 244, 0.88);
+  --task-sidebar-card-hover-bg-dark: rgba(255, 255, 255, 0.14);
+  --task-sidebar-card-hover-border-light: rgba(0, 0, 0, 0.11);
+  --task-sidebar-card-hover-border-dark: rgba(255, 255, 255, 0.16);
+  --task-sidebar-card-gap: 6px;
+}
+
+#task-overlay.global-rail-hidden {
+  --task-overlay-content-left-offset: 8px;
+}
+
+#task-sidebar-panel {
+  --task-sidebar-panel-height: 220px;
+  --task-sidebar-rail-width: 128px;
+  --task-sidebar-rail-collapsed-width: 48px;
+  --task-sidebar-rail-active-index: 0;
+}
+
+.task-sidebar-panel-tabs {
+  --task-sidebar-rail-item-height: 34px;
+}
+
+#task-sidebar-pinned-content {
+  --task-sidebar-pinned-height: 180px;
+}
+
+#password-capture-bar {
+  --password-capture-button-bg: rgba(255, 255, 255, 0.72);
+  --password-capture-button-border: rgba(0, 0, 0, 0.07);
+  --password-capture-button-hover-bg: rgba(234, 239, 244, 0.88);
+  --password-capture-button-hover-border: rgba(0, 0, 0, 0.11);
+}

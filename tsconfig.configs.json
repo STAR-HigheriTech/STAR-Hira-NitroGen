@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": false,
+    "moduleDetection": "force",
+    "verbatimModuleSyntax": false,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["electron.vite.config.ts", "drizzle.config.ts", "eslint.config.ts"],
+  "exclude": ["node_modules", "**/dist/**", "out/**"]
+}

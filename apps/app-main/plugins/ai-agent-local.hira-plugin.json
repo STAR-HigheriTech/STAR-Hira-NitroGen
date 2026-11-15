@@ -1,0 +1,12 @@
+{
+  "id": "ai-agent-local",
+  "name": "AI Agent · 本地文件与办公",
+  "version": "1.0.0",
+  "type": "feature-plugin",
+  "trustLevel": "internal",
+  "description": "用户授权工作区内的文件搜索、读写、命令执行，以及 DOCX / XLSX / PPTX / PDF 的读取与生成。",
+  "main": "./ai-agent-local.cjs",
+  "dependsOn": [
+    "ai-engine"
+  ]
+}

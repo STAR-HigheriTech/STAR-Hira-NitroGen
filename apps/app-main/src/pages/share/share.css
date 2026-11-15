@@ -1,0 +1,58 @@
+/* 分享页特有规则。公共骨架（body 配色 / .btn / .empty / 滚动条）来自 hira://shared/base.css。
+   本页在骨架之外只有两件事：**居中**，以及**一张二维码卡片**。
+   零描边：卡片与 URL 条都不画 border，层次只靠 surface / 软底。 */
+
+/* 居中的单卡片页：骨架的 body 只管配色与 24px 内边距，居中要自己说。 */
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+/* 卡片几何（底色 / 圆角 / 内边距）走骨架的 .card，这里只补居中与宽度上限 */
+.share-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  max-width: 420px;
+  padding: 22px;
+}
+
+.qr {
+  width: 224px;
+  height: 224px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.qr svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* 地址条：等宽字 + 字段软底 + 中圆角（与输入框同族），不额外描边。 */
+.url {
+  width: 100%;
+  max-height: 4.8em;
+  overflow: hidden;
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+  background: var(--field-bg);
+  color: var(--text-soft);
+  font-family: var(--hira-font-mono, ui-monospace, Consolas, "Courier New", "Microsoft YaHei UI", "Microsoft YaHei", monospace);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+  word-break: break-all;
+}
+
+/* ⚠ 不能叫 .row —— 骨架的 .row 是"列表行"（有底色/内边距/hover），
+   语义完全不同，重名会让这排按钮莫名长出背景和内边距。 */
+.share-actions {
+  display: flex;
+  gap: 8px;
+}

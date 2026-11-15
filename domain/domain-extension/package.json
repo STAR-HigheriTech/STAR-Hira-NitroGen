@@ -1,0 +1,21 @@
+{
+  "name": "@hira-ng/domain-extension",
+  "version": "0.0.1",
+  "private": true,
+  "main": "dist/index.cjs",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.cjs",
+      "default": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --format=cjs --platform=node --packages=external --outfile=dist/index.cjs"
+  },
+  "dependencies": {
+    "@hira-ng/shared-types": "workspace:*"
+  }
+}

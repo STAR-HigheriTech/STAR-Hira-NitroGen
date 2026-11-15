@@ -1,0 +1,15 @@
+{
+  "id": "bookmark-backup-provider",
+  "name": "书签备份引擎",
+  "version": "0.0.1",
+  "type": "feature-plugin",
+  "trustLevel": "internal",
+  "description": "提供书签自动备份的列出、立即备份与恢复能力。",
+  "main": "./bookmark-backup-provider.cjs",
+  "capabilities": [
+    "bookmark-backup.list",
+    "bookmark-backup.now",
+    "bookmark-backup.restore"
+  ],
+  "dependsOn": []
+}

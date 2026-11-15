@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>导入数据</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="hira://shared/browser-import.css" />
+    <link rel="stylesheet" href="./import-data.css" />
+  </head>
+  <body>
+    <main class="importer">
+      <header class="page-header">
+        <div class="page-heading">
+          <h1>导入数据</h1>
+        </div>
+      </header>
+
+      <!-- 一键迁移卡片（Chrome / Edge）：由 import-data.js 挂载，
+           与 OOBE 迁移步共用 hira://shared/browser-import.js -->
+      <div id="browser-import"></div>
+
+      <section class="card">
+        <input type="file" id="file" class="importer-input" hidden />
+        <div class="form-grid importer-formats">
+          <label class="field">
+            <span class="field-label">数据类型</span>
+            <select id="kind">
+              <option value="bookmarks">书签</option>
+              <option value="passwords">密码（CSV）</option>
+            </select>
+          </label>
+        </div>
+        <div class="form-grid importer-formats" id="formats-wrap" hidden>
+          <label class="field">
+            <span class="field-label">文件格式</span>
+            <select id="format"></select>
+          </label>
+        </div>
+        <div class="importer-actions">
+          <button class="btn" id="choose" type="button">选择文件</button>
+          <button class="btn btn-primary" id="import" type="button" disabled>导入书签</button>
+        </div>
+        <p class="importer-file" id="file-name">尚未选择文件。</p>
+      </section>
+
+      <section class="card" id="result" hidden>
+        <h2 class="card-title">导入结果</h2>
+        <dl class="def-grid" id="result-grid"></dl>
+        <p class="importer-hint" id="result-hint"></p>
+      </section>
+
+      <p class="importer-status" id="status"></p>
+    </main>
+    <script type="module" src="./import-data.js"></script>
+  </body>
+</html>

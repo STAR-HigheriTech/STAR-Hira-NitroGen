@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "noEmit": true,
+    "allowJs": false,
+    "checkJs": false,
+    "moduleDetection": "force",
+    "verbatimModuleSyntax": false,
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["scripts/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["node_modules", "**/dist/**", "out/**", ".tmp/**", "tests/ui/output/**"]
+}

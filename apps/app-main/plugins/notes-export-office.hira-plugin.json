@@ -1,0 +1,14 @@
+{
+  "id": "notes-export-office",
+  "name": "集锦 Office 导出",
+  "version": "0.0.1",
+  "type": "feature-plugin",
+  "trustLevel": "internal",
+  "description": "为集锦导出提供 Excel（.xlsx）与 Word（.docx）格式。",
+  "main": "./notes-export-office.cjs",
+  "render": "./notes-export-office.renderer.js",
+  "contributes": {
+    "rendererSlots": ["note.export-format"]
+  },
+  "dependsOn": ["notes-service"]
+}

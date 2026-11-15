@@ -1,0 +1,157 @@
+/* PDF 阅读器（hira://pdf）
+ *
+ * 独立查看器，不加载 base.css：自带一套与内部页同口径的浮动工具条
+ * （零描边、软底、32px 控件、single ring）。阅读区保持中性灰画布，
+ * 让纸张成为唯一的亮面 —— 分层只靠底色，不画分割线。 */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #525659;
+  color: #e8eaed;
+  /* 字体栈走唯一令牌（shared-types/theme.mjs#UI_FONT_STACK）；兜底串与它同值。 */
+  font-family: var(--hira-font-ui, 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans SC', system-ui, -apple-system, sans-serif);
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* 工具条：与阅读区同族的中性面，不用分割线，靠底色差分层 */
+#toolbar {
+  background: #3c4043;
+  padding: 8px 12px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+#toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  min-width: 32px;
+  padding: 0 12px;
+  background: transparent;
+  color: #e8eaed;
+  border: 0;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+}
+#toolbar button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+#toolbar button:active:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+}
+#toolbar button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(138, 180, 248, 0.45);
+}
+#toolbar button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 页码：软底槽，与按钮同高但更窄 */
+#toolbar input[type='number'] {
+  width: 52px;
+  height: 28px;
+  padding: 0 6px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e8eaed;
+  border: 0;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+#toolbar input[type='number']::-webkit-inner-spin-button,
+#toolbar input[type='number']::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+#toolbar input[type='number']:focus {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 0 2px rgba(138, 180, 248, 0.45);
+}
+
+#toolbar #total,
+#toolbar #zoom {
+  color: #9aa0a6;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+#toolbar .spacer {
+  flex: 1;
+}
+
+#toolbar #filename {
+  color: #bdc1c6;
+  font-size: 13px;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#viewer {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  padding: 20px 0;
+}
+
+canvas {
+  background: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  max-width: 100%;
+}
+
+.loading,
+.error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #bdc1c6;
+  font-size: 14px;
+}
+.error {
+  color: #ff6b6b;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(255, 255, 255, 0.18);
+  border-top-color: #8ab4f8;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 12px;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "id": "qr-scanner-panel",
+  "name": "扫码器面板",
+  "version": "0.0.1",
+  "type": "ui-panel-plugin",
+  "trustLevel": "internal",
+  "description": "扫码器：把二维码拖进取景框即可识别。默认关闭。",
+  "main": "./panel-generic.cjs",
+  "render": "./qr-scanner.renderer.js",
+  "defaultDisabled": true,
+  "contributes": {
+    "panels": [
+      {
+        "id": "qr-scanner-panel",
+        "title": "扫码器",
+        "icon": "ScanLine",
+        "order": 210,
+        "segment": "panel"
+      }
+    ]
+  },
+  "optionalDependsOn": [
+    "totp-service"
+  ],
+  "dependsOn": [
+    "side-panel-skeleton",
+    "qr-scanner"
+  ]
+}

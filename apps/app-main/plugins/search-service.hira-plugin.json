@@ -1,0 +1,20 @@
+{
+  "id": "search-service",
+  "name": "搜索聚合引擎",
+  "version": "0.0.1",
+  "type": "feature-plugin",
+  "trustLevel": "internal",
+  "description": "聚合历史、书签、打开标签、Bangs 与搜索引擎建议，并做相关性排序。",
+  "main": "./search-service.cjs",
+  "capabilities": [
+    "search.search",
+    "search.searchHistorySuggestions",
+    "search.recordSearchQuery",
+    "search.removeSearchHistoryEntry",
+    "search.clearSearchHistory",
+    "search.getBangs",
+    "search.getSearchEngines",
+    "search.getSearchConfig"
+  ],
+  "dependsOn": []
+}

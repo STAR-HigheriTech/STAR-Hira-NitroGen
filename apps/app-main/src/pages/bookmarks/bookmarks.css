@@ -1,0 +1,452 @@
+/* 书签页特有规则。公共骨架见 hira://shared/base.css
+ *
+ * 排版：页头 → 工具条（搜索 / 标签筛选）→ 批量条 → 主区（左文件夹树 / 右列表）。
+ * 零描边：树与列表之间只靠底色与留白分层；行内摘要与标签都是弱化信息。
+ */
+
+/* ── 工具条 ───────────────────────────────────────────────────────────── */
+.bookmarks-toolbar {
+  margin-bottom: 8px;
+}
+.bookmarks-toolbar .search {
+  flex: 1 1 260px;
+}
+
+/* ── 标签分类栏 ──────────────────────────────────────────────────────────
+   横向滚动的一排 chip：系统标签（书签栏 / 侧栏图标栏）永远在前，用户标签按热度排。
+   不换行是刻意的 —— 标签数量会长，换行会把列表标题往下推，滚动条更能保持页面稳定。 */
+.tag-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+.tag-bar:empty {
+  display: none;
+}
+.tag-bar-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  font-family: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tag-bar-chip:hover {
+  background: var(--hover-bg);
+  color: var(--text);
+}
+.tag-bar-chip.is-active {
+  background: var(--hira-accent-soft, rgba(59, 130, 246, 0.16));
+  color: var(--accent);
+}
+.tag-bar-chip.is-system {
+  color: var(--text-soft);
+}
+.tag-bar-chip.is-system.is-active {
+  color: var(--accent);
+}
+.tag-bar-chip .tag-bar-label {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tag-bar-chip .tag-bar-count {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.tag-bar-chip.is-active .tag-bar-count {
+  color: inherit;
+}
+
+/* ── 批量操作条 ───────────────────────────────────────────────────────────
+   只在有选中项时出现（[hidden] 由脚本切换）；粘顶，滚动时仍可操作。
+   标签 / 固定 / 移动 / AI / 删除都可能同时在场 → 允许换行，窄窗口不横向溢出。 */
+.batch-bar {
+  position: sticky;
+  top: 0;
+  z-index: var(--hira-z-elevated);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: var(--r-md);
+  background: var(--plane-bg);
+}
+.batch-bar[hidden] {
+  display: none;
+}
+.batch-count {
+  font-size: 12px;
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 主区布局 ─────────────────────────────────────────────────────────── */
+.bookmarks-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.folder-pane {
+  flex: 0 0 232px;
+  width: 232px;
+  position: sticky;
+  top: 24px;
+  padding: 8px;
+  background: var(--plane-bg);
+  border-radius: var(--r-lg);
+}
+.pane-head {
+  padding: 2px 6px 8px;
+}
+.pane-head .section-title {
+  margin-bottom: 0;
+}
+.bookmarks-main {
+  flex: 1;
+  min-width: 0;
+}
+@media (max-width: 900px) {
+  .bookmarks-layout {
+    flex-direction: column;
+  }
+  .folder-pane {
+    position: static;
+    width: 100%;
+    flex-basis: auto;
+  }
+}
+
+/* ── 文件夹树 ─────────────────────────────────────────────────────────── */
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+}
+.tree-row:hover {
+  background: var(--hover-bg);
+}
+.tree-row.active {
+  background: var(--selected-bg);
+  color: var(--text);
+}
+.tree-row .tree-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--text-soft);
+}
+.tree-row.active .tree-icon {
+  color: inherit;
+}
+.tree-caret,
+.tree-caret-spacer {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+}
+.tree-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.tree-caret::before {
+  width: 0;
+  height: 0;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transform: rotate(90deg);
+  transition: transform var(--dur-fast, 120ms) ease;
+  content: '';
+}
+.tree-caret.is-collapsed::before {
+  transform: rotate(0deg);
+}
+.tree-caret:hover {
+  color: var(--text);
+}
+.tree-row .tree-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tree-row .tree-count {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.tree-row.drop-into {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+/* 树内联重命名：输入框吃掉整行宽度，回车提交 / Esc 取消 */
+.tree-rename {
+  flex: 1;
+  min-width: 0;
+  height: var(--ctl-h-sm);
+}
+
+/* ── 面包屑 ───────────────────────────────────────────────────────────── */
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--text-soft);
+  min-height: 20px;
+}
+.breadcrumb .crumb {
+  cursor: pointer;
+  color: var(--accent);
+}
+.breadcrumb .crumb:hover {
+  text-decoration: underline;
+}
+.breadcrumb .crumb.current {
+  color: var(--text);
+  cursor: default;
+  text-decoration: none;
+}
+.breadcrumb .sep {
+  color: var(--text-muted);
+}
+.breadcrumb .crumb-note {
+  color: var(--text-soft);
+}
+
+/* ── 列表行 ───────────────────────────────────────────────────────────── */
+.row[data-id] {
+  cursor: grab;
+}
+.row .row-check {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+}
+.row .main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.row .main .title {
+  flex: none;
+}
+.row .url {
+  font-size: 11px;
+  color: var(--text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 摘要：两行截断 —— 它是扫描时的"这是什么"回答，不抢标题的位置 */
+.row .summary-line {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-soft);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.row .summary-line.is-empty {
+  color: var(--text-muted);
+  font-style: normal;
+}
+
+/* 标签胶囊列：只放得下有限的几个，多余的折成 +N */
+.row .tags {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+  max-width: 40%;
+  overflow: hidden;
+}
+.tag-chip {
+  padding: 1px 8px;
+  font-size: 11px;
+  line-height: 1.6;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  white-space: nowrap;
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+}
+.tag-chip:hover {
+  background: var(--hira-accent-soft, rgba(59, 130, 246, 0.14));
+  color: var(--accent);
+}
+.tag-chip.is-more {
+  cursor: default;
+  color: var(--text-muted);
+}
+/* 系统标签（书签栏 / 侧栏图标栏）：同一种胶囊，靠底色区分"派生标签"而不是另造控件 */
+.tag-chip.is-system {
+  background: var(--hira-accent-soft, rgba(59, 130, 246, 0.12));
+  color: var(--accent);
+}
+
+/* 固定态标记：书签栏 / rail 两个独立固定位，用小字形表达而不是再开一列 */
+.row .pin-flags {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 2px;
+  color: var(--text-muted);
+}
+
+/* ── 行内命名（新建文件夹）─────────────────────────────────────────────
+   输入框吃掉剩余宽度；行本身没有 data-id，因此不可抓取、也不是拖拽落点。 */
+.row.new-folder {
+  cursor: default;
+}
+.row.new-folder .new-folder-input {
+  flex: 1;
+  min-width: 0;
+  height: var(--ctl-h-sm);
+}
+
+/* ── 拖拽排序：与收藏面板同口径的落点反馈 ─────────────────────────────── */
+.row.dragging {
+  opacity: 0.4;
+}
+.row.drop-before {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.row.drop-after {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.row.drop-into {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+/* ── 行内摘要编辑器 ───────────────────────────────────────────────────── */
+.summary-editor {
+  margin: 2px 0 8px 34px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--plane-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.summary-input {
+  width: 100%;
+  min-height: 84px;
+  resize: vertical;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.summary-editor-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.summary-editor-foot .summary-meta {
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 备份视图 ─────────────────────────────────────────────────────────── */
+.row .backup-time {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 标签视图：按父文件夹分段的时间轴 ────────────────────────────────────
+   标签视图里"文件夹只是条目原来在哪儿"，不是可展开的容器 ——
+   组头一行（可收起）+ 左侧竖线串起命中行，语义只有一种：
+   组头说明位置，行才是筛选结果。 */
+.tag-group { display: block; margin-bottom: 10px; }
+.tag-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-soft);
+  font-family: inherit;
+  font-size: 11.5px;
+  /* 分组抬头是弱化标签，不是标题：用常规字重，避免整页都是粗体。 */
+  font-weight: var(--fw-medium, 500);
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--dur-fast, 120ms) ease, background var(--dur-fast, 120ms) ease;
+}
+.tag-group-head:hover { color: var(--text-main); background: var(--hover-bg); }
+/* 三角箭头用边框画（公共图标集里没有 chevron，不为这一个再补一个全局图标） */
+.tag-group-arrow {
+  flex: 0 0 0;
+  width: 0; height: 0;
+  border-left: 4px solid currentColor;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  /* 基准朝向是「右」：展开态顺时针 90° = 朝下，收起态回正 = 朝右 */
+  transform: rotate(90deg);
+  transition: transform var(--dur-fast, 120ms) ease;
+  margin-left: 4px;
+}
+.tag-group.is-collapsed .tag-group-arrow { transform: rotate(0deg); }
+.tag-group-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tag-group-count {
+  flex: 0 0 auto;
+  font-weight: 400;
+  font-size: 10.5px;
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+}
+/* 竖线 + 缩进：同组命中行挂在组头下方，形成一条时间轴 */
+.tag-group-body {
+  margin: 2px 0 0 16px;
+  padding-left: 8px;
+  border-left: 1px solid var(--line-soft, rgba(0, 0, 0, 0.12));
+}
+
+

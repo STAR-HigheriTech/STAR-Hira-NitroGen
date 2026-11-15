@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>地址与支付卡</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="./formfill.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="page-heading">
+        <h1>地址与支付卡</h1>
+      </div>
+      <div class="toolbar">
+        <input
+          class="search"
+          id="filter"
+          type="text"
+          placeholder="搜索名称或摘要"
+          autocomplete="off"
+        />
+        <button class="btn btn-primary" id="add-toggle" aria-expanded="false">新增</button>
+        <button class="btn" id="refresh">刷新</button>
+      </div>
+    </header>
+
+    <div class="list" id="message"></div>
+
+    <section class="panel ff-editor" id="editor" hidden>
+      <div class="panel-head">
+        <h2 class="card-title" id="editor-title">新增收货地址</h2>
+      </div>
+      <div class="form-grid">
+        <label class="field">
+          <span class="field-label">类型</span>
+          <select id="kind">
+            <option value="address">收货地址</option>
+            <option value="card">支付卡</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">备注名</span>
+          <input id="label" type="text" placeholder="可选，如「家里」" autocomplete="off" />
+        </label>
+      </div>
+      <div class="ff-fields" id="fields"></div>
+      <div class="toolbar form-actions">
+        <button class="btn" id="cancel">取消</button>
+        <button class="btn btn-primary" id="add">保存</button>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">
+        已保存 <span class="count" id="count"></span>
+      </h2>
+      <div class="list" id="list"></div>
+    </section>
+
+    <script type="module" src="./formfill.js"></script>
+  </body>
+</html>

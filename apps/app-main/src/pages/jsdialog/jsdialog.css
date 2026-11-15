@@ -1,0 +1,302 @@
+/* ============================================================================
+ * JS 对话框（hira://jsdialog）
+ *
+ * 这是一个独立 WebContentsView，不加载 base.css，因此在本文件内自带一套与
+ * 内部页同口径的 token（同名同值：--ctl-h / --r-* / --field-bg …）。
+ * 视觉纪律一致：零描边、软底、单层 focus ring、两档按钮。
+ * ========================================================================= */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  /* 字体栈走唯一令牌（shared-types/theme.mjs#UI_FONT_STACK）；兜底串与它同值。 */
+  font-family: var(--hira-font-ui, 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans SC', system-ui, -apple-system, sans-serif);
+  font-size: 14px;
+  color-scheme: light dark;
+}
+
+:root {
+  --jd-bg: #ffffff;
+  --jd-text: #1a1a1a;
+  --jd-muted: #5f6673;
+  --jd-faint: #8a9099;
+  --jd-field: rgba(15, 23, 42, 0.045);
+  --jd-field-focus: rgba(15, 23, 42, 0.06);
+  --jd-hover: rgba(15, 23, 42, 0.05);
+  --jd-danger: #d93025;
+  --jd-on-accent: #ffffff; /* accent 实底上的前景（复选勾 / 实心主按钮） */
+
+  /* 强调色只做「最后一次兜底」：浮层 preload（dialog-renderer.js）会把主题派生的
+   * accent 以行内 `--fw-accent` 写到 <html> 上，行内值永远优先于这里的声明。
+   * 因此 dark 分支绝不能在本文件里再声明 `--fw-accent`，否则 body 子树会被
+   * 硬编码值抢走（历史 bug：换主题后暗色对话框仍是出厂蓝）。 */
+  --fw-accent: var(--hira-accent, #3b82f6);
+  --fw-accent-strong: color-mix(in srgb, var(--fw-accent) 86%, var(--jd-text) 14%);
+
+  --ctl-h: 30px;
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 10px;
+  --ring: 0 0 0 2px color-mix(in srgb, var(--fw-accent) 35%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --jd-bg: #252525;
+    --jd-text: #e8e8e8;
+    --jd-muted: #9a9a9a;
+    --jd-faint: #838383;
+    --jd-field: rgba(255, 255, 255, 0.06);
+    --jd-field-focus: rgba(255, 255, 255, 0.09);
+    --jd-hover: rgba(255, 255, 255, 0.07);
+    --jd-danger: #ff7b72;
+    /* 注意：此处不得声明 --fw-accent —— 行内主题值必须始终优先（见上方说明）。 */
+    --ring: 0 0 0 2px color-mix(in srgb, var(--fw-accent) 45%, transparent);
+  }
+}
+
+body.dark,
+body.dark-mode {
+  --jd-bg: #252525;
+  --jd-text: #e8e8e8;
+  --jd-muted: #9a9a9a;
+  --jd-faint: #838383;
+  --jd-field: rgba(255, 255, 255, 0.06);
+  --jd-field-focus: rgba(255, 255, 255, 0.09);
+  --jd-hover: rgba(255, 255, 255, 0.07);
+  --jd-danger: #ff7b72;
+  --ring: 0 0 0 2px color-mix(in srgb, var(--fw-accent) 45%, transparent);
+}
+
+body {
+  background: var(--jd-bg);
+  color: var(--jd-text);
+}
+
+.jd-container {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 16px 18px 14px;
+  background: var(--jd-bg);
+  color: var(--jd-text);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* 高度由窗口决定（窗口高度由渲染层上报的内容自然高度自适应，见 jsdialog 的
+   * dialog-renderer.js）。必须写成 height 而非 min-height：量高度时脚本会临时
+   * 切成 auto 让内容按自然高度铺开，min-height 会把测量结果钉在 100vh。 */
+  height: 100vh;
+}
+
+/* 固定行不参与收缩：窗口被压到最大高度时，只让消息区滚动 */
+.jd-header,
+.jd-actions,
+.jd-suppress-wrap {
+  flex: none;
+}
+
+.jd-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.jd-icon {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--fw-accent) 12%, transparent);
+  color: var(--fw-accent);
+  flex-shrink: 0;
+}
+
+.jd-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.jd-source-domain {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--jd-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jd-title-text {
+  font-size: 12px;
+  color: var(--jd-muted);
+}
+
+.jd-message {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--jd-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  /* 自然高度由窗口自适应承接；只有内容超过窗口上限时才内部滚动 */
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  user-select: text;
+}
+
+/* 输入：软底、无描边、单层 ring */
+.jd-input {
+  width: 100%;
+  min-height: 32px;
+  max-height: 80px;
+  padding: 7px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--jd-text);
+  background: var(--jd-field);
+  border: 0;
+  border-radius: var(--r-md);
+  outline: none;
+  box-sizing: border-box;
+  transition: background-color 0.12s ease;
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.4;
+}
+
+.jd-input:focus {
+  background: var(--jd-field-focus);
+  box-shadow: var(--ring);
+}
+
+.jd-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.jd-btn {
+  flex: 1;
+  height: var(--ctl-h);
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--jd-muted);
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.jd-btn-primary {
+  background: color-mix(in srgb, var(--fw-accent) 14%, transparent);
+  color: var(--fw-accent);
+  font-weight: 600;
+}
+
+.jd-btn-primary:hover {
+  background: color-mix(in srgb, var(--fw-accent) 22%, transparent);
+  color: var(--fw-accent-strong);
+}
+
+.jd-btn-ghost:hover {
+  background: var(--jd-hover);
+  color: var(--jd-text);
+}
+
+.jd-btn:active {
+  background: var(--jd-field-focus);
+}
+
+.jd-btn:focus-visible,
+.jd-input:focus-visible,
+.jd-checkbox:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+.jd-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.jd-container.jd-type-alert .jd-actions #jd-cancel {
+  display: none;
+}
+
+.jd-container.jd-type-alert .jd-actions #jd-ok {
+  flex: 1;
+}
+
+.jd-suppress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.jd-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: var(--r-xs);
+  border: 0;
+  background: var(--jd-field);
+  vertical-align: middle;
+  cursor: pointer;
+  position: relative;
+  margin: 0;
+  padding: 0;
+  transition: background-color 0.12s ease;
+}
+
+.jd-checkbox:hover {
+  background: var(--jd-hover);
+}
+
+.jd-checkbox:checked {
+  background: var(--fw-accent);
+  box-shadow: none;
+}
+
+.jd-checkbox:checked::after {
+  content: '\2714';
+  color: var(--jd-on-accent, #fff);
+  font-size: 11px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  line-height: 1;
+}
+
+.jd-suppress-label {
+  font-size: 12px;
+  color: var(--jd-muted);
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

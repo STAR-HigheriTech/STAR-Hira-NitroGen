@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>站点权限</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="./permissions.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="page-heading">
+        <h1>站点权限</h1>
+      </div>
+      <div class="toolbar">
+        <button class="btn" id="refresh">刷新</button>
+      </div>
+    </header>
+
+    <div class="toolbar perm-toolbar">
+      <input
+        class="search"
+        id="site-search"
+        type="text"
+        placeholder="搜索站点，如 example.com"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <select
+        class="perm-select"
+        id="type-filter"
+        aria-label="按权限筛选"
+      ></select>
+      <span class="toolbar-note" id="rules-count"></span>
+    </div>
+
+    <section class="pending" id="pending-section" hidden>
+      <h2 class="section-title">
+        待处理的申请 <span class="count" id="pending-count"></span>
+      </h2>
+      <div class="pending-list table" id="pending"></div>
+    </section>
+
+    <div class="bulk-bar" id="bulk-bar" hidden>
+      <span class="bulk-count" id="bulk-count">已选 0 条</span>
+      <span class="bulk-actions">
+        <button class="btn btn-mini" id="bulk-allow">设为允许</button>
+        <button class="btn btn-mini" id="bulk-block">设为阻止</button>
+        <button class="btn btn-mini" id="bulk-clear">清除</button>
+        <button class="btn btn-mini btn-danger" id="bulk-clear-sites">
+          清除所选站点的全部规则
+        </button>
+      </span>
+    </div>
+
+    <section class="perm-table table">
+      <div class="perm-thead thead">
+        <input
+          type="checkbox"
+          class="perm-check"
+          id="select-all"
+          aria-label="全选当前筛选"
+        />
+        <span>站点</span>
+        <span>权限</span>
+        <span>状态</span>
+        <span>操作</span>
+      </div>
+      <div class="perm-rows" id="list"></div>
+    </section>
+
+    <details class="card perm-defaults">
+      <summary class="card-title">
+        默认规则 <span class="count" id="defaults-count"></span>
+      </summary>
+      <div class="defaults-list table" id="defaults"></div>
+    </details>
+
+    <script type="module" src="./permissions.js"></script>
+  </body>
+</html>

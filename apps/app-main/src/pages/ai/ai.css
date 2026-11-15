@@ -1,0 +1,54 @@
+/* ============================================================================
+ * AI 助手页（hira://ai）· 页面专属样式
+ *
+ * 这里**只有外壳几何**：整屏、不滚、给面板留一段与独立窗口同口径的边距。
+ * 聊天界面本身的样式全在 `plugins/ai/ui/styles.js`（与侧栏面板 / 独立窗口同一份），
+ * 本文件不重画任何一个 `.ai-*` 部件 —— 否则三种宿主就会慢慢长成三套长相。
+ *
+ * 判据：这段规则是"内部页这个宿主"独有的吗？
+ *   是 → 在这里（body 覆盖、根容器撑满视口）。
+ *   否 → 它在 panel 的样式表里，三宿主自动一致。
+ * ========================================================================= */
+
+html,
+body {
+  height: 100%;
+}
+
+/* base.css 的 body 是「文档流页面」：居中列宽 + 上下留白。
+   聊天页要的是整屏，必须抵消掉，否则面板会被挤进一条窄列、消息区跟着溢出。 */
+body.ai-page-body {
+  padding: 0;
+  max-width: none;
+  margin: 0;
+  overflow: hidden;
+}
+
+/* 根容器 = 独立窗口里那个 `.content` 的角色：
+   撑满视口、纵向 flex、内边距与 detached 窗口一致（20px），面板本身 `height:100%`。 */
+.ai-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 0;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+/* 面板主体（`.ai-panel` 自带 height:100%）在 flex 纵轴里改为吃满剩余空间。
+   选择器比 `.ai-panel` 多一节，因此不受"运行时注入的样式在 <head> 里更靠后"的影响。 */
+.ai-page > .ai-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
+/* 装配失败 / 桥不可用时的兜底文案（与 detached-panel 的兜底同口径）。 */
+.ai-page__fallback {
+  margin: 0;
+  padding: 24px 16px;
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 20px;
+  text-align: center;
+}

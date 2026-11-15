@@ -1,0 +1,24 @@
+{
+  "id": "panel-permissions",
+  "name": "权限面板",
+  "version": "0.0.1",
+  "type": "ui-panel-plugin",
+  "trustLevel": "internal",
+  "description": "在侧栏管理站点权限规则与待处理申请。",
+  "main": "./panel-generic.cjs",
+  "contributes": {
+    "panels": [
+      {
+        "id": "permissions-panel",
+        "title": "权限",
+        "icon": "Shield",
+        "order": 190,
+        "segment": "panel"
+      }
+    ]
+  },
+  "dependsOn": [
+    "side-panel-skeleton",
+    "permission-service"
+  ]
+}

@@ -1,0 +1,26 @@
+# 依赖
+node_modules/
+
+# 构建产物
+out/
+dist/
+release/
+build/plugins/
+*.tsbuildinfo
+
+# 本地工具 / 缓存
+.hira-ai/
+.workbuddy/
+.tmp-probe/
+.trae/
+.eslintcache
+.cache/
+.vite/
+coverage/
+
+# 日志与系统文件
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+desktop.ini

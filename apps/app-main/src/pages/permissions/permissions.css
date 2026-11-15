@@ -1,0 +1,287 @@
+/* Permissions 页特有规则。公共骨架见 hira://shared/base.css
+ *
+ * 三个列表（待处理 / 默认规则 / 规则表）共用 base.css 的 .table 壳 + .row 行议，
+ * 本文件只保留：列宽、状态徽标语义色、四档决定的强度配色、以及本页专用的复选框。 */
+
+/* 查询工具：站点搜索吃满剩余宽度，权限筛选与计数跟在后面；窄窗自动换行 */
+.perm-toolbar {
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.perm-toolbar .search {
+  flex: 1 1 260px;
+}
+.perm-toolbar .perm-select {
+  flex: 0 0 auto;
+  min-width: 168px;
+}
+
+/* ── 待处理的权限申请（有申请才出现，空时整块隐藏）───────────────── */
+.pending {
+  margin-bottom: 14px;
+}
+/* base 的 .table .row 是 grid（按列对齐）；待处理行是一条「文本 + 四档按钮」的
+   自由行，显式改回 flex 并允许换行。选择器带 .table .row 前缀，才压得住骨架规则。 */
+.table .row.pending-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: var(--row-h);
+  padding: 8px 14px;
+  font-size: 13px;
+}
+/* 表壳的「单行省略」只适用于真正的表格列；待处理行 / 默认规则行要允许换行 */
+.table .row.pending-row > *,
+.table .row.default-row > * {
+  overflow: visible;
+  white-space: normal;
+}
+.pending-text {
+  flex: 1 1 260px;
+  /* 允许换行（与侧栏权限面板同一口径）：四档按钮占位后文本区更窄了，
+     再压成单行会被省略号截断 —— 用户看到的就是"字显示不全"。 */
+  overflow-wrap: anywhere;
+}
+
+/* 「敏感」徽章：待处理申请 / 规则行 / 默认规则行三处同值（走 base .badge-danger，只补间距） */
+.pending-text .badge,
+.col-type .badge,
+.default-name .badge {
+  margin-left: 6px;
+}
+
+/* ── 复选框（16x16，与 jsdialog / 设置页同款规格：实心底 + 白色居中勾）──
+   零描边：未选是软底，选中是 accent 实心，不靠换边色表达状态。 */
+.perm-check {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: var(--tint-bg-strong);
+  cursor: pointer;
+  position: relative;
+  vertical-align: middle;
+  transition: background-color 0.12s ease;
+}
+.perm-check:hover {
+  background: color-mix(in srgb, var(--text) 9%, transparent);
+}
+.perm-check:checked,
+.perm-check:indeterminate {
+  background: var(--accent);
+}
+.perm-check:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+/* 空表时表头的全选框不可用：只降透明度，不换色 */
+.perm-check:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+.perm-check:checked::after {
+  content: '\2714';
+  color: var(--hira-on-accent, #fff);
+  font-size: 11px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  line-height: 1;
+}
+/* 半选（当前筛选只勾了一部分）：一条白横杠，与「全选」语义对齐主流浏览器 */
+.perm-check:indeterminate::after {
+  content: '';
+  width: 8px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--hira-on-accent, #fff);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* ── 默认规则（类型级全局行为 · 低频，折叠在页尾）────────────────── */
+/* 折叠入口必须一眼可见：整条 summary 就是可点的一行（48px、hover 软底），
+   左侧圆形箭头 + 右侧常驻「展开 / 收起」药丸 —— 不靠描边，靠底色与文案。
+   展开后整块（组头 + 说明 + 列表）连成一张 --panel-bg 的卡片。 */
+.perm-defaults {
+  margin-top: 14px;
+  padding: 0;
+  overflow: hidden;
+}
+.perm-defaults[open] {
+  background: var(--panel-bg);
+}
+.perm-defaults > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 18px;
+  margin-bottom: 0;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0;
+  transition: background-color 0.12s ease;
+}
+.perm-defaults > summary:hover {
+  background: var(--tint-bg);
+}
+.perm-defaults[open] > summary:hover {
+  background: transparent;
+}
+.perm-defaults > summary::-webkit-details-marker {
+  display: none;
+}
+/* 展开指示：圆片箭头（与列表折叠组同一手法，不额外加图标资源） */
+.perm-defaults > summary::before {
+  content: '›';
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--tint-bg-strong);
+  color: var(--text-soft);
+  font-size: 14px;
+  line-height: 1;
+  transition: transform 0.15s ease, background-color 0.12s ease, color 0.12s ease;
+}
+.perm-defaults[open] > summary::before {
+  transform: rotate(90deg);
+  background: var(--surface);
+  color: var(--accent);
+}
+/* 右侧操作药丸：常驻文案，用户不需要猜这一行能不能点 */
+.perm-defaults > summary::after {
+  content: '展开';
+  margin-left: auto;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--tint-bg-strong);
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+}
+.perm-defaults[open] > summary::after {
+  content: '收起';
+  background: var(--surface);
+  color: var(--accent);
+}
+/* base 的 .table .row 是 grid；这里保持 grid（名称列 + 下拉列），只改内边距与行高 */
+.table .row.default-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: var(--row-h);
+  padding: 4px 14px;
+  font-size: 13px;
+}
+/* 卡内的表不再铺第二层卡底：退成软底凹槽，和卡片表面拉开一层，不描边 */
+.perm-defaults .defaults-list {
+  margin: 0 18px 18px;
+  background: var(--tint-bg);
+}
+/* 外观走骨架 select 原语，这里只收窄尺寸 */
+.default-select {
+  min-width: 96px;
+  height: var(--ctl-h-sm);
+  font-size: 12px;
+}
+
+/* ── 批量操作条 ─────────────────────────────────────────────────── */
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 40px;
+  padding: 4px 14px;
+  margin-bottom: 10px;
+  background: var(--tint-bg);
+  border-radius: var(--r-md);
+  font-size: 12px;
+}
+/* JS 用 el.hidden 控制显隐；类选择器的 display:flex 会压过 UA 的 [hidden]，这里显式兜底 */
+.bulk-bar[hidden] {
+  display: none;
+}
+.bulk-count {
+  color: var(--text-soft);
+}
+.bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* ── 规则表（勾选 / 站点 / 权限 / 状态 / 操作）─────────────────────── */
+.perm-thead,
+.perm-row {
+  grid-template-columns: 24px minmax(150px, 1.2fr) minmax(140px, 1fr) 84px minmax(
+      188px,
+      auto
+    );
+}
+.perm-row {
+  font-size: 13px;
+}
+.col-site {
+  font-weight: 600;
+}
+/* 状态徽标在网格里靠左，不随列宽拉伸 */
+.perm-row .badge {
+  justify-self: start;
+}
+
+/* 行内操作按钮 .btn-mini / .btn-mini.is-active 见 _shared/base.css，
+   本文件只保留权限页特有的四档决定配色 */
+
+/* ── 待处理申请的四档决定（允许一次 / 始终允许 / 阻止一次 / 始终阻止）──
+   文案与 allow·persist 语义来自共享的 PERMISSION_CHOICES（与权限浮层、侧栏面板一致），
+   这里只负责强度：「一次」轻（10% 软底），「始终」重（20% 软底 + 600，会写库、影响以后）。 */
+.pending-row .btn-mini--allow-once {
+  color: var(--hira-success);
+  background: color-mix(in srgb, var(--hira-success) 10%, transparent);
+}
+.pending-row .btn-mini--allow-once:hover {
+  background: color-mix(in srgb, var(--hira-success) 18%, transparent);
+}
+.pending-row .btn-mini--allow-always {
+  color: var(--hira-success);
+  background: color-mix(in srgb, var(--hira-success) 20%, transparent);
+  font-weight: 600;
+}
+.pending-row .btn-mini--allow-always:hover {
+  background: color-mix(in srgb, var(--hira-success) 28%, transparent);
+}
+.pending-row .btn-mini--deny-once {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+.pending-row .btn-mini--deny-once:hover {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+}
+.pending-row .btn-mini--deny-always {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 20%, transparent);
+  font-weight: 600;
+}
+.pending-row .btn-mini--deny-always:hover {
+  background: color-mix(in srgb, var(--danger) 28%, transparent);
+}

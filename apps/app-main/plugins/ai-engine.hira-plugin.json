@@ -1,0 +1,10 @@
+{
+  "id": "ai-engine",
+  "name": "AI 引擎",
+  "version": "0.0.1",
+  "type": "feature-plugin",
+  "trustLevel": "internal",
+  "description": "浏览器内置 AI 助手的引擎：模型服务、事件日志、回合执行、上下文解析、工具与审批、技能。不含界面；界面由 panel-ai 贡献。",
+  "main": "./ai-engine.cjs",
+  "dependsOn": []
+}

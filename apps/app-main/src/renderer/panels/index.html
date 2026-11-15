@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Panel</title>
+    <!--
+      关键内联样式（critical CSS）：面板是冷进程，第一帧可能早于主题令牌的 <link> 到达。
+      这段时间若什么也不画，深色主题下会先闪一块白 —— 原生视图里这非常刺眼。
+      这里只给"底色 + 高度"两件事，且与 ui-common 的基底默认值逐字一致；
+      令牌随后到达时 #root 的 --hira-panel-bg 会自然接管，不存在覆盖冲突。
+    -->
+    <style>
+      html, body, #root {
+        margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden;
+        background: #f9fafb;
+      }
+      @media (prefers-color-scheme: dark) {
+        html, body, #root { background: #1c1c1f; }
+      }
+    </style>
+    <script type="module" src="./main.ts"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
+

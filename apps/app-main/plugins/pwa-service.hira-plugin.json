@@ -1,0 +1,22 @@
+{
+  "id": "pwa-service",
+  "name": "站点应用引擎",
+  "version": "0.0.1",
+  "type": "feature-plugin",
+  "trustLevel": "internal",
+  "description": "把站点安装为独立应用：探测 manifest、落盘图标资产、创建开始菜单/桌面快捷方式，并以独立窗口启动。",
+  "main": "./pwa-service.cjs",
+  "capabilities": [
+    "pwa.list",
+    "pwa.get",
+    "pwa.install",
+    "pwa.uninstall",
+    "pwa.launch",
+    "pwa.update",
+    "pwa.checkUpdates",
+    "pwa.setRunOnStartup",
+    "pwa.createShortcut",
+    "pwa.removeShortcut"
+  ],
+  "dependsOn": []
+}

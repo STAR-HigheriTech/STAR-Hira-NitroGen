@@ -1,0 +1,49 @@
+/* 证书页 —— 只覆盖 base.css 之外的少量局部规则。
+   口径同面板原子层：零描边、软底分区、靠底色分层。 */
+
+.status {
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+/* 顶部说明走骨架的 .notice，这里只补与列表的间距 */
+.notice {
+  margin-bottom: 14px;
+}
+
+/* 证书卡片：容器用骨架的 .card（surface / 圆角 / 卡片间距都交给骨架），
+   本页只补卡片内部的域名 / 错误码 / 明细网格这几行。 */
+.card-host {
+  font-size: 14px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.card-error {
+  margin-top: 2px;
+  color: var(--danger);
+  font-family: var(--hira-font-mono, ui-monospace, Consolas, "Microsoft YaHei UI", "Microsoft YaHei", monospace);
+  font-size: 12px;
+}
+
+/* 明细网格：与骨架 .def-grid 同口径（次要文字不低于 text-soft），
+   只是等宽值更密，所以单独收紧字号与列距。 */
+.card-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 14px;
+  font-size: 12px;
+}
+
+.card-grid dt {
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.card-grid dd {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--hira-font-mono, ui-monospace, Consolas, "Microsoft YaHei UI", "Microsoft YaHei", monospace);
+  overflow-wrap: anywhere;
+}

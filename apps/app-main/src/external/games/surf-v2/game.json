@@ -1,0 +1,12 @@
+{
+  "id": "surf-v2",
+  "name": "Edge 冲浪 (v2)",
+  "description": "Microsoft Edge 冲浪游戏第二版，画面与玩法重制。方向键操控，支持滑雪模式切换。",
+  "category": "经典",
+  "icon": "🌊",
+  "accent": "#1f9bb5",
+  "entry": "index.html",
+  "tags": ["跑酷", "无尽", "键盘"],
+  "source": "yell0wsuit/ms-edge-surf-2",
+  "license": "BSD-3-Clause"
+}

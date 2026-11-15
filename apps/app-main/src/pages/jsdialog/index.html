@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>网页对话框</title>
+    <link rel="stylesheet" href="./jsdialog.css" />
+  </head>
+  <body>
+    <div class="jd-container">
+      <div class="jd-header">
+        <div id="jd-icon" class="jd-icon" aria-hidden="true"></div>
+        <div class="jd-title">
+          <span id="jd-source-domain" class="jd-source-domain"></span>
+          <span id="jd-title-text" class="jd-title-text"></span>
+        </div>
+      </div>
+      <div id="jd-message" class="jd-message"></div>
+      <textarea
+        id="jd-input"
+        class="jd-input"
+        rows="1"
+        autocomplete="off"
+        spellcheck="false"
+        style="display: none"
+      ></textarea>
+      <div class="jd-actions">
+        <button id="jd-cancel" class="jd-btn jd-btn-ghost"></button>
+        <button id="jd-ok" class="jd-btn jd-btn-primary"></button>
+      </div>
+      <label id="jd-suppress-wrap" class="jd-suppress-wrap">
+        <input id="jd-suppress" type="checkbox" class="jd-checkbox" />
+        <span id="jd-suppress-label" class="jd-suppress-label"
+          >阻止此页面创建更多弹窗</span
+        >
+      </label>
+    </div>
+  </body>
+</html>

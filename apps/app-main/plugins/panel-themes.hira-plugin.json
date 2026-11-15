@@ -1,0 +1,24 @@
+{
+  "id": "panel-themes",
+  "name": "主题",
+  "version": "0.0.1",
+  "type": "ui-panel-plugin",
+  "trustLevel": "internal",
+  "nonDisableable": true,
+  "description": "主题库与换肤：切换主题、编辑主题与调度。",
+  "main": "./panel-generic.cjs",
+  "contributes": {
+    "panels": [
+      {
+        "id": "themes-panel",
+        "title": "主题",
+        "icon": "Palette",
+        "order": 145,
+        "segment": "panel"
+      }
+    ]
+  },
+  "dependsOn": [
+    "side-panel-skeleton"
+  ]
+}

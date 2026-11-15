@@ -1,0 +1,177 @@
+/* About 页特有规则。公共骨架见 hira://shared/base.css（内部页唯一视觉契约）
+   页头 / 卡片 / 定义网格 / 按钮 / 徽标 / 分段切换 / 提示块全部走骨架，
+   本页只保留三处：品牌 logo、页内主导航（关于 / 软件更新）、更新面板的进度几何。 */
+
+.about {
+  max-width: 600px;
+  /* 关于页是窄内容：在公共内容列里再居中一次，不贴着列左缘。 */
+  margin-inline: auto;
+}
+
+/* 品牌行：骨架的 .page-header 默认 space-between（标题左、工具右），
+   本页没有右侧工具，改成 logo 与标题左对齐并排。 */
+.about-brand {
+  align-items: center;
+  justify-content: flex-start;
+}
+
+/* 品牌块：真实软件图标（48px）。
+   以前是一个实心强调色方块 + 白字「H」—— 那只是占位，与任务栏/安装器里的
+   应用图标是两张脸。现在直接用 `hira://shared/app-icon.png`（由 build-icons
+   从 build/icon.ico 导出），全应用只有一份图标真源。
+   `object-fit: contain`：图标本身可能不是正方形，等比装进 48×48 不拉伸。 */
+.about-logo {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  object-fit: contain;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+/* 说明行三级层次：版本（次要）/ UA（次要·等宽）/ 备注（更淡） */
+.about-version {
+  margin: 12px 0 16px;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+/* ── 页内主导航（关于 Hira / 软件更新）────────────────────────────────
+   比设置页的小类（subtab）明显一档：等分宽的实心药丸、更高、字号更大，
+   选中态用 accent 软底 + accent 文字 —— 这两块是并列的两个面，
+   不是同一张表单里的细分，所以视觉权重必须更高。
+   层次只靠底色，不描边（与全站同一条口径）。 */
+.about-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 18px;
+  padding: 4px;
+  border-radius: var(--r-lg);
+  background: var(--tint-bg);
+}
+
+.about-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 34px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: calc(var(--r-lg) - 4px);
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 13.5px;
+  /* 未选中 = 常规字重；选中态见 .about-tab.is-active。 */
+  font-weight: var(--fw-normal, 400);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.about-tab:hover {
+  background: var(--hover-bg);
+  color: var(--text);
+}
+
+.about-tab.is-active {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+  font-weight: var(--fw-strong, 600);
+}
+
+.about-tab.is-active:hover {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.about-tab:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+/* 选项卡面板：`hidden` 一律不占位（卡片自身没有 display 规则，这里显式兜住）。 */
+.about-pane[hidden] {
+  display: none;
+}
+
+.about-ua {
+  font-family: var(--hira-font-mono, ui-monospace, Consolas, "Courier New", "Microsoft YaHei UI", "Microsoft YaHei", monospace);
+  font-size: 12px;
+  color: var(--text-soft);
+  word-break: break-all;
+  line-height: 1.6;
+}
+
+.about-note {
+  margin-top: 16px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.about-note.error {
+  color: var(--danger);
+}
+
+/* ── 软件更新面板（原 hira://update 页，现为本页第二个选项卡）─────────
+   只补「状态行 + 进度条 + 辅助说明」三处页面独有几何，其余全走骨架。 */
+
+/* 状态行：徽标在左、一句话在右；窄窗下允许换行（说明可能较长） */
+.update-headline {
+  display: flex;
+  align-items: center;
+  gap: 8px 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.update-line {
+  flex: 1 1 260px;
+  min-width: 0;
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* 下载进度：轨道与填充都取药丸圆角；宽度由面板按 percent 写入 */
+.update-progress {
+  margin: 4px 0 12px;
+}
+.update-progress[hidden] {
+  display: none;
+}
+.update-progress-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--tint-bg-strong);
+  overflow: hidden;
+}
+.update-progress-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+.update-progress-meta {
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* 动作条：与卡片底对齐（骨架 .toolbar 自带 16px 下边距，卡片末尾不需要） */
+.update-actions {
+  margin: 4px 0 0;
+}
+
+/* 通道说明：比状态行更淡一档 */
+.update-hint {
+  margin-top: 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* SmartScreen 说明块独立于卡片之外，与卡片同宽、留一档间距 */
+.update-smartscreen {
+  margin-top: 14px;
+}

@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>会话管理</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="page-heading">
+        <h1>会话管理</h1>
+      </div>
+      <div class="toolbar">
+        <button class="btn" id="refresh">刷新</button>
+      </div>
+    </header>
+
+    <section class="section">
+      <h2 class="section-title">保存当前会话</h2>
+      <div class="toolbar">
+        <input
+          class="search"
+          id="name"
+          type="text"
+          placeholder="给这个会话起个名字，如「周一项目」"
+          autocomplete="off"
+        />
+        <button class="btn" id="save">保存当前标签</button>
+      </div>
+      <div class="list" id="message"></div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">
+        已保存的会话 <span class="count" id="count"></span>
+      </h2>
+      <div class="list" id="list"></div>
+    </section>
+
+    <script type="module" src="./sessions.js"></script>
+  </body>
+</html>

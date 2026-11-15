@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>页面信息</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="./page-info.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="page-heading">
+        <h1>页面信息</h1>
+      </div>
+      <div class="toolbar">
+        <button class="btn" id="refresh">刷新</button>
+      </div>
+    </header>
+
+    <div class="card">
+      <div class="head">
+        <span class="favicon-slot" id="favicon"></span>
+        <span class="head-title" id="head-title"></span>
+      </div>
+      <dl class="def-grid" id="grid"></dl>
+    </div>
+
+    <p class="note" id="note"></p>
+    <script type="module" src="./page-info.js"></script>
+  </body>
+</html>

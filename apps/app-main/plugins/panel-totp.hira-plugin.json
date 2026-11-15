@@ -1,0 +1,26 @@
+{
+  "id": "panel-totp",
+  "name": "验证器面板",
+  "version": "0.0.1",
+  "type": "ui-panel-plugin",
+  "trustLevel": "internal",
+  "description": "侧栏内的两步验证器：条目与实时验证码、倒计时、增删改、粘贴链接导入与导出。可选功能，默认关闭——打开本面板会一并启用它依赖的「验证器引擎」。",
+  "main": "./panel-generic.cjs",
+  "render": "./panel-totp.renderer.js",
+  "defaultDisabled": true,
+  "contributes": {
+    "panels": [
+      {
+        "id": "totp-panel",
+        "title": "验证器",
+        "icon": "ShieldCheck",
+        "order": 200,
+        "segment": "panel"
+      }
+    ]
+  },
+  "dependsOn": [
+    "side-panel-skeleton",
+    "totp-service"
+  ]
+}

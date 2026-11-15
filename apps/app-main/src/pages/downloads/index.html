@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>下载中心</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="./downloads.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="page-heading">
+        <h1>下载中心</h1>
+      </div>
+      <div class="toolbar">
+        <input class="search" id="download-search" placeholder="搜索下载…" />
+        <button class="btn" id="refresh">刷新</button>
+        <button class="btn" id="clear">清除已完成</button>
+      </div>
+    </header>
+    <section class="download-rules" id="rules-panel">
+      <div class="rules-head">
+        <div>
+          <h2 class="card-title">整理规则</h2>
+          <p class="page-sub">按来源域名、扩展名或文件名关键词自动分类和重命名。</p>
+        </div>
+        <button class="btn" id="toggle-rules" type="button">收起</button>
+      </div>
+      <div class="rules-body" id="rules-body">
+        <div class="list" id="rules-list"></div>
+        <div class="rules-form">
+          <input class="search" id="rule-name" placeholder="规则名称" maxlength="80" />
+          <input class="search" id="rule-domains" placeholder="域名，如 github.com, npmjs.com" />
+          <input class="search" id="rule-extensions" placeholder="扩展名，如 .pdf, .zip" />
+          <input class="search" id="rule-keywords" placeholder="文件名关键词" />
+          <input class="search" id="rule-folder" placeholder="目标文件夹" maxlength="80" />
+          <input class="search" id="rule-template" placeholder="命名模板 {name} {ext} {domain} {date}" maxlength="200" />
+          <div class="rule-action-picker" id="rule-actions" aria-label="下载完成后执行"></div>
+          <button class="btn btn-primary" id="add-rule" type="button">添加规则</button>
+        </div>
+      </div>
+    </section>
+    <div class="list downloads-list" id="list"></div>
+    <script type="module" src="./downloads.js"></script>
+  </body>
+</html>

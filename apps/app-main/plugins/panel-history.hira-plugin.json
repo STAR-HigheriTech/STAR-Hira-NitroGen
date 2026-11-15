@@ -1,0 +1,29 @@
+{
+  "id": "panel-history",
+  "name": "最近历史面板",
+  "version": "0.0.1",
+  "type": "ui-panel-plugin",
+  "trustLevel": "internal",
+  "description": "在侧栏显示访问历史和最近关闭，支持检索、恢复、多选删除与清空。",
+  "main": "./panel-generic.cjs",
+  "contributes": {
+    "panels": [
+      {
+        "id": "history-panel",
+        "title": "最近历史",
+        "icon": "Clock",
+        "order": 110,
+        "segment": "panel",
+        "bangs": [
+          "历史",
+          "history",
+          "最近关闭"
+        ]
+      }
+    ]
+  },
+  "dependsOn": [
+    "side-panel-skeleton",
+    "history-service"
+  ]
+}

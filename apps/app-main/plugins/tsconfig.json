@@ -1,0 +1,12 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": false,
+    "checkJs": false,
+    "moduleDetection": "force",
+    "verbatimModuleSyntax": false
+  },
+  "include": ["**/*.ts", "**/*.cts"],
+  "exclude": ["**/*.test.ts", "**/*.test.mts", "**/*.test.cts", "**/*.test.mjs"]
+}

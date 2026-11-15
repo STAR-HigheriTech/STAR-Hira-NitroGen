@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": "../..",
+    "noEmit": true,
+    "allowJs": false,
+    "moduleDetection": "force",
+    "verbatimModuleSyntax": false,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["plugins/**/*.ts", "plugins/**/*.cts"],
+  "exclude": ["plugins/**/*.test.ts", "plugins/**/*.test.cts", "node_modules", "**/dist/**"]
+}

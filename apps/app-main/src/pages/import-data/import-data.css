@@ -1,0 +1,62 @@
+/* ImportData 页特有规则。公共骨架见 hira://shared/base.css
+   页头 / 卡片 / 定义网格 / 表单字段 / 按钮全部走骨架，本文件只留本页排版。 */
+
+/* 一键迁移卡片宿主：有卡片时与下方文件卡片拉开与 .card + .card 相同的间距 */
+#browser-import:not(:empty) + .card {
+  margin-top: 14px;
+}
+
+/* 原生 file input 的「选择文件」按钮由系统渲染，与项目按钮风格格格不入 ——
+   隐藏它，改用统一的 .btn（见 index.html）触发。 */
+.importer-input {
+  display: none;
+}
+
+/* 导入格式区：字段组之间留白；插件格式行与内建格式行同款 */
+.importer-formats {
+  margin-bottom: 16px;
+}
+.importer-formats[hidden] {
+  display: none;
+}
+.importer-formats .field {
+  max-width: 280px;
+}
+
+/* 动作行：两个按钮贴着放，与上方字段拉开 */
+.importer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.importer-file {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-soft);
+  word-break: break-all;
+}
+
+.importer-hint {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+.importer-hint--warn {
+  color: var(--danger);
+}
+
+.importer-status {
+  min-height: 18px;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.importer-status--error {
+  color: var(--danger);
+}
+.importer-status:empty {
+  display: none;
+}

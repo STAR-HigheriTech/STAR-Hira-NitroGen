@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>历史记录</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="./history.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="page-heading">
+        <h1>历史记录</h1>
+      </div>
+      <div class="toolbar">
+        <button class="btn" id="refresh">刷新</button>
+        <button class="btn btn-danger" id="remove-before">清除此前记录</button>
+        <button class="btn btn-danger" id="clear">全部清除</button>
+      </div>
+    </header>
+
+    <div class="toolbar history-toolbar">
+      <input class="search" id="search" placeholder="搜索历史记录…" />
+      <select class="quick-range" id="quick-range" aria-label="快捷时间段">
+        <option value="">全部</option>
+        <option value="today">今天</option>
+        <option value="7">最近 7 天</option>
+        <option value="30">最近 30 天</option>
+      </select>
+      <input
+        class="date-input"
+        id="from"
+        type="datetime-local"
+        aria-label="开始时间"
+      />
+      <input class="date-input" id="to" type="datetime-local" aria-label="结束时间" />
+      <button class="btn" id="range">筛选时间段</button>
+      <button class="btn" id="remove-selected" disabled>删除所选</button>
+    </div>
+
+    <div class="history-layout">
+      <div class="history-main">
+        <div class="list" id="list"></div>
+      </div>
+      <aside class="recent-panel">
+        <div class="recent-head">
+          <strong>最近关闭</strong>
+          <button class="icon-btn" id="recent-clear" title="清空当前列表">×</button>
+        </div>
+        <div class="list recent-list" id="recent-list"></div>
+      </aside>
+    </div>
+    <script type="module" src="./history.js"></script>
+  </body>
+</html>

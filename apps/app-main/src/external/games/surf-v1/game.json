@@ -1,0 +1,12 @@
+{
+  "id": "surf-v1",
+  "name": "Edge 冲浪 (v1)",
+  "description": "Microsoft Edge 经典彩蛋冲浪游戏第一版。方向键操控，空格跳跃，躲避障碍与海浪。",
+  "category": "经典",
+  "icon": "🏄",
+  "accent": "#2f6fd0",
+  "entry": "index.html",
+  "tags": ["跑酷", "无尽", "键盘"],
+  "source": "yell0wsuit/ms-edge-letssurf",
+  "license": "BSD-3-Clause"
+}

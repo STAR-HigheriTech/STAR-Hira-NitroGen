@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>密码管理</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="./passwords.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="page-heading">
+        <h1>密码管理</h1>
+      </div>
+      <div class="toolbar">
+        <button class="btn btn-primary" id="add-password" type="button">新增密码</button>
+        <button class="btn" id="import-passwords" type="button">导入 CSV</button>
+        <button class="btn" id="export-passwords" type="button">导出 CSV</button>
+        <button class="btn" id="refresh">刷新</button>
+        <input id="password-file" type="file" accept=".csv,text/csv" hidden />
+      </div>
+    </header>
+
+    <div class="segmented pw-tabs" id="pw-tabs" role="tablist" aria-label="密码管理分区">
+      <button class="btn btn-primary" type="button" role="tab" data-tab="sites">
+        已保存 <span class="count" id="count"></span>
+      </button>
+      <button class="btn" type="button" role="tab" data-tab="backends">
+        密码后端 <span class="count" id="backend-count"></span>
+      </button>
+      <button class="btn" type="button" role="tab" data-tab="audit">
+        安全检查 <span class="count" id="audit-count"></span>
+      </button>
+      <button class="btn" type="button" role="tab" data-tab="never">
+        不保存 <span class="count" id="never-count"></span>
+      </button>
+    </div>
+
+    <section class="pw-panel" data-panel="sites">
+      <form class="pw-editor" id="credential-editor" hidden>
+        <div class="pw-editor__head">
+          <strong id="editor-title">新增密码</strong>
+          <button class="icon-btn" id="editor-close" type="button" title="关闭">✕</button>
+        </div>
+        <div class="pw-editor__fields">
+          <label>网站<input id="editor-domain" type="text" placeholder="example.com" autocomplete="off" required /></label>
+          <label>用户名<input id="editor-username" type="text" autocomplete="username" /></label>
+          <label>密码<span class="pw-editor__password"><input id="editor-password" type="password" autocomplete="new-password" /><button class="link-btn" id="editor-toggle" type="button">显示</button></span></label>
+        </div>
+        <div class="pw-editor__foot">
+          <span class="toolbar-note" id="editor-strength"></span>
+          <button class="btn" id="editor-generate" type="button">生成强密码</button>
+          <button class="btn btn-primary" id="editor-save" type="submit">保存</button>
+        </div>
+      </form>
+      <div class="toolbar">
+        <input
+          class="search"
+          id="filter"
+          type="text"
+          placeholder="搜索站点、账号或后端"
+          autocomplete="off"
+        />
+        <span class="toolbar-note" id="sites-note"></span>
+      </div>
+      <div class="toolbar-note pw-notice" id="password-notice" role="status"></div>
+      <div class="list" id="list"></div>
+    </section>
+
+    <section class="pw-panel" data-panel="backends" hidden>
+      <div class="list" id="backends"></div>
+    </section>
+
+    <section class="pw-panel" data-panel="audit" hidden>
+      <div class="toolbar">
+        <button class="btn btn-primary" id="audit">开始检查</button>
+        <span class="toolbar-note" id="audit-note"></span>
+      </div>
+      <div class="list" id="audit-result"></div>
+    </section>
+
+    <section class="pw-panel" data-panel="never" hidden>
+      <div class="toolbar">
+        <input
+          class="search"
+          id="never-input"
+          type="text"
+          placeholder="输入域名，如 example.com"
+          autocomplete="off"
+        />
+        <button class="btn btn-primary" id="never-add">添加</button>
+      </div>
+      <div class="list" id="never"></div>
+    </section>
+
+    <script type="module" src="./passwords.js"></script>
+  </body>
+</html>

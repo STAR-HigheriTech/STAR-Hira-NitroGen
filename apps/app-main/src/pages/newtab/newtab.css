@@ -1,0 +1,1919 @@
+/* hira://newtab · 新标签页（顶部小选项卡切换分区：首页 / 推广 / 新闻）
+ *
+ * ═══ 层结构 ═════════════════════════════════════════════════════════════════
+ * 谁在哪一层，读这一段就够了，不必翻到下面找 z-index：
+ *
+ *   L0  —         壁纸 / 遮罩   **不在本页**：由窗口外壳唯一绘制（见下方「壁纸只有一份」）
+ *   L1  base      内容          .ntp__sections      顶部小选项卡（分区切换）
+ *                              .ntp__actions       动作栏（选项卡右侧，独立小药丸）
+ *                              .ntp-clock          顶部时间（选项卡左侧，与选项卡同高）
+ *                              .ntp__views         分区本体（首页 / 推广 / 新闻）
+ *   L2  popover   选择器 / 设置  .ntp-pop
+ *
+ * 「自定义 / 添加组件」是**独立的一颗小药丸**（`.ntp__actions`），挨着选项卡条右侧，
+ * 与选项卡同款 `.ntp-tab` 样式但**不连在一起** —— 所以它归 L1 base，
+ * 不再是单独一层浮在底部的编排条。
+ *
+ * 本文件的分节顺序与上面完全一致
+ * （§1 令牌 → §2 L0 → §3 L1 → §4 分区 → §5 组件 → §6 动效）。
+ *
+ * ── 一条定稿的设计决定（用户反馈）──
+ * **不做"一个大表面把搜索和所有组件包起来"**：搜索与每个组件**各自成块**（散装）。
+ * 曾按 Vivaldi 8.0「Unified」的"连续表面"试过一版（一张大玻璃板托住全部内容、
+ * 组件只作为板上区域、各自不画卡片），实测观感被否掉了 —— 散装的卡片更好。
+ * 于是"层系统"只落在**内部秩序**上，不落在视觉合并上：
+ *   · z-index 一律走语义层 token（门禁 scripts/check-z-index.cjs）
+ *   · 颜色/阴影/蒙层只在 §1 集中声明一次，选择器里不写字面量
+ *   · 分节顺序 = 层序，读文件即知归属
+ *
+ * ── 壁纸只有一份（本页透明）──
+ * 壁纸由**窗口外壳**的 `#chrome-theme-background` 唯一绘制（`position:fixed; inset:0`，
+ * 在所有 WebContentsView 之下）。本页跑在标签视图里，视图是透明画布、body 在有壁纸时
+ * 也透明 —— 看到的就是外壳那张图，裁切与模糊天然完全一致。
+ *
+ * 曾经这里自己画过一份「按整窗矩形摆放」的镜像去对齐外壳：面板 / 侧栏动画每帧都在改
+ * 标签视图的 bounds，而镜像几何经 IPC 事后取回，永远慢半拍 —— 表现就是壁纸跟着界面
+ * 一起动、接缝补不上、然后闪一下。**不要再在页面里画壁纸**。
+ *
+ * ── 两种模式（有壁纸 / 无壁纸）──
+ * 差异只在 §1 的 `html[data-ntp-wallpaper='1']` 一个块里切换。
+ */
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * §1 令牌
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 全局：强制隐藏所有滚动条 ──────────────────────────────────────────────
+ * 内容**照常可以滚**，只是不显示、也不占位（不占位这点很关键：
+ * 否则滚动条一出现一消失，内容横向会抖 15px）。
+ * 用 `*` 是为了连页内可滚动区一起覆盖（新闻列表、浮层列表、推广页）。
+ * 这条规则只作用于**这个内部页**，不会影响宿主浏览器里的网页。 */
+* {
+  scrollbar-width: none; /* Firefox / 标准 */
+  -ms-overflow-style: none; /* 旧 Edge / IE */
+}
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* 主题令牌（--ntp-*、--surface、--border、--badge-font-color、--hira-warn…）
+   由主进程的令牌表产出，见 packages/shared-types/src/theme.mjs#themeToTokens ——
+   这里只写"拿不到时的兜底"，与 _shared/base.css 同一口径。 */
+:root {
+  --ntp-bg: #f5f7fb;
+  --ntp-text: #1a1a1a;
+  --ntp-text-soft: #7a7f87;
+  --ntp-border: #e4e7ec;
+  --ntp-hover: #eef0f4;
+  --ntp-accent: var(--hira-accent, #3b82f6);
+
+  /* 抬升（投影）：三档语义各一处，选择器里不再写字面量 */
+  --ntp-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.06);
+  --ntp-shadow-lift: 0 18px 44px rgba(16, 24, 40, 0.22);
+  --ntp-shadow-pop: 0 16px 40px rgba(16, 24, 40, 0.18);
+
+  /* 卡片阴影的**可拆解分量**：让卡片"自定义不透明度"能同步带淡阴影与边框
+     （见 .wgt 的 box-shadow / border，它们拿 --wgt-bg-alpha 乘这里的 alpha）。
+     与 --ntp-shadow 同源，只是拆成可被 CSS 变量乘的零件。 */
+  --ntp-shadow-rgb: 16, 24, 40;
+  --ntp-shadow-a1: 0.04;
+  --ntp-shadow-a2: 0.06;
+  --ntp-shadow-y2: 8px;
+  --ntp-shadow-blur2: 24px;
+
+  /* 浮起小控件的**统一材质**（顶部选项卡条 / 快捷入口栏 / 顶部时间）：
+     "稍微半透明 + 一层随主题的淡描边 + 无投影 + 轻毛玻璃"。
+     三个控件共用这一套 —— 改质感只改这里，不在各自的选择器里再写一遍。 */
+  --ntp-pill-bg: color-mix(in srgb, var(--surface) 58%, transparent);
+  --ntp-pill-border: color-mix(in srgb, var(--ntp-text) 12%, transparent);
+  --ntp-pill-blur: 12px;
+
+  /* 自定义模式的蒙层：压着的是**任意内容**，所以它固定是一层深色渐变 + 白字，
+     不随主题反转（与开关滑块同样是"物理件"）。集中在这里，避免三处各写一遍 rgba。 */
+  --ntp-scrim: linear-gradient(to bottom, rgba(20, 24, 32, 0.5), rgba(20, 24, 32, 0) 62%);
+  --ntp-on-scrim: #ffffff;
+  --ntp-on-scrim-name-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --ntp-btn-on-scrim-bg: rgba(255, 255, 255, 0.88);
+  --ntp-btn-on-scrim-bg-hover: #ffffff;
+  --ntp-btn-on-scrim-fg: #2b2f38;
+
+  /* 物理白（开关滑块）—— 同上，不随主题反转 */
+  --ntp-knob: #ffffff;
+
+  /* 组件卡片"字体黑白"的覆盖值（用在 §3 的 .wgt[data-fg]）。
+     必须是**固定值、不随主题反转** —— 用户就是要在深色主题下也能选黑字。 */
+  --ntp-fg-light: #ffffff;
+  --ntp-fg-light-soft: rgba(255, 255, 255, 0.72);
+  --ntp-fg-dark: #12161c;
+  --ntp-fg-dark-soft: rgba(18, 22, 28, 0.66);
+
+  /* 大字组件的**可读性投影**（用在 §5 的时间 / 日期）。
+     它们**默认没有底色**（0%，见 widgets/defs/clock.js 的 appearance），
+     一串大字直接压在壁纸上会糊 —— 所以白字配深影、黑字配浅影。
+     这两条是**固定值、不随主题反转**：影子跟的是"字色"，不是"主题"
+     （深色主题下选黑字，一样要浅影才看得见）。
+     它们只是两个**素材**；"当前该用哪一个"由下面那条 --ntp-text-shadow 决定。 */
+  --ntp-fg-light-shadow: 0 1px 2px rgba(0, 0, 0, 0.55), 0 0 14px rgba(0, 0, 0, 0.38);
+  --ntp-fg-dark-shadow: 0 1px 2px rgba(255, 255, 255, 0.85), 0 0 14px rgba(255, 255, 255, 0.6);
+
+  /* 当前生效的可读性投影 —— **唯一**的"用哪个影子"判据，三处写、一处用：
+   *   · 这里（默认）        → 跟随主题的**浅色**档：浅色主题的字色是黑的 ⇒ 用浅影
+   *   · html[data-theme='dark'] → 跟随主题的**深色**档：深色主题的字色是白的 ⇒ 用深影
+   *   · §3 .wgt[data-fg='…']    → 用户显式选了白字 / 黑字，覆盖上面两档
+   * 也就是说「跟随主题」不是"没有影子"，而是**按主题实际呈现的黑/白自动选一个**。
+   * 挂在 :root 上没关系：§3 是在**卡片**上重新声明，自定义属性取最近的祖先，
+   * 所以卡片级的显式选择永远盖得住这里。 */
+  --ntp-text-shadow: var(--ntp-fg-dark-shadow);
+
+  /* 搜索框（胶囊卡）的 hover 底色。它必须**分模式**给：
+     无壁纸时卡是不透明的，一点灰调就够；有壁纸时卡是玻璃，
+     直接盖一层不透明灰会把玻璃质感打掉，所以这里给的是"更实一点的玻璃"。 */
+  --ntp-search-hover-bg: var(--ntp-hover);
+}
+
+html[data-theme='dark'] {
+  --ntp-bg: #1e1e1e;
+  --ntp-text: #e8e8e8;
+  --ntp-text-soft: #9a9a9a;
+  --ntp-border: #3a3a3a;
+  --ntp-hover: #2a2a2a;
+  --ntp-accent: #6aa5ff;
+  --ntp-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 28px rgba(0, 0, 0, 0.35);
+  --ntp-shadow-lift: 0 18px 44px rgba(0, 0, 0, 0.5);
+  --ntp-shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.5);
+  --ntp-shadow-rgb: 0, 0, 0;
+  --ntp-shadow-a1: 0.3;
+  --ntp-shadow-a2: 0.35;
+  --ntp-shadow-y2: 10px;
+  --ntp-shadow-blur2: 28px;
+  --ntp-knob: #f2f2f2;
+  /* 深色主题 ⇒ 字色是白的 ⇒ 大字配**深影**（见 :root 里 --ntp-text-shadow 的说明） */
+  --ntp-text-shadow: var(--ntp-fg-light-shadow);
+}
+
+/* ── 有壁纸：每张卡片各自成玻璃 ──────────────────────────────────────────
+ * 这不违反项目那条"半透明层不许逐层叠加"的纪律 —— 那条针对的是**互相叠放**的层
+ * （0.55 叠 0.55 ≈ 0.80，嵌套越深越不透明，于是"标签条比地址栏深"）；
+ * 而卡片彼此**不重叠**，各是一块独立的玻璃，不存在叠加。
+ * 搜索框现在也是卡片（`shape: 'capsule'` 的常驻组件），自动吃到同一层玻璃 ——
+ * 所以这里只需一条 `.wgt` 规则就覆盖了全部元素。 */
+html[data-ntp-wallpaper='1'] {
+  --ntp-search-hover-bg: color-mix(in srgb, var(--ntp-bg) 86%, transparent);
+}
+
+/* 有壁纸：**卡片**的玻璃材质。
+ * 注意这里**只管卡片** —— 顶部选项卡条 / 快捷入口栏 / 顶部时间
+ * 三个"浮起小控件"用的是 §1 那条统一的 --ntp-pill-* 材质，两种模式一个样，不随壁纸切换（它们本来就该"哪都一样"）。 */
+html[data-ntp-wallpaper='1'] .wgt {
+  /* 卡片这一档同样用本卡的不透明度。
+     关键：这里**不再乘 74% 的死地板** —— 旧写法会让滑块拉到 100% 仍然 26% 透，
+     看上去"透明度调了没反应"。现在 100% = 完全不透、0% = 完全透，滑块整段都有效。 */
+  background: color-mix(in srgb, var(--ntp-bg) calc(var(--wgt-bg-alpha, 1) * 100%), transparent);
+  border-color: color-mix(in srgb, var(--ntp-text) calc(14% * var(--wgt-bg-alpha, 1)), transparent);
+  backdrop-filter: blur(var(--wgt-blur, 16px)) saturate(1.1);
+  -webkit-backdrop-filter: blur(var(--wgt-blur, 16px)) saturate(1.1);
+}
+
+/* 文档大底要**明显更实**：它是"纸"，正文与标题直接落在上面；
+ * 卡片只是浮在纸上的小块，74% 那种透度撑得住一行小字，撑不住整页正文。
+ * 所以它不挤进上面那条卡片规则，单独一档 —— 这是角色不同，不是特例。 */
+html[data-ntp-wallpaper='1'] .ntp-sheet {
+  background: color-mix(in srgb, var(--ntp-bg) 92%, transparent);
+  border-color: color-mix(in srgb, var(--ntp-text) 14%, transparent);
+  backdrop-filter: blur(24px) saturate(1.05);
+  -webkit-backdrop-filter: blur(24px) saturate(1.05);
+}
+
+/* ── 浮起小控件的统一材质（材质口径的**唯一出处**）────────────────────────
+ * 顶部选项卡条 / 快捷入口栏 / 顶部时间 / 动作栏（选项卡右侧那个小药丸）
+ * —— 都是"浮在页面之上的小控件"，共用同一套材质：
+ * 稍微半透明 + 一层随主题的淡描边 + 无投影 + 轻毛玻璃。
+ *
+ * 为什么集中成一条：它们是同一**类**东西，材质是这类东西的共同身份。分散在各自
+ * 选择器里各写一遍，早晚会漂。
+ * 加新的同类控件 → 只往下面这个选择器列表里补一个，不要另起一套参数。
+ *
+ * 两种模式**共用、不随壁纸切换**：这几个控件本来就该"哪都一样"（只有卡片会按
+ * 壁纸换成玻璃底，见上面那条）。色值一律走 §1 的 --ntp-pill-*，选择器里不写字面量。 */
+.ntp__sections,
+.ntp__actions,
+.ntp__quicklinks,
+.ntp-clock {
+  background: var(--ntp-pill-bg);
+  border: 1px solid var(--ntp-pill-border);
+  box-shadow: none;
+  backdrop-filter: blur(var(--ntp-pill-blur));
+  -webkit-backdrop-filter: blur(var(--ntp-pill-blur));
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * §2 底色与透明
+ *
+ * 本页**没有背景层**（壁纸由外壳唯一绘制，见文件头的「壁纸只有一份」）。
+ * 这里只决定 body 透不透明：
+ *   · 无壁纸 → 铺主题底色（`--ntp-bg` = 窗口底色，观感与改动前一致）
+ *   · 有壁纸 → 透明，一路露出外壳那张图
+ * ═════════════════════════════════════════════════════════════════════════ */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  /* 新标签页自管整屏版式，不参与内部页的内容列约束。 */
+  max-width: none;
+}
+
+body {
+  background: var(--ntp-bg);
+  color: var(--ntp-text);
+  min-height: 100vh;
+  /* 字体栈走唯一令牌（shared-types/theme.mjs#UI_FONT_STACK）；兜底串与它同值。 */
+  font-family: var(--hira-font-ui, 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans SC', system-ui, -apple-system, sans-serif);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 有壁纸：整页透明。
+ * 标签视图本身也是透明画布（APPS 侧 tabCanvasColor 钩子），于是这里能一路看到
+ * 窗口级的 `#chrome-theme-background` —— 壁纸的取景、模糊、动画全部只由那一层负责，
+ * 本页不参与，也就不会在面板 / 侧栏动画时被带着动。 */
+html[data-ntp-wallpaper='1'] body {
+  background: transparent;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * §3 L1 · 内容 = 顶部小选项卡 + 分区
+ *
+ * 起始页被切成若干**分区**（首页 / 推广 / 新闻），由顶部小选项卡切换。
+ * 选项卡固定在页面顶部（不随内容高低上下跑），当前分区在剩余空间里居中 ——
+ * 于是"内容居中"的观感保留了，而选项卡始终待在原地。
+ * ═════════════════════════════════════════════════════════════════════════ */
+
+.ntp {
+  position: relative;
+  z-index: var(--hira-z-base);
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  min-height: 100vh;
+  padding: 7vh 32px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+
+/* ── 顶部一行：时间 + 分区选项卡 + 动作栏 + 内部页快捷入口 ────────────────────
+ * 四者作为**一组**一起居中；**时间在最左（选项卡前面）**，与选项卡同一行。
+ * `align-items: stretch` → 四个胶囊**等高、上下齐平**（"齐平"就靠这一条：
+ * 高度不写死，谁内容高就以谁为准，其余三个自动撑到同高；四个胶囊内部各自
+ * `align-items: center` 让内容在这条等高胶囊里居中）。选项卡条尺寸以后改了也不会错位。
+ * 不给快捷入口做绝对定位 —— 那样窄窗口下会和选项卡叠在一起。 */
+.ntp__topbar {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* 这一行里的四个药丸（选项卡条 / 动作栏 / 快捷入口栏）：这里只排**布局**
+ * （横排、圆角、内边距）；材质（半透明底 / 淡描边 / 毛玻璃 / 无投影）由 §1 那条
+ * 「浮起小控件统一材质」统一给 —— 别在这里再写一份，否则迟早又和别处漂。
+ * 底槽有了底色，选中态就**不再叠第二层玻璃**，只加一层着色（见 .ntp-tab.is-active）。
+ *
+ * 动作栏（`.ntp__actions`）在这里**与选项卡条同级并列**，不是它的子节点 ——
+ * 也就是"单独一个小药丸"，而不是和选项卡连成一长条（用户反馈）。 */
+.ntp__sections,
+.ntp__actions,
+.ntp__quicklinks {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+}
+
+.ntp-tab {
+  padding: 7px 16px;
+  /* 边框槽位一直留着（透明），选中时才显色 —— 否则选中瞬间会跳 2px */
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ntp-text-soft);
+  font-family: inherit;
+  font-size: 13px;
+  /* 未选中 = 常规字重；仅当前分区（.is-active）加粗 —— 与内部页 .segmented 同一口径。 */
+  font-weight: var(--fw-normal, 400);
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+/* hover 用**半透明着色**而不是不透明底色：同一条规则在两种模式下都对
+   （不透明底色盖在壁纸的玻璃上会把质感打掉）—— 不需要为它再开一个模式分支。 */
+.ntp-tab:hover {
+  color: var(--ntp-text);
+  background: color-mix(in srgb, var(--ntp-text) 8%, transparent);
+}
+.ntp-tab.is-active {
+  background: color-mix(in srgb, var(--ntp-text) 10%, transparent);
+  color: var(--ntp-text);
+  font-weight: var(--fw-strong, 600);
+}
+.ntp-tab:focus-visible {
+  outline: 2px solid var(--ntp-accent);
+  outline-offset: 2px;
+}
+
+/* 动作项（`自定义` / `添加组件`）：样式与选项卡**完全同一套**（.ntp-tab）——
+ * 它们本来就是"同一族的小按钮"，没必要另起一套配色与 hover。
+ * 这里只补两条它独有的：
+ *   · `.ntp__actions[hidden]`：动作栏里一个可见项都没有时，连**整颗药丸**一起收起，
+ *     不留一个空气泡占位；
+ *   · flex 子项默认 `display` 会被布局改写，所以隐藏必须显式钉死。 */
+.ntp__actions[hidden] {
+  display: none;
+}
+.ntp-tab[hidden] {
+  display: none;
+}
+
+/* 内部页快捷入口：图标按钮，弱化配色 —— 它们是"顺手的出口"，不是主角 */
+.ntp-quick {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ntp-text-soft);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+.ntp-quick:hover {
+  color: var(--ntp-text);
+  background: color-mix(in srgb, var(--ntp-text) 10%, transparent);
+}
+.ntp-quick:focus-visible {
+  outline: 2px solid var(--ntp-accent);
+  outline-offset: 2px;
+}
+
+/* ── 分区 ─────────────────────────────────────────────────────────────────
+ * 分区挂载后**常驻**（切走只是 hidden），所以这里只负责"显示哪一个"。
+ * flex 链路特意**打通到底**（views → view → 分区内容）：
+ * 目的是让首页的看板能撑满可用高度 —— 见下面 .ntp__board 的 flex: 1。
+ * 这里**不做垂直居中**：内容从画布顶部开始排，否则组件少的时候上方会空一大片。 */
+.ntp__views {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.ntp__view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+/* 显式写 [hidden]：.ntp__view 是 flex 项，不写这条会把隐藏的分区一起排出来 */
+.ntp__view[hidden] {
+  display: none;
+}
+
+/* ── 顶部时间（页面外壳，三个分区上都在）──────────────────────────────────
+ * 住在顶部那一行里（.ntp__topbar），**在选项卡左边、与它同一行齐平**。
+ * 这里只管布局与字号：高度由顶栏的 `align-items: stretch` 拉齐（不写死数字，
+ * 选项卡条以后改尺寸它自动跟着齐）；内部 flex + center 让文字垂直居中。
+ * 材质（半透明底 / 淡描边 / 毛玻璃）由 §1 那条统一材质给 —— 别在这里再写一份。 */
+.ntp-clock {
+  position: relative;
+  flex: none;
+  z-index: var(--hira-z-base);
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 16px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--ntp-text-soft);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  cursor: default;
+}
+
+/* ── 看板（首页里那个）─────────────────────────────────────────────────── */
+
+.ntp__board {
+  position: relative;
+  width: 100%;
+  /* 撑满可用高度：网格是一块**固定铺满的画布**，不是"内容多高就多高"的盒子。
+     组件排到画布之外时，由板层写进来的内联 min-height 把看板继续往下撑。
+     两个模式都用同一条规则 ⇒ 进出编辑模式内容一动不动（§4.6 的铁律）。 */
+  flex: 1;
+  /* 自成层叠上下文：网格点与各卡片的 z-index 只在本层内比较，外部怎么排都不影响 */
+  isolation: isolate;
+}
+
+/* 自定义模式的网格点：用来"看见格子在哪"。
+   看板既然铺满整块可用区，`inset: 0` 就等于"网格固定铺满" —— 不需要任何额外测量。
+   间距由板层写进 --ntp-step-x / -y（与网格同源），所以调细网格时这里不用改。
+   注意横向的**合法落点只有三处对称锚点**（贴左 / 正中 / 贴右，见 widgets/grid.js#hAnchors），
+   点阵因此主要表达**纵向行距**；横向对称另有一条中轴线（见下面的 ::after）。 */
+.ntp__board[data-editing='1']::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: var(--hira-z-base);
+  pointer-events: none;
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--ntp-text) 22%, transparent) 1.5px,
+    transparent 1.5px
+  );
+  background-size: var(--ntp-step-x, 64px) var(--ntp-step-y, 64px);
+}
+
+/* 自定义模式的中轴对称线。横向的合法落点只有三处（贴左 / 正中 / 贴右，见 widgets/grid.js#hAnchors），
+   所以"是否真的对称"只需一条参照：卡片居中时，它的中心正好压在这条线上。
+   垫在卡片之下：用**负层** token（backdrop/veil 才是负层，见 shared-ui-tokens/layers.css），
+   看板自成层叠上下文（isolation: isolate），负数只在**本层之内**下沉，
+   于是它落在卡片背后、页面底色之上，永远不会横穿卡片。 */
+.ntp__board[data-editing='1']::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 50%;
+  width: 1px;
+  z-index: var(--hira-z-veil);
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--ntp-text) 26%, transparent) 10%,
+    color-mix(in srgb, var(--ntp-text) 26%, transparent) 90%,
+    transparent
+  );
+}
+
+/* ── 组件卡片 ───────────────────────────────────────────────────────────── */
+
+.wgt {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: var(--hira-z-base);
+  border-radius: 16px;
+  /* 底色 = 主题底色 × 本卡不透明度（--wgt-bg-alpha 由组件设置写进来，默认 1 = 原样）。
+     写成乘法而不是给"半透明"另开一条规则：所以调透明度不需要按模式分叉。 */
+  background: color-mix(in srgb, var(--surface) calc(var(--wgt-bg-alpha, 1) * 100%), transparent);
+  /* 边框同样乘本卡不透明度：用户调"自定义透明度"时，描边与底色一起淡出，
+     不会出现"底透了、框还硬邦邦一圈"的割裂感。 */
+  border: 1px solid color-mix(in srgb, var(--border) calc(var(--wgt-bg-alpha, 1) * 100%), transparent);
+  /* 阴影拆成可被 --wgt-bg-alpha 乘的零件（见 §1 的 --ntp-shadow-*）：
+     透明度调低，投影也跟着变淡，三者同步。 */
+  box-shadow:
+    0 1px 2px rgba(var(--ntp-shadow-rgb), calc(var(--ntp-shadow-a1) * var(--wgt-bg-alpha, 1))),
+    0 var(--ntp-shadow-y2) var(--ntp-shadow-blur2) rgba(var(--ntp-shadow-rgb), calc(var(--ntp-shadow-a2) * var(--wgt-bg-alpha, 1)));
+  /* 背景模糊：单独由 --wgt-blur 控制（与底色不透明度各管各的）。
+     注意 `backdrop-filter` 只能采样**本页**背后的内容；壁纸在窗口外壳那一层
+     （另一个 WebContentsView），采不到 —— 有壁纸时的"玻璃"观感来自
+     「半透明卡片 + 外壳那层窗口级模糊」。 */
+  backdrop-filter: blur(var(--wgt-blur, 16px)) saturate(1.1);
+  -webkit-backdrop-filter: blur(var(--wgt-blur, 16px)) saturate(1.1);
+  /* 卡片是**自己的颜色根**：颜色从卡片这里取，而不是从 body 一路继承下来。
+     为什么必须显式声明：`data-fg`（字体黑白）只重写卡上的 --ntp-text 变量，
+     而变量只有在**用到它的那个元素**上才会被重新求值 —— 显式写了 `color: var(--ntp-text)`
+     的文本（秒数、月份、状态…）能跟着变，但**没写 color 的文本**是从 body 继承**计算后的
+     颜色**，卡上的变量覆盖根本传不下来。于是时钟大字（__hm）、日期大字（__day）、
+     新闻来源标题（__title）这些"靠继承"的排版一律无视字体黑白设置。
+     在这一层声明 color 之后，卡内**所有没自带颜色的文本**都从卡片取色，
+     变量覆盖自然生效 —— 这本来就是这个设置的设计口径（见 §3 的 .wgt[data-fg]）。 */
+  color: var(--ntp-text);
+  overflow: hidden;
+  contain: layout style; /* 内部排版不外泄，拖拽时不必重算外部 */
+  transition:
+    transform 0.19s cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 0.19s cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 0.19s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+
+/* 拖拽 / 改尺寸期间：关掉过渡（跟手的前提），并抬到同级之上 */
+.wgt.is-dragging,
+.wgt.is-resizing {
+  transition: none;
+  z-index: var(--hira-z-elevated);
+  box-shadow: var(--ntp-shadow-lift);
+}
+.wgt.is-dragging {
+  cursor: grabbing;
+}
+.wgt.is-entering {
+  animation: ntp-wgt-pop 0.32s cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+@keyframes ntp-wgt-pop {
+  from {
+    opacity: 0;
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    filter: none;
+  }
+}
+
+.wgt__body {
+  width: 100%;
+  height: 100%;
+  /* 让组件内部能按**自己的格子大小**排版（clock/date/news 都用 cq 单位） */
+  container-type: size;
+  display: block;
+}
+
+/* 自定义模式的操作蒙层：拖拽抓手 + 挡住组件内部的误点。
+   压着的是任意内容，所以固定一层深色渐变 + 白字（见 §1 的 --ntp-scrim）。 */
+.wgt__mask {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: var(--hira-z-elevated);
+  padding: 10px 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  cursor: grab;
+  background: var(--ntp-scrim);
+  touch-action: none;
+}
+.ntp__board[data-editing='1'] .wgt__mask {
+  display: flex;
+}
+.wgt__mask:active {
+  cursor: grabbing;
+}
+.wgt__name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ntp-on-scrim);
+  text-shadow: var(--ntp-on-scrim-name-shadow);
+  letter-spacing: 0.02em;
+}
+.wgt__actions {
+  display: flex;
+  gap: 6px;
+}
+.wgt__btn {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--ntp-btn-on-scrim-bg);
+  color: var(--ntp-btn-on-scrim-fg);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    transform 0.12s ease;
+}
+.wgt__btn:hover {
+  background: var(--ntp-btn-on-scrim-bg-hover);
+  transform: scale(1.06);
+}
+.wgt__btn:active {
+  transform: scale(0.94);
+}
+
+/* 改尺寸手柄（右下角）—— 压在蒙层之上，否则整块被抓手盖住点不到 */
+.wgt__resize {
+  display: none;
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: var(--hira-z-controls);
+  width: 22px;
+  height: 22px;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+.ntp__board[data-editing='1'] .wgt__resize {
+  display: block;
+}
+.wgt__resize::after {
+  content: '';
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid color-mix(in srgb, var(--ntp-text) 45%, transparent);
+  border-bottom: 2px solid color-mix(in srgb, var(--ntp-text) 45%, transparent);
+  border-radius: 0 0 3px 0;
+}
+
+/* ── 形状语言：胶囊 ───────────────────────────────────────────────────────
+ * 由组件自己声明（def.shape），板层只把它写进 data-shape ——
+ * 于是"这块区域长什么样"是**组件属性**，不是板层里的一个 id 判断。
+ * 目前只有搜索框用（它就是控件本身，不该被套一层圆角矩形卡）。 */
+.wgt[data-shape='capsule'] {
+  border-radius: 999px;
+}
+/* 焦点环画在**整个胶囊**上，而不是框内再套一圈（输入框自己是透明的） */
+.wgt[data-shape='capsule']:focus-within {
+  border-color: var(--ntp-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ntp-accent) 22%, transparent);
+}
+/* 只有一行高：压深色渐变会显脏，所以不铺蒙层底色 */
+.wgt[data-shape='capsule'] .wgt__mask {
+  background: none;
+  padding: 0 14px;
+  align-items: center;
+}
+/* 名字不能沿用"压在深色蒙层上的白字" —— 这个蒙层没有底色，白字会看不见 */
+.wgt[data-shape='capsule'] .wgt__name {
+  color: var(--ntp-text-soft);
+  text-shadow: none;
+}
+/* 自定义模式下给一圈虚线轮廓。
+   别的卡片靠深色蒙层表示"能拖"，胶囊没有那层底色，再不画点东西
+   就跟正常状态长得一模一样 —— 看上去像"不能拖、不能改位置"。 */
+.ntp__board[data-editing='1'] .wgt[data-shape='capsule'] {
+  outline: 2px dashed color-mix(in srgb, var(--ntp-text) 28%, transparent);
+  outline-offset: 2px;
+}
+
+/* ── 通用外观：字体黑白（data-fg 由 widgets/appearance.js 写入）─────────────
+ * 只重写**两个前景令牌**，卡内所有组件自然跟着变 ——
+ * 组件内部本来就只用令牌（见 §5 各组件样式），没有写死的颜色。
+ * 这正是"通用外观放板层"能成立的原因：不用挨个组件去改。
+ * 色值本身在 §1（选择器里不写字面量）。 */
+.wgt[data-fg='light'] {
+  --ntp-text: var(--ntp-fg-light);
+  --ntp-text-soft: var(--ntp-fg-light-soft);
+  /* 显式选了白字 ⇒ 大字配深影。注意影子跟的是**字色**而不是主题：
+     所以深色主题下选"黑色"，拿到的是浅影（覆盖 :root 的深色档）。 */
+  --ntp-text-shadow: var(--ntp-fg-light-shadow);
+}
+.wgt[data-fg='dark'] {
+  --ntp-text: var(--ntp-fg-dark);
+  --ntp-text-soft: var(--ntp-fg-dark-soft);
+  --ntp-text-shadow: var(--ntp-fg-dark-shadow);
+}
+
+/* ── 浮层外壳（选择器 / 组件设置共用） ──────────────────────────────────── */
+
+.ntp-pop-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--hira-z-popover);
+  pointer-events: none;
+}
+.ntp-pop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  min-width: 208px;
+  max-width: 320px;
+  padding: 8px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--ntp-shadow-pop);
+  color: var(--ntp-text);
+  pointer-events: auto;
+  will-change: transform;
+}
+.ntp-pop__title {
+  padding: 6px 10px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ntp-text-soft);
+  letter-spacing: 0.02em;
+}
+
+/* 选择器 */
+.ntp-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ntp-picker__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ntp-text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.ntp-picker__item:hover {
+  background: var(--ntp-hover);
+}
+.ntp-picker__item.is-disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.ntp-picker__item.is-disabled:hover {
+  background: transparent;
+}
+.ntp-picker__title {
+  font-size: 13px;
+  font-weight: 500;
+}
+.ntp-picker__desc {
+  font-size: 11px;
+  color: var(--ntp-text-soft);
+}
+.ntp-picker__empty {
+  padding: 14px;
+  font-size: 12px;
+  color: var(--ntp-text-soft);
+  text-align: center;
+}
+
+/* 设置表单 */
+.ntp-form {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ntp-form__row {
+  display: flex;
+  align-items: center;
+  /* 允许换行：hint 是 width:100% 的提示行，要能落到自己那一行去，
+     否则它会和标签、控件挤在同一行里互相压窄 */
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.ntp-form__row:hover {
+  background: var(--ntp-hover);
+}
+.ntp-form__label {
+  flex: 1;
+  white-space: nowrap;
+}
+.ntp-form__control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ntp-form__value {
+  font-size: 11px;
+  color: var(--ntp-text-soft);
+  min-width: 16px;
+  text-align: right;
+}
+.ntp-form__hint {
+  width: 100%;
+  font-size: 11px;
+  color: var(--ntp-text-soft);
+}
+
+.ntp-switch {
+  appearance: none;
+  width: 34px;
+  height: 20px;
+  margin: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ntp-text) 22%, transparent);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+.ntp-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--ntp-knob);
+  transition: transform 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.ntp-switch:checked {
+  background: var(--ntp-accent);
+}
+.ntp-switch:checked::after {
+  transform: translateX(14px);
+}
+
+.ntp-select,
+.ntp-input {
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--ntp-text);
+  background: var(--ntp-bg);
+  border: 1px solid var(--ntp-border);
+  border-radius: var(--radius);
+  padding: 4px 6px;
+  outline: none;
+}
+.ntp-select {
+  max-width: 150px;
+}
+.ntp-input {
+  width: 96px;
+}
+.ntp-select:focus,
+.ntp-input:focus {
+  border-color: var(--ntp-accent);
+}
+
+.ntp-range {
+  appearance: none;
+  width: 96px;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ntp-text) 20%, transparent);
+  outline: none;
+  cursor: pointer;
+}
+.ntp-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ntp-accent);
+  border: 2px solid var(--surface);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * §4 分区（整页）
+ *
+ * 与 §5 的组件是两种东西：组件是**用户能摆的格子**（有尺寸/位置/配置），
+ * 分区是**页面本身**（整屏，不可编排）。
+ * 所以两套前缀、两套注册中心、两段样式 —— 互不串味。
+ * 命名：ntp-promo__* （推广） / ntp-news__* （新闻）。
+ * ═════════════════════════════════════════════════════════════════════════ */
+
+/* ── 文档大底（.ntp-sheet）───────────────────────────────────────────────
+ * 首页是**画布**（用户在它上面摆格子，格子自己成块、各自成玻璃），
+ * 推广页与新闻页是**文档**（整页文字）—— 没有底座直接压在壁纸上，标题就糊。
+ *
+ * 所以大底只给文档型分区，不给画布：这不是"要不要连续表面"的问题
+ * （那次被否掉的是把首页合并成一张板），而是"这块内容是画布还是文档"的问题。
+ *
+ * 一条附带规矩：大底里的小块**不再自己画同色底**（否则和纸同色、糊成一片），
+ * 改成"透明 + 描边"的平铺块 —— 层次由描边和 hover 着色给。 */
+.ntp-sheet {
+  padding: 26px 28px;
+  border-radius: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--ntp-shadow);
+}
+
+/* ── 推广页 ─────────────────────────────────────────────────────────────── */
+
+.ntp-promo {
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+  padding-bottom: 8px;
+  text-align: left;
+}
+
+/* 主推位：在大底上再给一层主色淡染 —— 它是整页唯一要"跳出来"的块，
+   用染色而不是再叠一张同色卡片 */
+.ntp-promo__hero {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 30px 32px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--ntp-accent) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ntp-accent) 26%, var(--border));
+}
+.ntp-promo__eyebrow {
+  align-self: flex-start;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ntp-accent) 16%, transparent);
+  color: var(--ntp-accent);
+  font-size: 12px;
+  line-height: 1;
+}
+.ntp-promo__title {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ntp-text);
+}
+.ntp-promo__desc {
+  margin: 0;
+  max-width: 62ch;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--ntp-text-soft);
+}
+.ntp-promo__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ntp-promo__chip {
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 1;
+  color: var(--ntp-text-soft);
+}
+.ntp-promo__cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+/* 按钮（推广页自己的，与浮层/工具条那两套不共用） */
+.ntp-promo__btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 9px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--ntp-text);
+  font-size: 13px;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
+}
+.ntp-promo__btn:hover {
+  background: color-mix(in srgb, var(--ntp-text) 8%, transparent);
+}
+.ntp-promo__btn--primary {
+  border-color: transparent;
+  background: var(--ntp-accent);
+  /* 主色底上的文字用主题给的 on-accent 色（不在选择器里写死 #fff）——
+     深/浅主题的对比度由主题系统保证 */
+  color: var(--badge-font-color);
+}
+.ntp-promo__btn--primary:hover {
+  background: var(--ntp-accent);
+  filter: brightness(1.08);
+}
+
+/* 区块 */
+.ntp-promo__block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ntp-promo__h {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ntp-text);
+}
+
+/* 卡片网格 */
+.ntp-promo__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+.ntp-promo__card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px;
+  border-radius: 16px;
+  /* 大底之上的平铺块：透明 + 描边（同色底会和大底糊成一片） */
+  background: transparent;
+  border: 1px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+  transition:
+    background 0.14s ease,
+    transform 0.14s ease,
+    border-color 0.14s ease;
+}
+.ntp-promo__card:hover {
+  transform: translateY(-2px);
+  background: color-mix(in srgb, var(--ntp-text) 5%, transparent);
+  border-color: color-mix(in srgb, var(--ntp-accent) 40%, var(--border));
+}
+.ntp-promo__tag {
+  align-self: flex-start;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ntp-text) 8%, transparent);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ntp-text-soft);
+}
+.ntp-promo__card-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ntp-text);
+}
+.ntp-promo__card-desc {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--ntp-text-soft);
+}
+
+/* 伙伴位（第三方广告）
+ * 它是这一页的重点之一，所以给足存在感：主色淡染 + 实线描边（原来那版是
+ * 极淡的虚线框，几乎看不见）。但「广告」标签必须留着 ——
+ * **显眼不等于模糊"这是谁在说话"**。 */
+.ntp-promo__ad {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px 24px;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--ntp-accent) 46%, transparent);
+  background: color-mix(in srgb, var(--ntp-accent) 9%, transparent);
+}
+.ntp-promo__ad-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.ntp-promo__ad-label {
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--ntp-text) 28%, transparent);
+  font-size: 10px;
+  line-height: 1.5;
+  letter-spacing: 0.08em;
+  color: var(--ntp-text-soft);
+}
+.ntp-promo__ad-brand {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ntp-text);
+}
+/* 优惠信息：这一块的主钩子，单独一行、给足字号与主色 */
+.ntp-promo__ad-kicker {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ntp-accent);
+}
+.ntp-promo__plans {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+.ntp-promo__plan {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 14px;
+  background: transparent;
+  border: 1px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+  transition:
+    background 0.14s ease,
+    transform 0.14s ease,
+    border-color 0.14s ease;
+}
+.ntp-promo__plan:hover {
+  transform: translateY(-2px);
+  background: color-mix(in srgb, var(--ntp-text) 5%, transparent);
+  border-color: color-mix(in srgb, var(--ntp-accent) 40%, var(--border));
+}
+/* 标了 hot 的那条（对应官网自己标的"爆款"）再加重一档 */
+.ntp-promo__plan[data-hot='1'] {
+  border-color: color-mix(in srgb, var(--ntp-accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--ntp-accent) 10%, transparent);
+}
+.ntp-promo__plan[data-hot='1']:hover {
+  background: color-mix(in srgb, var(--ntp-accent) 16%, transparent);
+}
+.ntp-promo__plan-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ntp-promo__plan-badge {
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--ntp-accent) 16%, transparent);
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--ntp-accent);
+}
+.ntp-promo__plan-name {
+  font-size: 13px;
+  color: var(--ntp-text);
+}
+.ntp-promo__plan-price {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  color: var(--ntp-text);
+}
+.ntp-promo__plan-price strong {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.ntp-promo__plan-price span {
+  font-size: 12px;
+  color: var(--ntp-text-soft);
+}
+.ntp-promo__plan-spec {
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ntp-text-soft);
+}
+
+/* 页脚 */
+.ntp-promo__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.ntp-promo__foot-links {
+  display: flex;
+  gap: 16px;
+}
+.ntp-promo__link {
+  font-size: 12.5px;
+  color: var(--ntp-accent);
+  text-decoration: none;
+}
+.ntp-promo__link:hover {
+  text-decoration: underline;
+}
+
+/* ── 新闻页（整页）─────────────────────────────────────────────────────── */
+
+.ntp-news {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: left;
+}
+
+.ntp-news__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.ntp-news__sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ntp-news__src {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ntp-text-soft);
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+.ntp-news__src:hover {
+  color: var(--ntp-text);
+  background: color-mix(in srgb, var(--ntp-text) 8%, transparent);
+}
+/* 选中的源：同样不画同色底，用一层浅着色 + 描边表示"选中" */
+.ntp-news__src.is-active {
+  background: color-mix(in srgb, var(--ntp-text) 9%, transparent);
+  border-color: var(--border);
+  color: var(--ntp-text);
+}
+.ntp-news__refresh {
+  margin-left: auto;
+  padding: 6px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--ntp-text);
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1;
+  cursor: pointer;
+}
+.ntp-news__refresh:hover {
+  background: color-mix(in srgb, var(--ntp-text) 8%, transparent);
+}
+.ntp-news__refresh:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ntp-news__status {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ntp-text-soft);
+}
+
+/* 整页大卡片网格 */
+.ntp-news__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 10px;
+  transition: opacity 0.15s ease;
+}
+.ntp-news__list[data-loading='1'] {
+  opacity: 0.45;
+}
+.ntp-news__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 15px 16px;
+  border-radius: 14px;
+  background: transparent;
+  border: 1px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+  transition:
+    background 0.14s ease,
+    transform 0.14s ease,
+    border-color 0.14s ease;
+}
+.ntp-news__item:hover {
+  transform: translateY(-2px);
+  background: color-mix(in srgb, var(--ntp-text) 5%, transparent);
+  border-color: color-mix(in srgb, var(--ntp-accent) 40%, var(--border));
+}
+.ntp-news__rank {
+  flex: none;
+  min-width: 22px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--ntp-text-soft);
+  font-variant-numeric: tabular-nums;
+}
+.ntp-news__item[data-top='1'] .ntp-news__rank {
+  color: var(--ntp-accent);
+}
+.ntp-news__body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.ntp-news__title {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ntp-text);
+}
+.ntp-news__meta {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--ntp-text-soft);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * §5 内置组件（wg-*）
+ *
+ * 命名以 wg-<组件名>__ 为前缀：组件之间不共享类名，
+ * 新增组件只往这里追加自己那一段，不会串味。
+ * 尺寸自适应一律用 cq 单位（容器查询），所以同一个组件在 3 格宽和 8 格宽
+ * 下都是"刚好合适"，而不是靠 JS 算字号。
+ * ═════════════════════════════════════════════════════════════════════════ */
+
+.wg {
+  width: 100%;
+  height: 100%;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  overflow: hidden;
+}
+
+/* ── 搜索框（常驻组件，shape: 'capsule'）──────────────────────────────────
+ * 它**不画自己的底**：卡片本身就是那个胶囊（底色 / 描边 / 玻璃 / 焦点环
+ * 全部由 .wgt 与 [data-shape='capsule'] 负责），这里只排内部那两个元素。
+ * 高度跟随区域（一行 = 一格高），所以缩放宽度时它自然变长变短。 */
+.wg-search {
+  padding: 0;
+}
+.wg-search__form {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* ⚠ 组件内自绘控件必须用**「组件命名空间 + 控件类名」**的复合选择器（见下面
+ *   `.wg-search .wg-search__input`）。原因：内部页公共样式表 base.css 里有一套
+ *   元素型表单原语 `input[type='text'] { height: var(--ctl-h); padding: 0 10px;
+ *   background: var(--field-bg); … }`（特异性 0,1,1），单类名控件（0,1,0）会被它
+ *   覆盖 —— 搜索框曾因此只有 34px 高、贴在胶囊上半截，与卡片底色分离。
+ *   抬到 0,2,0 并逐项解除原语后，控件长什么样完全由组件自己说了算。 */
+.wg-search__icon {
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  color: var(--ntp-text-soft);
+  pointer-events: none;
+}
+.wg-search .wg-search__input {
+  width: 100%;
+  /* 撑满胶囊：输入区与卡片底色**同一块**，不留上下半截的分离感 */
+  height: 100%;
+  padding: 0 22px 0 48px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ntp-text);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: normal;
+  outline: none;
+  transition: background 0.12s ease;
+}
+.wg-search .wg-search__input:hover {
+  background: var(--ntp-search-hover-bg);
+}
+/* 聚焦反馈画在**整个胶囊**上（.wgt[data-shape='capsule']:focus-within），
+   这里把 base.css 原语留下的软底 + ring 一并解除，否则框内会再套一层。 */
+.wg-search .wg-search__input:focus {
+  background: transparent;
+  box-shadow: none;
+}
+/* ── 插件动作按钮（「询问 AI」等，插槽：official-extension-points#newtab.search-action）
+ * 贴在输入区右端、**胶囊之内**：它是"对当前输入再做一件事"，从属于这颗胶囊，
+ * 焦点环仍画在整个胶囊上（.wgt[data-shape='capsule']:focus-within）。
+ * 有无按钮由插件决定：输入区右内边距是脚本量出按钮宽度后**内联**写上的
+ * （见 widgets/defs/search.js），所以没有动作时胶囊外观与改造前一字不差。 */
+.wg-search__actions {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.wg-search__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ntp-text-soft);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+/* 图标不自带尺寸语义（uiIconSvg 只写 width/height 属性），这里钉住不许被文字压扁 */
+.wg-search__action svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.wg-search__action:hover {
+  background: var(--ntp-search-hover-bg);
+  color: var(--ntp-text);
+}
+.wg-search__action:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+
+.wg-search__input::placeholder {
+  color: var(--ntp-text-soft);
+}
+/* 自定义模式下：
+ *   · 占位提示不显示 —— 那时输入框点不动，留着"搜索或输入网址"只会让人以为这里能打字；
+ *     而别的卡片在那个位置显示的是**组件名**，它也该显示名字（见上面的 .wgt__name）。
+ *   · 搜索图标让位 —— 否则它和角落的组件名会叠在一起。 */
+.ntp__board[data-editing='1'] .wg-search__input::placeholder {
+  color: transparent;
+}
+.ntp__board[data-editing='1'] .wg-search__icon,
+.ntp__board[data-editing='1'] .wg-search__actions {
+  display: none;
+}
+
+/* ── 时间 ───────────────────────────────────────────────────────────────── */
+
+/* 大字组件的**可读性投影**（时间 / 日期共用这一条）。
+ * 这两张卡**默认没有底色**（不透明度 0%，见 widgets/defs/clock.js 的 appearance），
+ * 一串大字直接压在壁纸上会糊 —— 所以它们吃一个投影。
+ *
+ * 用哪个影子由 `--ntp-text-shadow` 一处决定（见 §1）：
+ *   跟随主题 → 按主题实际呈现的黑 / 白自动选（浅色主题配浅影、深色主题配深影）；
+ *   显式选白 / 黑 → 由 §3 的 `.wgt[data-fg]` 覆盖。
+ * 这里**只做"谁要影子"这一件事**，不做任何颜色判断 —— 判断只有一处。
+ *
+ * text-shadow 是**继承属性**，挂在组件根节点上就覆盖了它所有文字。
+ * 以后再有"大字组件"要投影，把类名补进这个选择器即可。 */
+.wg-clock,
+.wg-date {
+  text-shadow: var(--ntp-text-shadow);
+}
+
+.wg-clock {
+  justify-content: center;
+  gap: 2px;
+}
+/* 时间卡片的每一行都要**水平居中**：
+   它们是 .wg 的满宽行（flex column + stretch），不居中就是左对齐 ——
+   卡片一宽，右边就空出一大片，看着像布局坏了。
+   字号已经按 cq 自适应，所以居中后左右留白是均匀的，读起来是"居中的时钟"。 */
+.wg-clock__time {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.06em;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  line-height: 1;
+}
+.wg-clock__hm {
+  font-size: min(26cqw, 52cqh);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.wg-clock__sec {
+  font-size: min(11cqw, 22cqh);
+  font-weight: 500;
+  color: var(--ntp-text-soft);
+}
+.wg-clock__meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: min(5cqw, 15cqh);
+  color: var(--ntp-text-soft);
+  min-height: 1em;
+}
+.wg-clock[data-compact='1'] .wg-clock__meta {
+  display: none;
+}
+
+/* ── 日期 ───────────────────────────────────────────────────────────────── */
+
+.wg-date {
+  justify-content: center;
+  gap: 8px;
+}
+/* 与时间卡片同一个道理：表头行是满宽行，不居中就是左对齐、右边空一大片。
+   下面那条进度条保持满宽 —— 它是"撑住卡片宽度"的那一根，不该跟着缩 */
+.wg-date__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.14em;
+}
+.wg-date__day {
+  /* 两行高（116px）是默认尺寸：50cqh 会连进度条一起挤出卡片，压到 46cqh 刚好留出余量 */
+  font-size: min(26cqw, 46cqh);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.wg-date__tail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: min(5.5cqw, 13cqh);
+  color: var(--ntp-text-soft);
+}
+.wg-date__month {
+  color: var(--ntp-text);
+  font-weight: 500;
+}
+.wg-date__progress {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.wg-date__bar {
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ntp-text) 12%, transparent);
+  overflow: hidden;
+}
+.wg-date__bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--ntp-accent);
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.wg-date__label {
+  font-size: min(4cqw, 11cqh);
+  color: var(--ntp-text-soft);
+  font-variant-numeric: tabular-nums;
+}
+.wg-date[data-compact='1'] .wg-date__progress {
+  display: none;
+}
+
+/* ── 新闻 ───────────────────────────────────────────────────────────────── */
+
+.wg-news {
+  padding: 10px 4px 6px 12px;
+  gap: 5px;
+}
+.wg-news__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 8px;
+  flex: none;
+}
+.wg-news__title {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wg-news__status {
+  flex: 1;
+  font-size: 11px;
+  color: var(--ntp-text-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wg-news__status[data-tone='warn'] {
+  color: var(--hira-warn, #d99000);
+}
+.wg-news__refresh {
+  flex: none;
+  border: none;
+  border-radius: 999px;
+  padding: 4px 11px;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--ntp-text-soft);
+  background: color-mix(in srgb, var(--ntp-text) 8%, transparent);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+.wg-news__refresh:hover {
+  background: color-mix(in srgb, var(--ntp-text) 16%, transparent);
+  color: var(--ntp-text);
+}
+.wg-news__refresh:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.wg-news__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  margin-right: 4px;
+}
+.wg-news__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.wg-news__item {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  align-items: baseline;
+  column-gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  transition: background 0.1s ease;
+}
+.wg-news__item:hover {
+  background: var(--ntp-hover);
+}
+.wg-news__rank {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ntp-text-soft);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.wg-news__rank.is-top {
+  color: var(--hira-danger, #e0483c);
+}
+.wg-news__link {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ntp-text);
+  text-decoration: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* 刻意**不给标题做 hover 变色**（原来会变蓝）：新闻列表里一屏十几条标题，
+   鼠标划过时挨个变蓝是很吵的"链接感"；反馈交给**整行的 hover 底色**（见上面的
+   .wg-news__item:hover）就足够了 —— 一行一个反馈，不额外染标题。 */
+.wg-news__meta {
+  grid-column: 2;
+  font-size: 10.5px;
+  color: var(--ntp-text-soft);
+  margin-top: 1px;
+}
+.wg-news[data-compact='1'] .wg-news__meta {
+  display: none;
+}
+
+.wg-news__empty {
+  padding: 24px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ntp-text-soft);
+}
+
+.wg-news__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 6px 4px;
+}
+.wg-news__skeleton-row {
+  height: 12px;
+  border-radius: var(--radius);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--ntp-text) 8%, transparent),
+    color-mix(in srgb, var(--ntp-text) 16%, transparent),
+    color-mix(in srgb, var(--ntp-text) 8%, transparent)
+  );
+  background-size: 200% 100%;
+  animation: ntp-skeleton 1.2s ease-in-out infinite;
+}
+@keyframes ntp-skeleton {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* ── 快速拨号 ─────────────────────────────────────────────────────────── */
+
+.wg-speed-dial {
+  gap: 0;
+}
+.wg-speed-dial__grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  align-content: start;
+  gap: 6px;
+  padding-right: 2px;
+  overflow: auto;
+}
+.wg-speed-dial__tile,
+.wg-speed-dial__add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 84px;
+  padding: 8px 4px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ntp-text);
+  font-family: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  transition: background 0.14s ease, border-color 0.14s ease, transform 0.12s ease;
+}
+.wg-speed-dial__tile:hover,
+.wg-speed-dial__add:hover {
+  background: var(--ntp-hover);
+}
+.wg-speed-dial__tile:active,
+.wg-speed-dial__add:active {
+  transform: scale(0.97);
+}
+.wg-speed-dial__label {
+  max-width: 100%;
+  font-size: 11.5px;
+  line-height: 1.2;
+  color: var(--ntp-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wg-speed-dial__add {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--ntp-text) 18%, transparent);
+  color: var(--ntp-text-soft);
+}
+.wg-speed-dial__add:hover {
+  border-color: var(--ntp-accent);
+  color: var(--ntp-accent);
+}
+.wg-speed-dial__plus {
+  font-size: 22px;
+  font-weight: 300;
+  line-height: 1;
+}
+.wg-speed-dial__empty {
+  grid-column: 1 / -1;
+  padding: 18px 8px;
+  font-size: 12px;
+  color: var(--ntp-text-soft);
+  text-align: center;
+}
+.wg-speed-dial__status {
+  flex: 0 0 auto;
+  padding-top: 4px;
+  font-size: 11px;
+  color: var(--ntp-text-soft);
+}
+
+.wg-speed-dial .favicon-wrap {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.wg-speed-dial .favicon {
+  border-radius: 7px;
+  object-fit: contain;
+}
+/* base.css 里的 .favicon-fallback 是按列表行（16px / 浅底）定的全局规则，
+   组件内按自己的令牌与尺寸重设一次，避免整页出现两套"首字母徽标" */
+.wg-speed-dial .favicon-fallback {
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--ntp-text) 12%, transparent);
+  color: var(--ntp-text-soft);
+  font-weight: 600;
+}
+
+/* 紧凑态：只留图标，尽量多放几格 */
+.wg-speed-dial[data-compact='1'] .wg-speed-dial__label {
+  display: none;
+}
+.wg-speed-dial[data-compact='1'] .wg-speed-dial__tile,
+.wg-speed-dial[data-compact='1'] .wg-speed-dial__add {
+  height: 64px;
+  gap: 0;
+}
+
+/* 删除确认浮层（右键管理菜单本身是原生 Menu，不走这里） */
+.wg-speed-dial__menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wg-speed-dial__menu-item {
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ntp-text);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.wg-speed-dial__menu-item:hover {
+  background: var(--ntp-hover);
+}
+.wg-speed-dial__menu-item.is-danger {
+  color: var(--hira-danger, #e0483c);
+}
+
+/* 新增 / 重命名表单 */
+.wg-speed-dial__form-pop {
+  min-width: 240px;
+}
+.wg-speed-dial__form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px;
+}
+/* 同搜索框：组件自绘控件用复合选择器压过 base.css 的元素型表单原语
+   （见 §5 搜索框上方那段说明），否则高度 / 内边距 / 底色会被页面原语接管。 */
+.wg-speed-dial__form .wg-speed-dial__input {
+  width: 100%;
+  height: auto;
+  box-sizing: border-box;
+  padding: 7px 9px;
+  border: 1px solid var(--ntp-border);
+  border-radius: var(--radius);
+  background: var(--ntp-bg);
+  color: var(--ntp-text);
+  font-family: inherit;
+  font-size: 12.5px;
+  outline: none;
+  box-shadow: none;
+}
+.wg-speed-dial__input:focus {
+  border-color: var(--ntp-accent);
+}
+.wg-speed-dial__actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.wg-speed-dial__submit,
+.wg-speed-dial__cancel {
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.wg-speed-dial__submit {
+  background: var(--ntp-accent);
+  color: #fff;
+}
+.wg-speed-dial__cancel {
+  background: transparent;
+  border-color: var(--ntp-border);
+  color: var(--ntp-text);
+}
+.wg-speed-dial__cancel:hover {
+  background: var(--ntp-hover);
+}
+.wg-speed-dial__hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--hira-danger, #e0483c);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * §6 动效偏好
+ * ═════════════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  .wgt,
+  .wg-date__bar > i,
+  .wg-speed-dial__tile,
+  .wg-speed-dial__add {
+    transition: none;
+  }
+  .wgt.is-entering,
+  .wg-news__skeleton-row {
+    animation: none;
+  }
+  .wg-speed-dial__tile:active,
+  .wg-speed-dial__add:active {
+    transform: none;
+  }
+}

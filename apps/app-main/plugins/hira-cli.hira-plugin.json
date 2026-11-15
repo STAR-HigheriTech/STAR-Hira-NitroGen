@@ -1,0 +1,13 @@
+{
+  "id": "hira-cli",
+  "name": "Hira CLI · Agent 接入",
+  "version": "1.0.0",
+  "type": "feature-plugin",
+  "trustLevel": "internal",
+  "description": "让 Codex、Claude Code 和任意 Agent 通过本机 hira 命令提交后台浏览任务；停用后监听、令牌与任务执行立即关闭。",
+  "main": "./hira-cli.cjs",
+  "dependsOn": [
+    "ai-engine",
+    "ai-agent-browser"
+  ]
+}

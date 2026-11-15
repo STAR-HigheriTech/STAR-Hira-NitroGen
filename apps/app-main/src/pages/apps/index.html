@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>已安装应用</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="./apps.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="page-heading">
+        <h1>已安装应用</h1>
+      </div>
+      <div class="toolbar page-header-actions">
+        <button
+          class="btn"
+          id="check-btn"
+          type="button"
+          title="立即检查所有应用是否有可用更新（后台也会定期自动检查）"
+        >
+          检查更新
+        </button>
+        <button class="btn" id="refresh-btn" type="button">刷新</button>
+      </div>
+    </header>
+
+    <div class="toolbar apps-toolbar">
+      <input
+        class="search"
+        id="search"
+        type="search"
+        placeholder="搜索应用名称或网址"
+        autocomplete="off"
+        spellcheck="false"
+        aria-label="搜索已安装应用"
+      />
+      <span class="toolbar-note" id="summary" aria-live="polite"></span>
+    </div>
+
+    <div class="feedback" id="feedback" role="status" aria-live="polite" hidden></div>
+    <div class="item-list" id="list" aria-label="已安装应用列表"></div>
+    <script type="module" src="./apps.js"></script>
+  </body>
+</html>

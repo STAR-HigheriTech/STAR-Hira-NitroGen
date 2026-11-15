@@ -1,0 +1,17 @@
+{
+  "id": "settings-service",
+  "name": "设置引擎",
+  "version": "0.0.1",
+  "type": "core",
+  "trustLevel": "core",
+  "description": "提供设置的读取、写入、重置、Schema 与变更广播。",
+  "main": "./settings-service.cjs",
+  "capabilities": [
+    "settings.get",
+    "settings.set",
+    "settings.list",
+    "settings.reset",
+    "settings.schema"
+  ],
+  "dependsOn": []
+}

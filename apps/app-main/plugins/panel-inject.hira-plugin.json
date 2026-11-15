@@ -1,0 +1,26 @@
+{
+  "id": "panel-inject",
+  "name": "注入规则面板",
+  "version": "0.0.1",
+  "type": "ui-panel-plugin",
+  "trustLevel": "internal",
+  "description": "管理站点级网页注入规则（自定义 CSS / JS、强制深色覆盖）。可选功能，默认关闭。",
+  "main": "./panel-generic.cjs",
+  "defaultDisabled": true,
+  "contributes": {
+    "panels": [
+      {
+        "id": "inject-panel",
+        "title": "注入",
+        "icon": "Paintbrush",
+        "order": 165,
+        "segment": "panel"
+      }
+    ]
+  },
+  "dependsOn": [
+    "side-panel-skeleton",
+    "tabs-service",
+    "settings-service"
+  ]
+}

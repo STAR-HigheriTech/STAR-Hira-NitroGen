@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>PDF Viewer</title>
+    <link rel="stylesheet" href="./pdf.css" />
+  </head>
+  <body>
+    <div id="toolbar">
+      <button id="prev" title="Previous (←)" disabled>‹</button>
+      <input id="page" type="number" value="1" min="1" disabled />
+      <span id="total">/ ?</span>
+      <button id="next" title="Next (→)" disabled>›</button>
+      <span class="spacer"></span>
+      <button id="zoomout" title="Zoom out" disabled>−</button>
+      <span id="zoom">120%</span>
+      <button id="zoomin" title="Zoom in" disabled>+</button>
+      <button id="fit" title="Fit width" disabled>Fit</button>
+      <span class="spacer"></span>
+      <span id="filename"></span>
+    </div>
+    <div id="viewer">
+      <div class="loading">
+        <div class="spinner"></div>
+        <span>Loading PDF…</span>
+      </div>
+    </div>
+    <script type="module" src="./pdf.js"></script>
+  </body>
+</html>

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>分享</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="./share.css" />
+  </head>
+  <body>
+    <div class="card share-card">
+      <div class="qr" id="qr"></div>
+      <div class="url" id="url"></div>
+      <div class="share-actions">
+        <button class="btn" id="copy" type="button">复制链接</button>
+        <button class="btn btn-primary" id="open" type="button">在新标签页打开</button>
+      </div>
+    </div>
+    <script type="module" src="./share.js"></script>
+  </body>
+</html>

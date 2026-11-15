@@ -1,0 +1,36 @@
+{
+  "id": "panel-notes",
+  "name": "集锦面板",
+  "version": "0.0.1",
+  "type": "ui-panel-plugin",
+  "trustLevel": "internal",
+  "description": "集锦中心：卡片墙、收藏夹树、标签筛选、稍后读、标签归档与回收站。",
+  "main": "./panel-generic.cjs",
+  "render": "./panel-notes.renderer.js",
+  "contributes": {
+    "panels": [
+      {
+        "id": "notes-panel",
+        "title": "集锦",
+        "icon": "StickyNote",
+        "order": 105,
+        "segment": "panel",
+        "bangs": [
+          "集锦",
+          "笔记",
+          "稍后读",
+          "归档",
+          "回收站",
+          "notes",
+          "collection",
+          "collections",
+          "archive"
+        ]
+      }
+    ]
+  },
+  "dependsOn": [
+    "side-panel-skeleton",
+    "notes-service"
+  ]
+}

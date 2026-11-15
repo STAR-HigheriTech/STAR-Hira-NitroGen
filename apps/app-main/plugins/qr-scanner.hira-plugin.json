@@ -1,0 +1,14 @@
+{
+  "id": "qr-scanner",
+  "name": "扫码器引擎",
+  "version": "0.0.1",
+  "type": "feature-plugin",
+  "trustLevel": "internal",
+  "description": "屏幕扫码引擎：抓取屏幕并按取景框裁剪，供扫码器面板调用。默认关闭。",
+  "main": "./qr-scanner.cjs",
+  "defaultDisabled": true,
+  "capabilities": [
+    "qr.captureScreen"
+  ],
+  "dependsOn": []
+}

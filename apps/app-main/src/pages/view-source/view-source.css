@@ -1,0 +1,55 @@
+/* ViewSource 页特有规则。公共骨架见 hira://shared/base.css
+   布局（整页纵向 flex、头部固定、正文吃掉剩余高度）是本页特有的；
+   容器层次统一走 surface + 一圈 inset 发丝线，不再画真实 border。 */
+
+html,
+body {
+  height: 100%;
+}
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+.page-header .toolbar {
+  flex: none;
+}
+/* 本页副标题是一整条 URL：必须能断行，否则会把右侧工具挤出视野。 */
+.page-sub {
+  word-break: break-all;
+}
+.copy-state {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* 代码容器：大圆角 + surface 底色；滚动条沿用骨架的细滚动条。 */
+.source-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+}
+
+/* 可定位的只读视图（见 index.html 注释）：contenteditable 保证插入符与选区一定可用，
+   写入由脚本层拦截。这里只把「可编辑区域」的默认外观抹平，视觉与原 pre 一致：
+   等宽 12/1.5，背景透明（层次交给容器），不做任何聚焦框。 */
+.source {
+  margin: 0;
+  padding: 12px 14px;
+  min-height: 100%;
+  box-sizing: border-box;
+  outline: none;
+  cursor: text;
+  background: transparent;
+  font-family: var(--hira-font-mono, ui-monospace, Consolas, "Courier New", "Microsoft YaHei UI", "Microsoft YaHei", monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  color: var(--text);
+  caret-color: var(--text);
+  user-select: text;
+  -webkit-user-select: text;
+}

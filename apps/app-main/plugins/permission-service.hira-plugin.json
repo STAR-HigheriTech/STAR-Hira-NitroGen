@@ -1,0 +1,25 @@
+{
+  "id": "permission-service",
+  "name": "权限引擎",
+  "version": "0.0.1",
+  "type": "feature-plugin",
+  "trustLevel": "internal",
+  "description": "站点权限规则与待处理申请的管理能力。",
+  "main": "./permission-service.cjs",
+  "capabilities": [
+    "permission.getPermission",
+    "permission.resolveRequest",
+    "permission.setPermission",
+    "permission.setSitePermissions",
+    "permission.resetSite",
+    "permission.removePermission",
+    "permission.listAll",
+    "permission.listByType",
+    "permission.getSite",
+    "permission.clearSite",
+    "permission.respond",
+    "permission.pendingList",
+    "permission.pendingWithFlags"
+  ],
+  "dependsOn": []
+}

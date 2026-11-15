@@ -1,0 +1,723 @@
+/* ============================================================================
+ * hira://onboarding · 首次启动引导（OOBE）
+ *
+ * 视觉全部取自 base.css（内部页设计系统）：按钮 .btn / 图标按钮 .icon-btn /
+ * 徽标 .badge / 提示块 .notice，以及 --bg / --surface / --text* / --accent /
+ * --hover-bg / --field-bg / --ring / --r-* 等令牌。本文件不再自建调色板。
+ *
+ * 本文件只负责三件「页面级」的事：
+ *   1. **整屏铺满**：base.css 给 body 定了留白与列宽，这里显式覆盖；
+ *   2. **壳布局**：拖拽条 / 页头 / 舞台 / 页脚 + 阶段共用的排版原语；
+ *   3. **两个本页原语**：
+ *        · .oobe-choice   「选一个」的可选卡（四类步骤共用一套几何）
+ *        · .oobe-surface  静态面（迁移行 / 状态卡 / 勾选行共用的底）
+ *
+ * 主题：全部来自 initTheme() 下发的同源令牌；index.html 的 dark 仅作首帧兜底。
+ * 引导窗没有浏览器外壳，所以背景层由 initThemeBackground() 直接复用共享渲染器。
+ * ========================================================================= */
+
+.oobe-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--hira-z-backdrop);
+  overflow: hidden;
+  pointer-events: none;
+  contain: layout paint style;
+}
+.oobe-background,
+.oobe-background-overlay {
+  position: absolute;
+  inset: 0;
+}
+/* 只在真有壁纸 / 动态壁纸时参与合成；仅开材质时这一层保持空且零纹理。 */
+html[data-theme-wallpaper='1'] .oobe-backdrop {
+  will-change: opacity;
+}
+
+.oobe-body {
+  /* 覆盖 base.css 的整屏留白与列宽（OOBE 没有「页面列」，只有窗口） */
+  padding: 0;
+  max-width: none;
+  margin: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: transparent;
+  color: var(--text);
+  user-select: none;
+}
+
+/* ── 壳 ─────────────────────────────────────────────────────────────── */
+
+.oobe {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  /* 无玻璃时铺主题底色；有壁纸 / 材质时让背景层透出，只叠同一份主题染色。 */
+  background:
+    radial-gradient(
+      680px 420px at 12% -8%,
+      color-mix(in srgb, var(--accent) 18%, transparent),
+      transparent 68%
+    ),
+    radial-gradient(
+      560px 380px at 96% 108%,
+      color-mix(in srgb, var(--accent) 8%, transparent),
+      transparent 70%
+    ),
+    var(--bg);
+}
+html[data-theme-background='1'] .oobe {
+  background:
+    radial-gradient(
+      680px 420px at 12% -8%,
+      color-mix(in srgb, var(--accent) 18%, transparent),
+      transparent 68%
+    ),
+    radial-gradient(
+      560px 380px at 96% 108%,
+      color-mix(in srgb, var(--accent) 8%, transparent),
+      transparent 70%
+    ),
+    var(--hira-panel-bg, transparent);
+}
+
+/* 顶部拖拽条（44px 空白，正好落在窗口上沿） */
+.oobe-drag {
+  flex: 0 0 44px;
+  -webkit-app-region: drag;
+}
+
+/* 关闭按钮：视觉全交给 .icon-btn，这里只管位置与拖拽穿透 */
+.oobe-close {
+  position: absolute;
+  top: 10px;
+  right: 16px;
+  z-index: var(--hira-z-controls);
+  -webkit-app-region: no-drag;
+}
+
+/* ── 页头：品牌 + 阶段点 ───────────────────────────────────────────── */
+
+.oobe-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  gap: 20px;
+  padding: 0 40px;
+}
+/* 壁纸只在两条固定工具带做局部模糊；中间内容区保持直出，避免整窗滤镜常驻。 */
+html[data-theme-wallpaper='1'] .oobe-head,
+html[data-theme-wallpaper='1'] .oobe-foot {
+  -webkit-backdrop-filter: blur(var(--hira-ui-blur, var(--hira-theme-blur, 10px)));
+  backdrop-filter: blur(var(--hira-ui-blur, var(--hira-theme-blur, 10px)));
+}
+
+.oobe-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.oobe-brand-icon {
+  display: block;
+  border-radius: var(--r-xs);
+}
+.oobe-brand-name {
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.oobe-steps {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
+}
+.oobe-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--ctl-h-sm);
+  padding: 0 10px;
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+.oobe-step-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.55;
+}
+/* 当前阶段：accent 软底 + accent 字（与 .icon-btn.is-active 同源） */
+.oobe-step.is-active {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+.oobe-step.is-active .oobe-step-dot {
+  opacity: 1;
+  background: var(--accent);
+}
+.oobe-step.is-done {
+  color: var(--text-soft);
+}
+.oobe-step.is-done .oobe-step-dot {
+  opacity: 1;
+}
+
+/* ── 舞台：唯一的内容槽 ────────────────────────────────────────────── */
+
+.oobe-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* 垂直居中交给 .oobe-view 的 auto 外边距：内容超高时 auto 归零，
+     不会像 justify-content:center 那样把顶部切出可视区（滚动条仍可用）。 */
+  justify-content: flex-start;
+  padding: 8px 64px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* 阶段内容：同一套入场动画，切阶段只换这一层 DOM（由 onboarding.js 控制 is-in） */
+.oobe-view {
+  width: 100%;
+  max-width: 680px;
+  margin: auto;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.26s ease, transform 0.26s cubic-bezier(0.22, 0.8, 0.24, 1);
+}
+.oobe-view.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+.oobe-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 180px;
+}
+.oobe-loading .oobe-sub {
+  margin: 0;
+}
+.oobe-loading-mark {
+  width: 16px;
+  height: 16px;
+  border: 2px solid color-mix(in srgb, var(--text) 18%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: oobe-spin 0.7s linear infinite;
+}
+
+@keyframes oobe-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 阶段共同的排版原语（各 stage 只组合，不各写一套字号） */
+.oobe-title {
+  margin-bottom: 10px;
+  font-size: 28px;
+  font-weight: 680;
+  line-height: 1.22;
+  letter-spacing: -0.02em;
+}
+.oobe-sub {
+  max-width: 56ch;
+  color: var(--text-soft);
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+
+/* ── 页脚：提示 + 上一步 / 下一步 ──────────────────────────────────── */
+
+.oobe-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  gap: 20px;
+  padding: 18px 40px 26px;
+}
+.oobe-hint {
+  min-height: 18px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.oobe-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* 首阶段隐藏「上一步」但保留占位，避免按钮整体左右跳动 */
+.oobe-actions .is-hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* 忙碌态：只锁交互，不改文案（文案由 stage 的 nextLabel 决定） */
+.oobe.is-busy .oobe-actions .btn {
+  pointer-events: none;
+}
+
+/* ── 轻提示 ─────────────────────────────────────────────────────────── */
+
+.oobe-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 86px;
+  z-index: var(--hira-z-controls);
+  max-width: 520px;
+  padding: 8px 14px;
+  border-radius: var(--r-md);
+  background: var(--surface-solid);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42);
+  color: var(--text);
+  font-size: 12.5px;
+  text-align: center;
+  transform: translate(-50%, 6px);
+  opacity: 0;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  pointer-events: none;
+}
+.oobe-toast.is-in {
+  transform: translate(-50%, 0);
+  opacity: 1;
+}
+
+/* ── 原语 · 可选卡（欢迎 / 外观 / 启动 / 布局 四步共用）───────────────
+   与 base.css 的选中态同一条口径：无描边，只换底色（--surface → accent 软底）。 */
+.oobe-choice {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.14s ease;
+}
+.oobe-choice:hover {
+  background: color-mix(in srgb, var(--text) 6%, var(--surface));
+}
+/* 放在 hover 之后：选中卡悬停时仍保持 accent 软底，不闪回中性色 */
+.oobe-choice.is-active {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+}
+.oobe-choice.is-active .oobe-choice-name {
+  color: var(--accent);
+}
+.oobe-choice:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+/* 带预览图（主题 / 布局）：预览在上，文字在下，卡片圆角裁切预览 */
+.oobe-choice--media {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+/* 单行单选（启动方式）：文字在左，标记在右 */
+.oobe-choice--row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.oobe-choice-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.oobe-choice--media .oobe-choice-body {
+  padding: 10px 12px 12px;
+}
+.oobe-choice-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.oobe-choice-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.oobe-choice-desc {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.oobe-choice-meta {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+/* 卡内的中性徽标跟随选中态一起转 accent */
+.oobe-choice.is-active .badge {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+
+/* 来源卡的选中标记：中性圆底 + accent 对勾，与单选点同一套状态口径。 */
+.oobe-choice-mark {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--field-bg);
+}
+.oobe-choice-mark::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 3px;
+  width: 5px;
+  height: 8px;
+  border: solid var(--accent);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg) scale(0.72);
+  opacity: 0;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+.oobe-choice.is-active .oobe-choice-mark {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.oobe-choice.is-active .oobe-choice-mark::after {
+  opacity: 1;
+  transform: rotate(45deg) scale(1);
+}
+
+/* ── 原语 · 静态面（迁移行 / 状态卡 / 勾选行共用的底）───────────────── */
+
+.oobe-surface {
+  padding: 16px 18px;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+}
+
+/* ── 阶段原语 · 欢迎 ────────────────────────────────────────────────── */
+
+.oobe-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.oobe-welcome-icon {
+  display: block;
+  width: 76px;
+  height: 76px;
+  margin-bottom: 22px;
+  border-radius: 20px;
+  box-shadow: 0 16px 36px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+/* 来源选择：两张并排大卡，点一下决定走哪条流程（见 stages/index.js 的 ORDER） */
+.oobe-paths {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+  margin-top: 26px;
+}
+.oobe-paths .oobe-choice {
+  min-height: 106px;
+  padding-right: 46px;
+}
+.oobe-paths .oobe-choice-head {
+  padding-right: 2px;
+}
+
+/* ── 阶段原语 · 外观（主题卡片） ───────────────────────────────────── */
+
+.oobe-themes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 10px;
+  margin-top: 22px;
+}
+/* 加载 / 空态占满整行（提示块本身是 base.css 的 .notice） */
+.oobe-themes > .notice {
+  grid-column: 1 / -1;
+}
+.oobe-theme-bar {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr 0.8fr 0.55fr;
+  flex: 0 0 auto;
+  height: 46px;
+}
+.oobe-theme-bar i {
+  display: block;
+}
+
+/* ── 阶段原语 · 启动方式（单选卡） ─────────────────────────────────── */
+
+.oobe-options {
+  display: grid;
+  gap: 8px;
+  margin-top: 22px;
+}
+/* 单选标记：中性圆底 + accent 内点，选中才出现内点（无描边） */
+.oobe-radio {
+  position: relative;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--field-bg);
+  transition: background-color 0.14s ease;
+}
+.oobe-radio::after {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.14s ease;
+}
+.oobe-choice.is-active .oobe-radio {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.oobe-choice.is-active .oobe-radio::after {
+  opacity: 1;
+}
+
+/* ── 阶段原语 · 布局（四张线框卡） ─────────────────────────────────── */
+
+.oobe-layouts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 22px;
+}
+
+/* 线框预览：两张网格（上：行区；左：侧栏；右：内容），纯 CSS 画的迷你窗口 */
+.oobe-wire {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: 30px 1fr;
+  flex: 0 0 auto;
+  gap: 4px;
+  height: 78px;
+  padding: 8px;
+  background: var(--field-bg);
+}
+.oobe-wire-top {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.oobe-wire-row {
+  display: flex;
+  flex: 1;
+  gap: 4px;
+  min-height: 0;
+}
+.oobe-wire-bar {
+  display: block;
+  flex: 1;
+  align-self: stretch;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text) 13%, transparent);
+}
+.oobe-wire-bar.is-tab {
+  background: color-mix(in srgb, var(--accent) 52%, transparent);
+}
+.oobe-wire-bar.is-nav {
+  background: color-mix(in srgb, var(--text) 28%, transparent);
+}
+.oobe-wire-bar.is-ctl {
+  flex: 0 0 34%;
+  align-self: center;
+  height: 6px;
+  background: color-mix(in srgb, var(--text) 18%, transparent);
+}
+.oobe-wire-side {
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 18px;
+}
+.oobe-wire-side .oobe-wire-bar {
+  flex: 0 0 6px;
+}
+.oobe-wire-body {
+  grid-row: 2;
+  grid-column: 1 / -1;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+/* 有侧栏时内容只占右列（没有 side 则由上一条跨满两列） */
+.oobe-wire-side + .oobe-wire-body {
+  grid-column: 2;
+}
+
+/* ── 阶段原语 · 迁移（每个来源一行，可逐个导入） ───────────────────── */
+
+.oobe-migrate {
+  display: grid;
+  gap: 8px;
+  margin-top: 22px;
+}
+.oobe-migrate-item {
+  display: grid;
+  gap: 8px;
+}
+.oobe-migrate-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.oobe-migrate-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.oobe-migrate-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2px;
+}
+.oobe-migrate-status {
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.oobe-migrate-status.is-ok {
+  color: var(--hira-success);
+}
+.oobe-migrate-status.is-bad {
+  color: var(--danger);
+}
+
+/* ── 阶段原语 · 默认浏览器（状态卡） ───────────────────────────────── */
+
+.oobe-status-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 22px;
+}
+.oobe-status-main {
+  min-width: 0;
+}
+.oobe-status-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.oobe-status-desc {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+/* ── 阶段原语 · 完成（回顾清单） ──────────────────────────────────── */
+
+.oobe-recap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+}
+.oobe-recap-item {
+  padding: 5px 11px;
+  border-radius: var(--r-md);
+  background: var(--tint-bg);
+  color: var(--text-soft);
+  font-size: 12px;
+}
+.oobe-recap-item b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .oobe-head,
+  .oobe-foot {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+  .oobe-stage {
+    padding-left: 28px;
+    padding-right: 28px;
+  }
+  .oobe-step {
+    padding: 0 7px;
+  }
+  .oobe-step:not(.is-active):not(.is-done) {
+    color: transparent;
+    overflow: hidden;
+    width: 20px;
+  }
+  .oobe-paths,
+  .oobe-layouts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .oobe-status-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-height: 620px) {
+  .oobe-drag {
+    flex-basis: 36px;
+  }
+  .oobe-title {
+    font-size: 24px;
+  }
+  .oobe-foot {
+    padding-top: 12px;
+    padding-bottom: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oobe-view,
+  .oobe-toast,
+  .oobe-choice,
+  .oobe-step,
+  .oobe-radio,
+  .oobe-choice-mark::after {
+    transition: none;
+  }
+  .oobe-loading-mark {
+    animation: none;
+    border-color: var(--accent);
+  }
+}

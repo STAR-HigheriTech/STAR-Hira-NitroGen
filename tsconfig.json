@@ -1,0 +1,35 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": false,
+    "moduleDetection": "force",
+    "verbatimModuleSyntax": false,
+    "forceConsistentCasingInFileNames": true,
+    "paths": {
+      "hira://shared/*.js": ["apps/app-main/src/pages/_shared/*.ts"],
+      "hira://shared/*.mjs": ["packages/shared-types/dist/types/*.d.ts"],
+      "hira://shared/*": ["apps/app-main/src/pages/_shared/*"]
+    }
+  },
+  "include": [
+    "drizzle.config.ts",
+    "apps/*/src/**/*.ts",
+    "infra/*/src/**/*.ts",
+    "infra/*/preload/**/*.ts",
+    "domain/*/src/**/*.ts",
+    "ui/*/src/**/*.ts",
+    "packages/*/src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/dist/**",
+    "out/**",
+    "packages/shared-types/src/**",
+    "apps/app-main/src/external/**",
+    "apps/app-main/src/pages/**",
+    "apps/app-main/src/renderer/**"
+  ]
+}

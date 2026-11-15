@@ -1,0 +1,32 @@
+{
+  "id": "panel-open-tabs",
+  "name": "标签面板",
+  "version": "0.0.1",
+  "type": "ui-panel-plugin",
+  "trustLevel": "internal",
+  "description": "标签中心：打开中、播放中和已固定。归档统一放在集锦面板。",
+  "main": "./panel-generic.cjs",
+  "contributes": {
+    "panels": [
+      {
+        "id": "open-tabs-panel",
+        "title": "标签",
+        "icon": "AppWindow",
+        "order": 180,
+        "segment": "panel",
+        "bangs": [
+          "标签",
+          "标签页",
+          "tabs",
+          "切换",
+          "固定",
+          "固定文件夹"
+        ]
+      }
+    ]
+  },
+  "dependsOn": [
+    "side-panel-skeleton",
+    "tabs-service"
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "id": "panel-ai",
+  "name": "AI 助手",
+  "version": "0.0.1",
+  "type": "ui-panel-plugin",
+  "trustLevel": "internal",
+  "description": "AI 助手：会话历史、流式回答、@ 引用上下文、技能与工具调用。",
+  "main": "./panel-generic.cjs",
+  "render": "./panel-ai.renderer.js",
+  "contributes": {
+    "panels": [
+      {
+        "id": "ai-panel",
+        "title": "AI 助手",
+        "icon": "Sparkles",
+        "order": 92,
+        "segment": "panel",
+        "presentation": "both",
+        "hostPage": "ai",
+        "bangs": [
+          "ai",
+          "助手",
+          "对话",
+          "chat",
+          "提问",
+          "总结",
+          "翻译"
+        ]
+      }
+    ]
+  },
+  "dependsOn": [
+    "side-panel-skeleton",
+    "ai-engine"
+  ]
+}

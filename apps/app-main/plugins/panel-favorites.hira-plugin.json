@@ -1,0 +1,29 @@
+{
+  "id": "panel-favorites",
+  "name": "书签面板",
+  "version": "0.0.1",
+  "type": "ui-panel-plugin",
+  "trustLevel": "internal",
+  "description": "侧栏里的书签中心：书签树（拖拽排序、批量移动与编辑）、检索、右键菜单与「在侧栏打开」。",
+  "main": "./panel-generic.cjs",
+  "contributes": {
+    "panels": [
+      {
+        "id": "favorites-panel",
+        "title": "书签",
+        "icon": "Star",
+        "order": 100,
+        "segment": "panel",
+        "bangs": [
+          "收藏",
+          "书签",
+          "bookmarks"
+        ]
+      }
+    ]
+  },
+  "dependsOn": [
+    "side-panel-skeleton",
+    "bookmark-service"
+  ]
+}

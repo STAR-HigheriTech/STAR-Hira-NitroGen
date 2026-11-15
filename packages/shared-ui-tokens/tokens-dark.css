@@ -1,0 +1,144 @@
+body.dark {
+  /* 原生控件按深色渲染：`<select>` 弹出列表、滚动条、表单默认样式跟随（见 tokens-base 注释） */
+  color-scheme: dark;
+  --main-bg-color: transparent;
+  --no-main-bg-color: transparent;
+  --no-main-font-color: #ffffff;
+  --sys-btn-font-color: #ffffff;
+  --main-border-color: transparent;
+  --new-tab-btn-bg-color: transparent;
+  --new-tab-btn-bg-color-hover: rgba(255, 255, 255, 0.1);
+  --new-tab-btn-font-color: #ffffff;
+  --new-tab-label-hover-bg-color: rgba(255, 255, 255, 0.05);
+  --tab-label-box-shadow-color: rgba(255, 255, 255, 0.1);
+  --main-btn-bg-color-hover: rgba(255, 255, 255, 0.1);
+  --addr-bar-bg-color: rgba(26, 26, 26, 0.8);
+  --addr-bar-bg-color-hover: rgba(26, 26, 26, 0.9);
+  --addr-bar-bg-color-focus: rgba(26, 26, 26, 1);
+  --addr-bar-border-color: rgba(10, 132, 255, 0.5);
+  --tool-btn-color: #ffffff;
+  --tool-btn-dis-color: rgba(255, 255, 255, 0.5);
+  --more-container-bg-color: rgba(26, 26, 26, 0.8);
+  --filter-back: saturate(180%) blur(20px);
+  --badge-font-color: white;
+  --badge-bg-color: #0a84ff;
+  --msg-icon-color: #0a84ff;
+  --bg-color: #1a1a1a;
+  --text-color: #ffffff;
+  --border-color: rgba(255, 255, 255, 0.1);
+  --accent-color: #0a84ff;
+  --accent-hover: #409cff;
+  --secondary-color: #8e8e93;
+  --secondary-hover: #aeaeb2;
+
+  /* STAR Hira NitroGen component tokens (dark) */
+  --hira-bg-surface: rgb(30, 30, 30);
+  --hira-bg-elevated: #2a2a2a;
+  --hira-text-primary: #e0e0e0;
+  --hira-text-secondary: #888888;
+  --hira-border-subtle: rgba(255, 255, 255, 0.1);
+  --hira-accent-bg: rgba(10, 132, 255, 0.2);
+  /*
+   * 中性 hover 底。深色下**不能照搬浅色的 alpha**：白叠黑比黑叠白的对比步进更弱，
+   * .06 在 #1e1e1e 上只抬了约 12 个灰阶，观感就是「没有 hover」。抬到 .10，
+   * 与外壳件（--ui-hover）取同一个值，保证 tab 的 hover 和面板行的 hover 一样明显。
+   */
+  --hira-hover-bg: rgba(255, 255, 255, 0.1);
+  /*
+   * 与 tokens-base.css 同名的这一组补齐深色取值。
+   * 此前这些 token 名未定义 → 各处一律吃浅色兜底：半透明黑（黑底上不可见）、
+   * #fff 实底（黑底上变白块）。深色统一改为**半透明白叠层**，亮度随层级递增：
+   * 软面 < 输入框 < 聚焦态，保证「搜索框在深色下也一眼看得出是个框」。
+   */
+  --hira-surface: #2a2a2a; /* 与 --hira-bg-elevated 同值：深色里的实心控件面 */
+  --hira-surface-soft: rgba(255, 255, 255, 0.06);
+  --hira-bg-subtle: rgba(255, 255, 255, 0.05);
+  --hira-field-bg: rgba(255, 255, 255, 0.1);
+  --hira-field-bg-focus: rgba(255, 255, 255, 0.16);
+  --hira-track-bg: rgba(255, 255, 255, 0.14);
+  --hira-switch-off: rgba(255, 255, 255, 0.22);
+  --hira-text-tertiary: #7b8188; /* 深色下三级文本要**暗于**二级(#888)，原来反而更亮 */
+  --hira-accent-soft: rgba(10, 132, 255, 0.22);
+  --hira-accent-soft-strong: rgba(10, 132, 255, 0.34); /* 软底之上再一档（active hover） */
+  --hira-danger: #ff6b6b;
+  --hira-danger-bg: rgba(255, 107, 107, 0.16);
+  --hira-warn: #f5a524;
+  --hira-warn-bg: rgba(245, 165, 36, 0.16);
+  --hira-success: #4ade80;
+  --hira-success-bg: rgba(74, 222, 128, 0.16);
+  --hira-on-accent: #ffffff;
+
+  /* 面板设计语言（深色）：描边提亮、卡片底改成半透明白叠层，阴影加重 */
+  --hira-hairline: rgba(255, 255, 255, 0.09);
+  --hira-panel-card-bg: rgba(255, 255, 255, 0.045);
+  --hira-panel-card-hover: rgba(255, 255, 255, 0.075);
+  --hira-panel-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 10px rgba(0, 0, 0, 0.28);
+  --hira-panel-shadow-flyout: 0 10px 28px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --hira-focus-ring: 0 0 0 2px rgba(10, 132, 255, 0.6);
+  /* 活动面框线**颜色**（分屏活动格 / 侧栏聚焦框 / 侧栏调宽把手）。
+     与上面那条 box-shadow 令牌是两件事：那条是 shadow 列表，这条才是颜色。
+     取值与两处绘制点的回退值一致（深色下仍是同一支亮蓝，保证对比度）。 */
+  --hira-split-focus-ring: rgba(74, 158, 255, 0.9);
+
+  /*
+   * 外壳件（navbar / tabbar / searchbar / rail）的 hover 底色与描边。
+   * 浅色那版是「深灰半透明」，深色下必须换成浅色半透明 —— 且要比面板行 hover(.06)
+   * 明显一档（tab 是主要点击目标），所以取 .10；描边同步换成浅色，hover 时轮廓可见。
+   */
+  --ui-hover: rgba(255, 255, 255, 0.1);
+  --ui-border: rgba(148, 163, 184, 0.18);
+
+  /*
+   * 选中标签/选中行（tabbar + 打开标签面板 + 固定标签面板共用）。
+   * 深色下不能照搬浅色的「白底 + 蓝字」：
+   *   · 底色 —— 深色里「比底色更暗」等于消失（旧值 #1a1a1a 与主表面 #1e1e1e 几乎同色，
+   *     选中项完全看不出来）。深色 UI 的选中态应当**提亮**，用半透明白叠出抬升面。
+   *   · 标题 —— 抬亮底色后旧的 #409cff 对比度掉到 3.5:1（低于 AA 4.5:1）读不清，
+   *     但直接拉到近白的浅蓝又会「洗掉」强调色的浓度。取两者中间的一档：
+   *     成色仍是明确的强调蓝，对比度约 4.8:1（过 AA）。
+   */
+  --ng-tab-active-bg: rgba(255, 255, 255, 0.14);
+  --ng-tab-active-fg: #74b2fc;
+  --ng-tab-active-border-color: rgba(255, 255, 255, 0.18);
+  --ng-tabs-drag-handle-color: rgba(
+    255,
+    255,
+    255,
+    0.3
+  ); /* 深色下拖拽手柄转浅，否则黑底上看不见 */
+  --ng-tabs-scrollbar-thumb: rgba(
+    255,
+    255,
+    255,
+    0.2
+  ); /* 标签条横向滚动条滑块：静息可见（深色转浅） */
+  --ng-tabs-scrollbar-thumb-hover: rgba(
+    255,
+    255,
+    255,
+    0.28
+  ); /* 标签栏横向滚动条滑块同理 */
+
+  --webview-border: var(--hira-border-subtle);
+  --webview-radius: var(--hira-theme-radius, 6px);
+}
+
+/*
+ * 深色主表面：统一为中性灰《#1e1e1e》，与内部页(设置页)《--bg:#1e1e1e》同值，彻底去蓝相。
+ *
+ * 必须同时落在 `html` 上：`html` **不是 body 的后代**，取不到 body 上的覆盖，
+ * 于是它一直沿用 tokens-base 的浅色 `--main-bg-color`——而各渲染页（面板 / rail）都写着
+ * `html, body { background: var(--main-bg-color) }`，这层画布底在深色下就是浅色的「占位」。
+ * `data-theme` 由 theme-controller 与 body 的类一起设置，两处取值恒等。
+ */
+body.dark-mode,
+html[data-theme='dark'] {
+  --main-bg-color: #1e1e1e;
+}
+
+body.dark-mode #password-capture-bar {
+  --password-capture-button-bg: rgba(255, 255, 255, 0.09);
+  --password-capture-button-border: rgba(255, 255, 255, 0.1);
+  --password-capture-button-hover-bg: rgba(255, 255, 255, 0.14);
+  --password-capture-button-hover-border: rgba(255, 255, 255, 0.16);
+}

@@ -1,0 +1,42 @@
+/* 崩溃报告页 —— 只保留 base.css 之外的局部规则 */
+
+.status {
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+/* 提示条几何走骨架的 .notice，这里只补与列表的间距 */
+.notice {
+  margin-bottom: 14px;
+}
+
+/* 行是纯展示（无跳转）：整行一块软底，不做分隔发丝线 */
+.list .row {
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--tint-bg);
+  border-radius: var(--r-sm);
+  cursor: default;
+}
+.list .row:hover {
+  background: var(--tint-bg);
+}
+
+.row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.row-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-sub {
+  margin-top: 2px;
+  color: var(--text-soft);
+  font-family: var(--hira-font-mono, ui-monospace, Consolas, "Microsoft YaHei UI", "Microsoft YaHei", monospace);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}

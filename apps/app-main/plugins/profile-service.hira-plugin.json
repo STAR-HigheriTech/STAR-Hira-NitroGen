@@ -1,0 +1,18 @@
+{
+  "id": "profile-service",
+  "name": "空间引擎",
+  "version": "0.0.1",
+  "type": "feature-plugin",
+  "trustLevel": "internal",
+  "description": "提供空间的创建、更新、切换与可见性管理。",
+  "main": "./profile-service.cjs",
+  "capabilities": [
+    "profile.list",
+    "profile.getActive",
+    "profile.create",
+    "profile.update",
+    "profile.setActive",
+    "profile.remove"
+  ],
+  "dependsOn": []
+}

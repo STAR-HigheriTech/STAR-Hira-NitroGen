@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>自动化</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="./automation.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="page-heading">
+        <h1>自动化</h1>
+      </div>
+      <div class="segmented" role="tablist" aria-label="自动化设置">
+        <button class="btn btn-primary" id="tab-chains" type="button" role="tab" aria-selected="true" aria-controls="view-chains">
+          命令链
+          <span class="count" id="chain-count" aria-hidden="true"></span>
+        </button>
+        <button class="btn" id="tab-gestures" type="button" role="tab" aria-selected="false" aria-controls="view-gestures" tabindex="-1">
+          鼠标手势
+          <span class="count" id="gesture-count" aria-hidden="true"></span>
+        </button>
+        <button class="btn" id="tab-rules" type="button" role="tab" aria-selected="false" aria-controls="view-rules" tabindex="-1">
+          工作区规则
+          <span class="count" id="rule-count" aria-hidden="true"></span>
+        </button>
+      </div>
+    </header>
+
+    <section id="view-chains" role="tabpanel" aria-labelledby="tab-chains">
+      <div class="toolbar automation-toolbar">
+        <button class="btn btn-primary" id="new-chain" type="button">新建命令链</button>
+        <span class="toolbar-note">按顺序组合浏览器命令，步与步之间会自动等待</span>
+      </div>
+
+      <div class="list" id="chain-list"></div>
+      <p class="page-sub automation-status" id="chain-status" role="status" aria-live="polite" hidden></p>
+
+      <section class="panel editor-panel" id="chain-editor" hidden aria-labelledby="editor-title">
+        <div class="panel-head">
+          <h2 class="card-title" id="editor-title">编辑命令链</h2>
+        </div>
+        <div class="toolbar">
+          <input
+            class="search"
+            id="chain-name"
+            type="text"
+            maxlength="60"
+            placeholder="名称，例如“开始工作”"
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="命令链名称"
+          />
+        </div>
+        <div class="list" id="steps" aria-label="命令步骤"></div>
+        <div class="toolbar editor-actions">
+          <select id="step-picker" aria-label="选择要添加的命令"></select>
+          <button class="btn" id="add-step" type="button">添加步骤</button>
+          <span class="spacer"></span>
+          <button class="btn" id="cancel-chain" type="button">取消</button>
+          <button class="btn btn-primary" id="save-chain" type="button">保存</button>
+        </div>
+      </section>
+    </section>
+
+    <section id="view-gestures" role="tabpanel" aria-labelledby="tab-gestures" hidden>
+      <div class="toolbar automation-toolbar">
+        <label class="check">
+          <input type="checkbox" id="gestures-enabled" />
+          <span>启用鼠标手势</span>
+        </label>
+        <span class="toolbar-note">按住右键划过页面即可执行映射命令</span>
+      </div>
+      <div class="list" id="gesture-list" aria-label="鼠标手势映射"></div>
+      <p class="page-sub automation-status" id="gesture-status" role="status" aria-live="polite" hidden></p>
+      <div class="toolbar">
+        <button class="btn" id="reset-gestures" type="button">恢复默认映射</button>
+      </div>
+    </section>
+
+    <section id="view-rules" role="tabpanel" aria-labelledby="tab-rules" hidden>
+      <div class="toolbar automation-toolbar">
+        <label class="check">
+          <input type="checkbox" id="rules-enabled" />
+          <span>启用工作区规则</span>
+        </label>
+        <button class="btn btn-primary" id="new-rule" type="button">新建规则</button>
+        <span class="toolbar-note">按网址匹配；打开或跳转时自动执行浏览器动作</span>
+      </div>
+      <div class="toolbar rule-toolbar-extra">
+        <select id="rule-template" aria-label="规则模板"></select>
+        <button class="btn" id="apply-rule-template" type="button">应用模板</button>
+        <span class="spacer"></span>
+        <input class="search" id="task-name" type="text" maxlength="80" placeholder="任务工作区名称" />
+        <button class="btn" id="save-task" type="button">保存当前任务</button>
+      </div>
+      <div class="task-workspaces">
+        <div class="section-title">任务工作区</div>
+        <div class="list" id="task-list" aria-label="任务工作区"></div>
+      </div>
+      <div class="list" id="rule-list" aria-label="工作区规则"></div>
+      <p class="page-sub automation-status" id="rule-status" role="status" aria-live="polite" hidden></p>
+
+      <section class="panel editor-panel" id="rule-editor" hidden aria-labelledby="rule-editor-title">
+        <div class="panel-head"><h2 class="card-title" id="rule-editor-title">编辑工作区规则</h2></div>
+        <div class="rule-fields">
+          <label class="rule-field">
+            <span>名称</span>
+            <input class="search" id="rule-name" type="text" maxlength="60" placeholder="例如：GitHub 自动归档" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="rule-field">
+            <span>触发时机</span>
+            <select id="rule-trigger">
+              <option value="open">标签打开时</option>
+              <option value="navigate">页面跳转后</option>
+            </select>
+          </label>
+          <label class="rule-field rule-field--wide">
+            <span>网址匹配</span>
+            <input class="search" id="rule-match" type="text" maxlength="512" placeholder="https://github.com/*  或  *://*.example.com/*" autocomplete="off" spellcheck="false" />
+          </label>
+        </div>
+        <div class="list" id="rule-actions" aria-label="规则动作"></div>
+        <div class="toolbar editor-actions">
+          <select id="rule-action-picker" aria-label="选择要添加的动作"></select>
+          <button class="btn" id="add-rule-action" type="button">添加动作</button>
+          <span class="spacer"></span>
+          <button class="btn" id="cancel-rule" type="button">取消</button>
+          <button class="btn btn-primary" id="save-rule" type="button">保存</button>
+        </div>
+      </section>
+    </section>
+
+    <script type="module" src="./automation.js"></script>
+  </body>
+</html>

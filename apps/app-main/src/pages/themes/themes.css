@@ -1,0 +1,67 @@
+/* ============================================================================
+ * 主题页（hira://themes）· 页面专属样式
+ *
+ * 分工只有一条判据：**这段规则侧栏面板也要逐字一样吗？**
+ *   是 → `packages/shared-types/src/themes/styles.js`（两形态同源的基础原子）；
+ *   只有本页要 → 在这个文件 / `./styles.js` 里。
+ *   本文件只做三件事：整屏工作区口径、静态令牌桥、页面边距。
+ *
+ * 令牌一律取 base.css 的原生变量（--text / --bg / --border / --ctl-h …），
+ * 深浅主题由同一个公式派生，不写第二套 dark 分支。
+ * ========================================================================= */
+
+/* ── 整屏工作区 ───────────────────────────────────────────────────────
+   base.css 的 body 是「文档流页面」：居中列宽 + 上下留白。主题库是左右分栏的
+   工作区，必须撑满剩余可视区，否则两栏会被挤进一条窄列。 */
+html,
+body {
+  height: 100%;
+}
+body.themes-page-body {
+  margin: 0;
+  padding: 0;
+  max-width: none;
+  height: 100vh;
+  overflow: hidden;
+}
+/* 有公共侧栏（`data-hira-shell`）时只让开侧栏宽度：主题库不居中，铺满剩余区。 */
+html[data-hira-shell] body.themes-page-body {
+  padding-left: var(--shell-w);
+  max-width: none;
+}
+
+#app {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── 静态令牌桥 ───────────────────────────────────────────────────────
+   共享层样式（themes/styles.js + 本页 styles.js）里的 `--hira-*` 与部分原子令牌，
+   由主进程推来的令牌表覆盖；但**几何 / 时长**这类静态令牌不在那张表里
+   （真源在 packages/shared-ui-tokens），内部页不加载它 → 在这里用 base.css 的值接上。
+   `:root` 的优先级低于 initTheme 写在 html 上的内联样式，不会盖掉主题色。 */
+:root {
+  --hira-bg-surface: var(--bg);
+  --hira-surface: var(--surface);
+  --hira-surface-soft: var(--surface-soft);
+  --hira-bg-subtle: var(--plane-bg);
+  --hira-field-bg: var(--field-bg);
+  --hira-hover-bg: var(--hover-bg);
+  --hira-border-subtle: var(--border);
+  --hira-hairline: var(--border);
+  --hira-control-height: var(--ctl-h);
+  --hira-radius-xs: var(--r-xs);
+  --hira-radius-sm: var(--r-sm);
+  --hira-radius-md: var(--r-md);
+  --hira-dur-fast: 120ms;
+  --hira-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* ── 页面边距 ─────────────────────────────────────────────────────────
+   窗口形态的边距由 subwindow 宿主给（`.thm-win` 自身没有 padding）。
+   页面化之后由本页补上，取值与设置页的工作区留白同源。 */
+.thm-root.thm-win {
+  padding: var(--page-pad-y) var(--page-pad-x);
+}

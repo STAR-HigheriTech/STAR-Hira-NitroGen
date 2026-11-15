@@ -1,0 +1,18 @@
+{
+  "id": "session-service",
+  "name": "会话引擎",
+  "version": "0.0.1",
+  "type": "feature-plugin",
+  "trustLevel": "internal",
+  "description": "提供标签会话的保存、恢复与退化标签栈裁剪。",
+  "main": "./session-service.cjs",
+  "capabilities": [
+    "session.read",
+    "session.stats",
+    "session.save",
+    "session.restore",
+    "session.clear",
+    "session.exists"
+  ],
+  "dependsOn": []
+}
