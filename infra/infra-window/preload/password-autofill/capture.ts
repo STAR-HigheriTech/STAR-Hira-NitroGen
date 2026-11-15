@@ -25,6 +25,31 @@ interface CredentialCaptureScanner {
 }
 interface CredentialCaptureHandlers { onCaptured?(username: string, password: string): void }
 
+const LOGIN_LABEL_PATTERN = /\b(log[\s-]?in|sign[\s-]?in|submit|continue|next|enter)\b|登录|登陆|提交|确定|下一步|继续/i
+const AUXILIARY_LABEL_PATTERN = /\b(show|hide|reveal|toggle|visibility|eye|cancel|forgot|reset|register|sign[\s-]?up|create account)\b|显示密码|隐藏密码|密码可见|眼睛|忘记|取消|注册|创建账号/i
+
+function inputFromEvent(event: Event): HTMLInputElement | null {
+  const path = typeof event.composedPath === 'function' ? event.composedPath() : null
+  if (path) {
+    for (const node of path) {
+      if (node instanceof HTMLInputElement) return node
+    }
+  }
+  return event.target instanceof HTMLInputElement ? event.target : null
+}
+
+function elementLabel(el: HTMLElement): string {
+  const inputValue = el instanceof HTMLInputElement ? el.value : ''
+  return [
+    el.id,
+    typeof el.className === 'string' ? el.className : '',
+    el.getAttribute('name') || '',
+    el.getAttribute('aria-label') || '',
+    el.getAttribute('title') || '',
+    el.innerText || el.textContent || inputValue || ''
+  ].join(' ').trim()
+}
+
 function createCredentialCapture(scanner: CredentialCaptureScanner, handlers?: CredentialCaptureHandlers) {
   let lastTypedCredentials = { hostname: '', username: '', password: '', time: 0 }
   let lastCapturedCredential = { hostname: '', username: '', password: '', time: 0 }
@@ -34,8 +59,8 @@ function createCredentialCapture(scanner: CredentialCaptureScanner, handlers?: C
 
   function trackInput(e: Event): void {
     if (e.isTrusted === false) return
-    const t = e.target
-    if (!(t instanceof HTMLInputElement)) return
+    const t = inputFromEvent(e)
+    if (!t) return
 
     if (scanner.isUsernameLikeField(t) || scanner.isPasswordLikeField(t)) {
       lastTrustedInputAt = Date.now()
@@ -88,7 +113,7 @@ function createCredentialCapture(scanner: CredentialCaptureScanner, handlers?: C
       !usernameValue &&
       lastTypedCredentials &&
       lastTypedCredentials.hostname === window.location.hostname &&
-      now - lastTypedCredentials.time < 120000
+      now - lastTypedCredentials.time < 30 * 60 * 1000
     ) {
       usernameValue = lastTypedCredentials.username || ''
     }
@@ -97,7 +122,7 @@ function createCredentialCapture(scanner: CredentialCaptureScanner, handlers?: C
       (!passwordValue || passwordValue.length === 0) &&
       lastTypedCredentials &&
       lastTypedCredentials.hostname === window.location.hostname &&
-      now - lastTypedCredentials.time < 120000
+      now - lastTypedCredentials.time < 30 * 60 * 1000
     ) {
       passwordValue = lastTypedCredentials.password || ''
       if (!usernameValue) usernameValue = lastTypedCredentials.username || ''
@@ -144,34 +169,53 @@ function createCredentialCapture(scanner: CredentialCaptureScanner, handlers?: C
 
     if (el.tagName === 'INPUT') {
       const type = String(el.getAttribute('type') || '').toLowerCase()
-      if (type === 'submit' || type === 'button') return true
+      if (type === 'submit') return true
     }
 
     const role = (el.getAttribute && String(el.getAttribute('role') || '').toLowerCase()) || ''
-    if (role === 'button') {
-      const id = String(el.id || '')
-      const className = typeof el.className === 'string' ? el.className : ''
-      const label = (el.getAttribute && String(el.getAttribute('aria-label') || '')) || ''
-      const inputValue = el instanceof HTMLInputElement ? el.value : ''
-      const text = String((el.innerText || el.textContent || inputValue || '')).trim()
-      const lower = (id + ' ' + className + ' ' + label + ' ' + text).toLowerCase()
-
+    const label = elementLabel(el)
+    const auxiliary = AUXILIARY_LABEL_PATTERN.test(label)
+    if (!auxiliary && LOGIN_LABEL_PATTERN.test(label)) {
       if (
-        lower.includes('login') ||
-        lower.includes('log in') ||
-        lower.includes('signin') ||
-        lower.includes('sign in') ||
-        lower.includes('submit') ||
-        lower.includes('continue') ||
-        lower.includes('next') ||
-        text.includes('登录') ||
-        text.includes('登陆') ||
-        text.includes('提交') ||
-        text.includes('确定') ||
-        text.includes('下一步')
+        role === 'button' ||
+        el.tagName === 'BUTTON' ||
+        el.tagName === 'A' ||
+        (el.tagName === 'INPUT' && String(el.getAttribute('type') || '').toLowerCase() === 'button') ||
+        el.hasAttribute('onclick') ||
+        el.hasAttribute('tabindex') ||
+        el.hasAttribute('data-action')
       ) {
         return true
       }
+      /**
+       * 大量 SPA 把“登录”写在 div/span 上，由框架委托处理，
+       * 没有 role、form 或原生按钮语义。凭据输入已经发生且文案明确时，
+       * 允许这一层进入捕获；辅助操作词表已在上面排除。
+       */
+      const text = String(el.innerText || el.textContent || '').trim()
+      if (text && text.length <= 80) return true
+    }
+
+    /**
+     * 纯图标登录按钮没有可读文案时，用“同一表单里唯一的非辅助按钮”兜底。
+     * 眼睛 / 忘记密码 / 注册等按钮先由辅助词表排除，避免误把可见性切换当登录。
+     */
+    const passwordField = scanner.getBestPasswordField()
+    const form = el.closest('form') ||
+      (el instanceof HTMLButtonElement || el instanceof HTMLInputElement ? el.form : null)
+    if (passwordField && form && passwordField.form === form && !auxiliary) {
+      const semanticControl = el.matches(
+        'button, [role="button"], input[type="submit"], input[type="button"], input[type="image"]'
+      )
+      if (semanticControl) return true
+      let pointer = false
+      try { pointer = getComputedStyle(el).cursor === 'pointer' } catch (_) {}
+      if (
+        pointer &&
+        !(el instanceof HTMLInputElement) &&
+        !(el instanceof HTMLTextAreaElement) &&
+        !el.closest('label')
+      ) return true
     }
 
     return false
@@ -234,6 +278,9 @@ function createCredentialCapture(scanner: CredentialCaptureScanner, handlers?: C
       }
       if (shouldCapture) {
         lastTrustedInputAt = Date.now()
+        // 先同步捕获一次：SPA 常在 click 处理里立刻跳转 / 清空 DOM，
+        // 只等 setTimeout 会被导航销毁 preload，表现为“点了登录完全没反应”。
+        sendCapturedCredentials()
         setTimeout(sendCapturedCredentials, 0)
       }
     }, true)
@@ -252,6 +299,7 @@ function createCredentialCapture(scanner: CredentialCaptureScanner, handlers?: C
       if (target instanceof HTMLInputElement) {
         if (target === passwordField || (usernameField && target === usernameField)) {
           lastTrustedInputAt = Date.now()
+          sendCapturedCredentials()
           setTimeout(sendCapturedCredentials, 0)
         }
       } else if (
@@ -259,11 +307,13 @@ function createCredentialCapture(scanner: CredentialCaptureScanner, handlers?: C
         (usernameField && document.activeElement === usernameField)
       ) {
         lastTrustedInputAt = Date.now()
+        sendCapturedCredentials()
         setTimeout(sendCapturedCredentials, 0)
       }
     }, true)
 
     window.addEventListener('input', trackInput, true)
+    window.addEventListener('change', trackInput, true)
 
     window.addEventListener('pagehide', sendCapturedCredentials, true)
     window.addEventListener('beforeunload', sendCapturedCredentials, true)
@@ -278,7 +328,8 @@ function createCredentialCapture(scanner: CredentialCaptureScanner, handlers?: C
 
   return {
     bind,
-    onRouteChange
+    onRouteChange,
+    captureNow: sendCapturedCredentials
   }
 }
 

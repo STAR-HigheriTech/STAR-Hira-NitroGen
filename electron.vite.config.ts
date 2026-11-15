@@ -1466,6 +1466,7 @@ export default defineConfig({
           shell: resolve(ROOT_DIR, 'infra/infra-window/preload/shell-preload.ts'),
           panel: resolve(ROOT_DIR, 'infra/infra-window/preload/panel-preload.ts'),
           tab: resolve(ROOT_DIR, 'infra/infra-window/preload/tab-preload.ts'),
+          'password-frame': resolve(ROOT_DIR, 'infra/infra-window/preload/password-frame-preload.ts'),
           'dialog-renderer': resolve(ROOT_DIR, 'infra/infra-window/preload/dialog-renderer.ts')
         }
       }

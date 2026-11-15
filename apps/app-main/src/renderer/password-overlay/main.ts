@@ -6,13 +6,14 @@
  * 主进程通过独立 IPC 通道推送显示/隐藏，并由本页自行 set-bounds / set-interactive。
  *
  * 事件（main → 本页，通道名取自 IPC_EVENTS，此处只记 payload 形状）：
- *   - overlayShowPasswordMenu  { hostname, credentials, x, y, windowWidth, windowHeight }
+ *   - overlayShowPasswordMenu  { hostname, credentials, x, y, viewport }
  *   - overlayHidePasswordMenu
- *   - overlayShowPasswordSave  { hostname, username, password, readOnlyBackend, windowWidth, windowHeight }
+ *   - overlayShowPasswordSave  { hostname, username, password, readOnlyBackend, viewport }
  *   - overlayHidePasswordSave
  *   - overlayShowPasswordUnlock { backend, displayName, stage, hostname, message, signInLabel,
- *                                 signInHint, signInFields[], unlockHint, windowWidth, windowHeight }
+ *                                 signInHint, signInFields[], unlockHint, viewport }
  *   - overlayHidePasswordUnlock
+ *   - overlayPasswordViewport  { x, y, width, height }（窗口 / 布局变化后重排活动卡片）
  *
  * 用户操作（本页 → main，IPC_ROUTES.passwordOverlayCommit）：
  *   { kind: 'menu' | 'menu-cancel' | 'save' | 'save-dismiss' | 'save-release'
@@ -55,6 +56,12 @@ interface PasswordCredential {
   password?: string
   [key: string]: unknown
 }
+interface OverlayViewport {
+  x: number
+  y: number
+  width: number
+  height: number
+}
 interface PasswordMenuPayload {
   hostname?: string
   credentials?: PasswordCredential[]
@@ -62,6 +69,7 @@ interface PasswordMenuPayload {
   y?: number
   windowWidth?: number
   windowHeight?: number
+  viewport?: OverlayViewport
 }
 interface PasswordSavePayload {
   hostname?: string
@@ -70,6 +78,7 @@ interface PasswordSavePayload {
   readOnlyBackend?: boolean
   windowWidth?: number
   windowHeight?: number
+  viewport?: OverlayViewport
 }
 interface PasswordSaveState {
   hostname: string
@@ -92,9 +101,16 @@ function errorMessage(error: unknown): string {
 // 顶部不留阴影 padding：view 从卡片上沿开始，避免浮层上方出现一块透明命中区。
 const OVERLAY_SIDE_PADDING = 28
 const OVERLAY_BOTTOM_PADDING = 28
+const OVERLAY_GAP = 12
+const SAVE_CARD_WIDTH = 320
+const UNLOCK_CARD_WIDTH = 340
+const MENU_CARD_WIDTH = 360
 
 // ── 互斥状态（本层有密码菜单 / 保存卡 / 解锁卡三张浮层）──────────
 let activeOverlay: PasswordOverlayKind | null = null
+let currentMenuAnchor: { x: number; y: number } | null = null
+let pendingReflowViewport: unknown = null
+let reflowFrame = 0
 
 // 当前展示中的保存卡数据（用于点击空白/Esc 时回传去重）
 let currentSavePayload: PasswordSaveState | null = null
@@ -106,6 +122,14 @@ let currentSavePayload: PasswordSaveState | null = null
 //   前者根本不跟应用主题，后者才生效 —— 两套规则迟早漂移，已删除。）
 const style = document.createElement('style')
 style.textContent = `
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}
 :root {
   --pw-bg: var(--hira-bg-elevated, #ffffff);
   --pw-fg: var(--hira-text-primary, #1a1a1a);
@@ -119,6 +143,7 @@ style.textContent = `
 }
 .hira-password-menu, .hira-password-save {
   position: fixed;
+  box-sizing: border-box;
   background: var(--pw-bg);
   color: var(--pw-fg);
   border: 1px solid var(--pw-border);
@@ -171,10 +196,13 @@ style.textContent = `
   font-size: 13px;
 }
 .hira-password-save {
-  width: 320px;
+  width: ${SAVE_CARD_WIDTH}px;
+  max-width: 100%;
   border-radius: var(--hira-theme-radius, 12px);
   padding: 16px;
   font-size: 13px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .hira-password-save__title { font-weight: 600; margin-bottom: 4px; font-size: 14px; }
 .hira-password-save__host { opacity: 0.6; font-size: 12px; margin-bottom: 12px; }
@@ -215,7 +243,7 @@ style.textContent = `
   background: color-mix(in srgb, var(--pw-accent) 88%, #000);
 }
 /* ── 解锁 / 登录卡（与保存卡同一套视觉，仅内容来源不同）── */
-.hira-password-unlock { width: 340px; }
+.hira-password-unlock { width: ${UNLOCK_CARD_WIDTH}px; }
 .hira-password-unlock__row label { width: 78px; }
 .hira-password-unlock__error {
   color: #d9534f;
@@ -258,22 +286,63 @@ root.appendChild(pwMenu)
  * 两个数对不上 —— 保存卡实测 354+56=410 宽，x 却按 320 算，右侧直接超出窗口
  * 约 50px 被裁掉。这里统一以**实测尺寸**计算，并保证 x+w / y+h 落在窗口内。
  */
-const WINDOW_MARGIN = 12
+function escapeHtml(value: unknown): string {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
 
-function clampIntoWindow(x: number, y: number, w: number, h: number, winW: number, winH: number) {
+function normalizeViewport(
+  value: unknown,
+  fallbackWidth?: unknown,
+  fallbackHeight?: unknown
+): OverlayViewport | null {
+  const rect = value && typeof value === 'object' ? value as Partial<OverlayViewport> : null
+  const width = Number(rect ? rect.width : fallbackWidth)
+  const height = Number(rect ? rect.height : fallbackHeight)
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null
+  const x = Number(rect ? rect.x : 0)
+  const y = Number(rect ? rect.y : 0)
+  return {
+    x: Number.isFinite(x) ? Math.round(x) : 0,
+    y: Number.isFinite(y) ? Math.round(y) : 0,
+    width: Math.round(width),
+    height: Math.round(height)
+  }
+}
+
+function clampIntoViewport(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  viewport: OverlayViewport
+) {
   let nx = Math.round(x)
   let ny = Math.round(y)
-  if (winW > 0) {
-    const maxX = winW - w - WINDOW_MARGIN
-    nx = maxX >= WINDOW_MARGIN ? Math.min(nx, maxX) : WINDOW_MARGIN
-    nx = Math.max(WINDOW_MARGIN, nx)
-  }
-  if (winH > 0) {
-    const maxY = winH - h - WINDOW_MARGIN
-    ny = maxY >= WINDOW_MARGIN ? Math.min(ny, maxY) : WINDOW_MARGIN
-    ny = Math.max(WINDOW_MARGIN, ny)
-  }
+  const minX = viewport.x + OVERLAY_GAP
+  const minY = viewport.y + OVERLAY_GAP
+  const maxX = viewport.x + viewport.width - w - OVERLAY_GAP
+  const maxY = viewport.y + viewport.height - h - OVERLAY_GAP
+  nx = maxX >= minX ? Math.min(nx, maxX) : minX
+  ny = maxY >= minY ? Math.min(ny, maxY) : minY
+  nx = Math.max(minX, nx)
+  ny = Math.max(minY, ny)
   return { x: nx, y: ny }
+}
+
+function fitCardMetrics(viewport: OverlayViewport, preferredWidth: number, minWidth: number) {
+  const horizontalRoom = viewport.width - OVERLAY_GAP * 2
+  const fittedMinWidth = Math.min(minWidth, Math.max(80, horizontalRoom - 8))
+  const sidePadding = Math.min(OVERLAY_SIDE_PADDING, Math.max(4, Math.floor((horizontalRoom - fittedMinWidth) / 2)))
+  const cardWidth = Math.max(fittedMinWidth, Math.min(preferredWidth, horizontalRoom - sidePadding * 2))
+  const verticalRoom = viewport.height - OVERLAY_GAP * 2
+  const bottomPadding = Math.min(OVERLAY_BOTTOM_PADDING, Math.max(4, Math.floor((verticalRoom - 120) / 3)))
+  const cardMaxHeight = Math.max(120, verticalRoom - bottomPadding)
+  return { sidePadding, bottomPadding, cardWidth, cardMaxHeight }
 }
 
 function hidePasswordMenuInternal() {
@@ -281,7 +350,38 @@ function hidePasswordMenuInternal() {
   pwMenu.innerHTML = ''
 }
 
-function showPasswordMenu({ hostname, credentials, x, y, windowWidth, windowHeight }: PasswordMenuPayload = {}) {
+function layoutPasswordMenu(viewport: OverlayViewport, anchor = currentMenuAnchor): void {
+  if (!anchor) return
+  const { sidePadding, bottomPadding, cardWidth, cardMaxHeight } = fitCardMetrics(viewport, MENU_CARD_WIDTH, 120)
+  pwMenu.style.minWidth = `${Math.min(240, cardWidth)}px`
+  pwMenu.style.maxWidth = `${cardWidth}px`
+  pwMenu.style.maxHeight = `${Math.min(240, cardMaxHeight)}px`
+  pwMenu.style.left = `${sidePadding}px`
+  pwMenu.style.top = '0px'
+  pwMenu.style.display = 'block'
+  const rect = pwMenu.getBoundingClientRect()
+  const viewW = Math.ceil(rect.width + sidePadding * 2)
+  const viewH = Math.ceil(rect.height + bottomPadding)
+  const pos = clampIntoViewport(
+    Math.round(anchor.x - sidePadding),
+    Math.round(anchor.y),
+    viewW,
+    viewH,
+    viewport
+  )
+  setBounds(pos.x, pos.y, viewW, viewH)
+  setInteractive(true)
+}
+
+function showPasswordMenu({
+  hostname,
+  credentials,
+  x,
+  y,
+  windowWidth,
+  windowHeight,
+  viewport: suppliedViewport
+}: PasswordMenuPayload = {}) {
   if (activeOverlay === 'password-save') {
     releaseSaveCard()
     hidePasswordSaveInternal(false)
@@ -330,27 +430,18 @@ function showPasswordMenu({ hostname, credentials, x, y, windowWidth, windowHeig
     }
   }
 
-  pwMenu.style.left = `${OVERLAY_SIDE_PADDING}px`
-  pwMenu.style.top = '0px'
-  pwMenu.style.display = 'block'
-  const rect = pwMenu.getBoundingClientRect()
-  const viewW = Math.ceil(rect.width + OVERLAY_SIDE_PADDING * 2)
-  const viewH = Math.ceil(rect.height + OVERLAY_BOTTOM_PADDING)
-  const pos = clampIntoWindow(
-    Math.round((x || 0) - OVERLAY_SIDE_PADDING),
-    Math.round(y || 0),
-    viewW,
-    viewH,
-    typeof windowWidth === 'number' ? windowWidth : 0,
-    typeof windowHeight === 'number' ? windowHeight : 0
-  )
-  setBounds(pos.x, pos.y, viewW, viewH)
-  setInteractive(true)
+  currentMenuAnchor = {
+    x: Number.isFinite(Number(x)) ? Number(x) : 0,
+    y: Number.isFinite(Number(y)) ? Number(y) : 0
+  }
+  const viewport = normalizeViewport(suppliedViewport, windowWidth, windowHeight)
+  if (viewport) layoutPasswordMenu(viewport)
 }
 
 function hidePasswordMenu() {
   if (activeOverlay !== 'password-menu') return
   activeOverlay = null
+  currentMenuAnchor = null
   hidePasswordMenuInternal()
   collapse()
 }
@@ -373,6 +464,27 @@ function hidePasswordSaveInternal(collapseView = true) {
   pwSave.innerHTML = ''
   currentSavePayload = null
   if (collapseView) collapse()
+}
+
+function layoutPasswordSave(viewport: OverlayViewport): void {
+  const { sidePadding, bottomPadding, cardWidth, cardMaxHeight } = fitCardMetrics(viewport, SAVE_CARD_WIDTH, 140)
+  pwSave.style.width = `${cardWidth}px`
+  pwSave.style.maxHeight = `${cardMaxHeight}px`
+  pwSave.style.left = `${sidePadding}px`
+  pwSave.style.top = '0px'
+  pwSave.style.display = 'block'
+  const rect = pwSave.getBoundingClientRect()
+  const viewW = Math.ceil(rect.width + sidePadding * 2)
+  const viewH = Math.ceil(rect.height + bottomPadding)
+  const pos = clampIntoViewport(
+    viewport.x + viewport.width - viewW - OVERLAY_GAP,
+    viewport.y + OVERLAY_GAP,
+    viewW,
+    viewH,
+    viewport
+  )
+  setBounds(pos.x, pos.y, viewW, viewH)
+  setInteractive(true)
 }
 
 function commitSaveAction(action: string | undefined): void {
@@ -400,7 +512,8 @@ function showPasswordSave({
   password,
   readOnlyBackend,
   windowWidth,
-  windowHeight
+  windowHeight,
+  viewport: suppliedViewport
 }: PasswordSavePayload = {}) {
   if (activeOverlay === 'password-menu') hidePasswordMenuInternal()
   if (activeOverlay === 'password-unlock') hidePasswordUnlockInternal(false)
@@ -411,25 +524,19 @@ function showPasswordSave({
     password: String(password || '')
   }
 
-  const safe = (s: unknown) => String(s == null ? '' : s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
   pwSave.innerHTML = `
     <div class="hira-password-save__title">保存密码？</div>
-    <div class="hira-password-save__host">${safe(hostname)}</div>
+    <div class="hira-password-save__host">${escapeHtml(hostname)}</div>
     ${readOnlyBackend
       ? '<div class="hira-password-save__hint">外部密码库为只读集成，这条密码会保存到内置保险库。</div>'
       : ''}
     <div class="hira-password-save__row">
       <label>用户名</label>
-      <input id="pw-save-username" type="text" value="${safe(username)}" />
+      <input id="pw-save-username" type="text" value="${escapeHtml(username)}" />
     </div>
     <div class="hira-password-save__row">
       <label>密码</label>
-      <input id="pw-save-password" type="password" value="${safe(password)}" />
+      <input id="pw-save-password" type="password" value="${escapeHtml(password)}" />
       <span class="hira-password-save__reveal" title="显示密码">👁</span>
     </div>
     <div class="hira-password-save__actions">
@@ -448,19 +555,8 @@ function showPasswordSave({
     })
   }
 
-  // 右上角定位：以**实测**尺寸整体靠右，保证整张卡（含阴影 padding）都在窗口内。
-  // 不要再拿常量 320 去算 x —— 实测宽度含 padding+border，两者不一致会溢出右侧。
-  pwSave.style.left = `${OVERLAY_SIDE_PADDING}px`
-  pwSave.style.top = '0px'
-  pwSave.style.display = 'block'
-  const rect = pwSave.getBoundingClientRect()
-  const viewW = Math.ceil(rect.width + OVERLAY_SIDE_PADDING * 2)
-  const viewH = Math.ceil(rect.height + OVERLAY_BOTTOM_PADDING)
-  const w = (typeof windowWidth === 'number' && windowWidth > 0) ? windowWidth : (window.innerWidth || 0)
-  const h = (typeof windowHeight === 'number' && windowHeight > 0) ? windowHeight : (window.innerHeight || 0)
-  const pos = clampIntoWindow(w - viewW - 16, 16, viewW, viewH, w, h)
-  setBounds(pos.x, pos.y, viewW, viewH)
-  setInteractive(true)
+  const viewport = normalizeViewport(suppliedViewport, windowWidth, windowHeight)
+  if (viewport) layoutPasswordSave(viewport)
 }
 
 function hidePasswordSave() {
@@ -518,6 +614,7 @@ interface UnlockPayload {
   signInFields?: SignInField[]
   windowWidth?: number
   windowHeight?: number
+  viewport?: OverlayViewport
   [key: string]: unknown
 }
 
@@ -552,24 +649,23 @@ function renderUnlockCard(payload: UnlockPayload, message: string): void {
   const hostname = payload.hostname || ''
   const hint = stage === 'sign-in' ? (payload.signInHint || '') : (payload.unlockHint || '')
   const primaryLabel = stage === 'sign-in' ? (payload.signInLabel || '登录') : '解锁'
-  const fields: SignInField[] = Array.isArray(payload.signInFields) ? payload.signInFields : []
-  const safe = (s: unknown) => String(s == null ? '' : s).replace(/"/g, '&quot;')
+  const fields: SignInField[] = Array.isArray(payload.signInFields) ? payload.signInFields.slice(0, 8) : []
 
   let rows = ''
   if (stage === 'sign-in') {
     for (const field of fields) {
       if (!field || !field.key) continue
       const type = field.type === 'password' ? 'password' : 'text'
-      const value = safe(unlockDraft.get(field.key) || '')
-      const placeholder = field.placeholder ? ` placeholder="${safe(field.placeholder)}"` : ''
+      const value = escapeHtml(unlockDraft.get(field.key) || '')
+      const placeholder = field.placeholder ? ` placeholder="${escapeHtml(field.placeholder)}"` : ''
       rows += `
         <div class="hira-password-save__row hira-password-unlock__row">
-          <label>${safe(field.label || field.key)}</label>
-          <input data-pw-field="${safe(field.key)}" type="${type}" value="${value}"${placeholder} spellcheck="false" autocomplete="off" />
+          <label>${escapeHtml(field.label || field.key)}</label>
+          <input data-pw-field="${escapeHtml(field.key)}" type="${type}" value="${value}"${placeholder} spellcheck="false" autocomplete="off" />
         </div>`
     }
   } else {
-    const value = safe(unlockDraft.get('password') || '')
+    const value = escapeHtml(unlockDraft.get('password') || '')
     rows = `
       <div class="hira-password-save__row hira-password-unlock__row">
         <label>主密码</label>
@@ -582,14 +678,14 @@ function renderUnlockCard(payload: UnlockPayload, message: string): void {
     : (hostname || '输入主密码以读取凭据')
 
   pwUnlock.innerHTML = `
-    <div class="hira-password-save__title">${stage === 'sign-in' ? `登录 ${safe(displayName)}` : `解锁 ${safe(displayName)}`}</div>
-    <div class="hira-password-save__host">${safe(subtitle)}</div>
-    ${hint ? `<div class="hira-password-save__hint">${safe(hint)}</div>` : ''}
-    <div class="hira-password-unlock__error">${safe(message)}</div>
+    <div class="hira-password-save__title">${stage === 'sign-in' ? `登录 ${escapeHtml(displayName)}` : `解锁 ${escapeHtml(displayName)}`}</div>
+    <div class="hira-password-save__host">${escapeHtml(subtitle)}</div>
+    ${hint ? `<div class="hira-password-save__hint">${escapeHtml(hint)}</div>` : ''}
+    <div class="hira-password-unlock__error">${escapeHtml(message)}</div>
     ${rows}
     <div class="hira-password-save__actions hira-password-unlock__actions">
       <button data-pw-action="unlock-cancel" type="button">取消</button>
-      <button data-pw-action="${stage}" data-pw-primary="1" type="button">${safe(primaryLabel)}</button>
+      <button data-pw-action="${stage}" data-pw-primary="1" type="button">${escapeHtml(primaryLabel)}</button>
     </div>
     <span class="hira-password-unlock__switch" data-pw-switch="${stage === 'sign-in' ? 'unlock' : 'sign-in'}">
       ${stage === 'sign-in' ? '改用主密码解锁' : '改用账号登录'}
@@ -605,24 +701,24 @@ function focusUnlockField() {
 }
 
 function layoutUnlock(payload: UnlockPayload): void {
-  pwUnlock.style.left = `${OVERLAY_SIDE_PADDING}px`
+  const viewport = normalizeViewport(payload.viewport, payload.windowWidth, payload.windowHeight)
+  if (!viewport) return
+  const { sidePadding, bottomPadding, cardWidth, cardMaxHeight } = fitCardMetrics(viewport, UNLOCK_CARD_WIDTH, 200)
+  pwUnlock.style.width = `${cardWidth}px`
+  pwUnlock.style.maxHeight = `${cardMaxHeight}px`
+  pwUnlock.style.left = `${sidePadding}px`
   pwUnlock.style.top = '0px'
   pwUnlock.style.display = 'block'
   const rect = pwUnlock.getBoundingClientRect()
-  const viewW = Math.ceil(rect.width + OVERLAY_SIDE_PADDING * 2)
-  const viewH = Math.ceil(rect.height + OVERLAY_BOTTOM_PADDING)
-  const winW = (typeof payload.windowWidth === 'number' && payload.windowWidth > 0)
-    ? payload.windowWidth : (window.innerWidth || 0)
-  const winH = (typeof payload.windowHeight === 'number' && payload.windowHeight > 0)
-    ? payload.windowHeight : (window.innerHeight || 0)
+  const viewW = Math.ceil(rect.width + sidePadding * 2)
+  const viewH = Math.ceil(rect.height + bottomPadding)
   // 水平居中、垂直偏上（与浏览器原生密码弹窗体感一致），再整体钳进窗口
-  const pos = clampIntoWindow(
-    Math.round((winW - viewW) / 2),
-    96,
+  const pos = clampIntoViewport(
+    Math.round(viewport.x + (viewport.width - viewW) / 2),
+    viewport.y + Math.min(72, Math.max(OVERLAY_GAP, Math.round(viewport.height * 0.08))),
     viewW,
     viewH,
-    winW,
-    winH
+    viewport
   )
   setBounds(pos.x, pos.y, viewW, viewH)
   setInteractive(true)
@@ -759,6 +855,34 @@ async function setBounds(x: number, y: number, width: number, height: number): P
   } catch (e) { console.error('[pw-overlay] set-bounds failed:', errorMessage(e)) }
 }
 
+function reflowPasswordOverlay(value: unknown): void {
+  const viewport = normalizeViewport(value)
+  if (!viewport) return
+  if (activeOverlay === 'password-menu') {
+    layoutPasswordMenu(viewport)
+    return
+  }
+  if (activeOverlay === 'password-save' && currentSavePayload) {
+    layoutPasswordSave(viewport)
+    return
+  }
+  if (activeOverlay === 'password-unlock' && currentUnlockPayload) {
+    currentUnlockPayload = { ...currentUnlockPayload, viewport }
+    layoutUnlock(currentUnlockPayload)
+  }
+}
+
+function schedulePasswordOverlayReflow(value: unknown): void {
+  pendingReflowViewport = value
+  if (reflowFrame) return
+  reflowFrame = requestAnimationFrame(() => {
+    reflowFrame = 0
+    const viewport = pendingReflowViewport
+    pendingReflowViewport = null
+    reflowPasswordOverlay(viewport)
+  })
+}
+
 // ── 监听主进程事件 ──────────────────────────────────────────
 ;(function boot() {
   window.addEventListener('error', (e) => {
@@ -777,6 +901,9 @@ async function setBounds(x: number, y: number, width: number, height: number): P
       try { showPasswordSave((p || {}) as unknown as Parameters<typeof showPasswordSave>[0]) } catch (err) { console.error('[pw-overlay] show-save threw:', err) }
     })
     bridge.on.subscribe(IPC_EVENTS.overlayHidePasswordSave, () => hidePasswordSave())
+    bridge.on.subscribe(IPC_EVENTS.overlayPasswordViewport, (p) => {
+      try { schedulePasswordOverlayReflow(p) } catch (err) { console.error('[pw-overlay] viewport reflow threw:', errorMessage(err)) }
+    })
     bridge.on.subscribe(IPC_EVENTS.overlayShowPasswordUnlock, (p) => {
       try { showPasswordUnlock((p || {}) as unknown as UnlockPayload) } catch (err) { console.error('[pw-overlay] show-unlock threw:', errorMessage(err)) }
     })

@@ -643,6 +643,7 @@ class LayoutCoordinator {
   private _floatDismissBound: Map<WebContents, (event: ElectronEvent, input: Input) => void>
   private _floatReclaimTimers: Map<string, Timer>
   private _passwordOverlayView: WebContentsView | null
+  private _lastPasswordOverlayViewportKey: string
   private _panelSlots: Record<Side, string | null>
   private _panelPinned: Record<Side, string | null>
   private _pinnedWidths: Record<Side, number>
@@ -1026,6 +1027,7 @@ class LayoutCoordinator {
      */
     this._floatReclaimTimers = new Map()
     this._passwordOverlayView = null
+    this._lastPasswordOverlayViewportKey = ''
     /**
      * 面板位：'left' | 'right' → panelId | null。
      *
@@ -3004,7 +3006,18 @@ class LayoutCoordinator {
    */
   _ensurePasswordOverlay() : Electron.WebContentsView|null {
     const existing = this._passwordOverlayView
-    if (existing) return existing
+    if (existing) {
+      try {
+        if (!existing.webContents.isDestroyed()) return existing
+      } catch (_) {}
+      // renderer 崩溃后保留的视图外壳不能再复用：先摘图层并销毁，下面走同一条重建路径。
+      this._dropLayerByView(existing)
+      this._passwordOverlayView = null
+      this._lastPasswordOverlayViewportKey = ''
+      try {
+        if (typeof this._wcm.destroyPasswordOverlay === 'function') this._wcm.destroyPasswordOverlay()
+      } catch (_) {}
+    }
     const view = this._wcm.createPasswordOverlay()
     this._passwordOverlayView = view
     const layer = this._pushLayer('password-overlay', view)
@@ -3068,6 +3081,7 @@ class LayoutCoordinator {
     // 先摘图层再销毁：留着图层就是一条指向已销毁 webContents 的空壳。
     this._dropLayerByView(view)
     this._passwordOverlayView = null
+    this._lastPasswordOverlayViewportKey = ''
     try {
       if (this._wcm && typeof this._wcm.destroyPasswordOverlay === 'function') {
         this._wcm.destroyPasswordOverlay()
@@ -3103,6 +3117,26 @@ class LayoutCoordinator {
     } catch (_) {}
     if (wc.isDestroyed()) return
     try { wc.send(channel, payload) } catch (_) {}
+  }
+
+  /** 只在密码浮层可见时同步网页矩形；相同几何不重复发 IPC。 */
+  private _syncPasswordOverlayViewport(): void {
+    const view = this._passwordOverlayView
+    if (!view || view.webContents.isDestroyed()) return
+    try {
+      const own = view.getBounds()
+      if (!own || own.width <= 0 || own.height <= 0) return
+    } catch (_) {
+      return
+    }
+    const viewport = this.getActiveTabViewBounds()
+    if (!viewport) return
+    const key = `${viewport.x}:${viewport.y}:${viewport.width}:${viewport.height}`
+    if (key === this._lastPasswordOverlayViewportKey) return
+    this._lastPasswordOverlayViewportKey = key
+    try {
+      view.webContents.send(IPC_EVENTS.overlayPasswordViewport, viewport)
+    } catch (_) {}
   }
 
   attachRail() {
@@ -3529,6 +3563,9 @@ class LayoutCoordinator {
      * 不存在"一个早一个晚"这类只在首次布局暴露的坑。
      */
     this._pushWebSidebarFrame()
+    // 密码浮层的锚点是“活动网页”，不是窗口。窗口缩放 / 面板开关 / 分屏变化
+    // 都在本收敛点之后把新矩形推给浮层，由它按当前卡片实测尺寸重新钳位。
+    this._syncPasswordOverlayViewport()
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -5417,6 +5454,26 @@ class LayoutCoordinator {
     const pane = this._activePaneBounds()
     if (pane) return { x: Math.round(pane.x), y: Math.round(pane.y) }
     return { x: 0, y: 0 }
+  }
+
+  /**
+   * 活动网页在窗口内容区中的完整矩形。
+   *
+   * 优先读取真实 tab view bounds；视图尚未落位时退回最近一次布局结果。
+   * 密码浮层只在返回矩形内定位，不能再拿整个窗口尺寸充当网页可视区。
+   */
+  getActiveTabViewBounds(): Rectangle | null {
+    if (this._activeTabId) {
+      const view = this._wcm.getTab(this._activeTabId)
+      if (view && typeof view.getBounds === 'function') {
+        try {
+          const rect = view.getBounds()
+          if (rect && rect.width > 0 && rect.height > 0) return { ...rect }
+        } catch (_) {}
+      }
+    }
+    const fallback = this._lastPageBounds
+    return fallback && fallback.width > 0 && fallback.height > 0 ? { ...fallback } : null
   }
 
   /**

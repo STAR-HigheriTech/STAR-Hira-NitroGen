@@ -15,7 +15,7 @@ type SenderEventLike = {
   sender?: { mainFrame?: SenderFrameLike | null } | null
 }
 
-export type IpcSenderSurface = 'trusted-ui' | 'web-preload' | 'extension' | 'untrusted'
+export type IpcSenderSurface = 'trusted-ui' | 'web-preload' | 'web-preload-frame' | 'extension' | 'untrusted'
 
 const FILE_RENDERER_ROOT = path.resolve(getAppRoot(), 'out', 'renderer')
 const DEV_RENDERER_ORIGIN = (() => {
@@ -77,18 +77,27 @@ function topLevelFrame(event: unknown): SenderFrameLike | null {
   return frame.parent === null || frame.parent === undefined ? frame : null
 }
 
+function liveSenderFrame(event: unknown): SenderFrameLike | null {
+  if (!event || typeof event !== 'object') return null
+  const frame = (event as SenderEventLike).senderFrame
+  return frame && frame.detached !== true && frame.url ? frame : null
+}
+
 /**
  * Classify the trusted boundary of an IPC sender. The application shell and the
  * web preload have intentionally different route audiences; both still require a
  * live top-level frame.
  */
 export function ipcSenderSurface(event: unknown): IpcSenderSurface {
-  const frame = topLevelFrame(event)
+  const frame = liveSenderFrame(event)
   if (!frame) return 'untrusted'
   let url: URL
   try { url = new URL(String(frame.url || '')) } catch (_) { return 'untrusted' }
-  if (isTrustedIpcUrl(url.href)) return 'trusted-ui'
-  if (url.protocol === 'http:' || url.protocol === 'https:') return 'web-preload'
+  const top = topLevelFrame(event)
+  if (top && isTrustedIpcUrl(url.href)) return 'trusted-ui'
+  if (url.protocol === 'http:' || url.protocol === 'https:') {
+    return top ? 'web-preload' : 'web-preload-frame'
+  }
   if (url.protocol === 'file:') return 'web-preload'
   if (url.protocol === 'chrome-extension:') return 'extension'
   return 'untrusted'

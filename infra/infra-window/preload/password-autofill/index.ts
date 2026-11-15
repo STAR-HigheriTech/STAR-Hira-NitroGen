@@ -656,6 +656,27 @@ function startAutofillEngine(options: AutofillOptions): AutofillEngine {
     }
   }
 
+  function eventInput(event: Event): HTMLInputElement | null {
+    const path = typeof event.composedPath === 'function' ? event.composedPath() : null
+    if (path) {
+      for (const node of path) {
+        if (node instanceof HTMLInputElement) return node
+      }
+    }
+    return event.target instanceof HTMLInputElement ? event.target : null
+  }
+
+  function looksLikeCredentialInput(input: HTMLInputElement | null): boolean {
+    if (!input) return false
+    const type = String(input.type || '').toLowerCase()
+    const autocomplete = String(input.getAttribute('autocomplete') || '').toLowerCase()
+    return type === 'password' ||
+      autocomplete === 'current-password' ||
+      autocomplete === 'new-password' ||
+      autocomplete === 'username' ||
+      autocomplete === 'email'
+  }
+
   function activate(anchor: EventTarget | null): void {
     if (started) return
     started = true
@@ -680,8 +701,8 @@ function startAutofillEngine(options: AutofillOptions): AutofillEngine {
         if (hasCredentialField()) activate(null)
         return
       }
-      const t = e.target
-      if (t instanceof HTMLInputElement && hasCredentialField()) activate(t)
+      const input = eventInput(e)
+      if (input && (hasCredentialField() || looksLikeCredentialInput(input))) activate(input)
     } catch (_) {}
   }
 

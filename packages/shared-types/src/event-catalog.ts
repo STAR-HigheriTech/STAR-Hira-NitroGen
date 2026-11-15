@@ -454,8 +454,9 @@ export const EVENT_CATALOG: Readonly<Record<string, EventSpec>> = Object.freeze(
   },
   [E.overlayShowPasswordMenu]: {
     scope: TARGET,
-    payload: '{ items, anchor }',
-    subscribers: ['overlay']
+    payload: '{ hostname, credentials, x, y, viewport }',
+    subscribers: ['overlay'],
+    note: 'x / y 为窗口内容区坐标；viewport 是活动网页矩形，浮层只在其中落位'
   },
   [E.overlayHidePasswordMenu]: {
     scope: TARGET,
@@ -464,8 +465,15 @@ export const EVENT_CATALOG: Readonly<Record<string, EventSpec>> = Object.freeze(
   },
   [E.overlayShowPasswordSave]: {
     scope: TARGET,
-    payload: '{ origin, username }',
-    subscribers: ['overlay']
+    payload: '{ hostname, username, password, readOnlyBackend, viewport }',
+    subscribers: ['overlay'],
+    note: '保存卡使用活动网页矩形定位；窗口尺寸变化由 overlayPasswordViewport 继续同步'
+  },
+  [E.overlayPasswordViewport]: {
+    scope: TARGET,
+    payload: '{ x, y, width, height }',
+    subscribers: ['overlay'],
+    note: '活动网页在窗口内容区中的矩形；窗口缩放 / 分屏 / 面板变化后推送，密码浮层只在该区域内落位'
   },
   [E.overlayHidePasswordSave]: {
     scope: TARGET,
@@ -474,7 +482,7 @@ export const EVENT_CATALOG: Readonly<Record<string, EventSpec>> = Object.freeze(
   },
   [E.overlayShowPasswordUnlock]: {
     scope: TARGET,
-    payload: '{ backend, displayName, stage, hostname, signInLabel, signInHint, signInFields, unlockHint, message, windowWidth, windowHeight }',
+    payload: '{ backend, displayName, stage, hostname, signInLabel, signInHint, signInFields, unlockHint, message, viewport }',
     subscribers: ['overlay'],
     note: '保险库锁着时先弹「解锁 / 登录」卡；stage 由后端 status.signInRequired 决定，主进程无厂商分支'
   },

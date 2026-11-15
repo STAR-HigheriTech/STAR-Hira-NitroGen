@@ -68,6 +68,7 @@ interface AutofillUnlockDependencies {
   sendOverlayEvent?(route: string, payload?: Record<string, unknown>): void
   events: { overlayShowPasswordUnlock: string; overlayHidePasswordUnlock: string }
   getWindowSize?(): [number, number] | null
+  getViewport?(): { x: number; y: number; width: number; height: number } | null
 }
 
 interface PendingUnlock {
@@ -137,6 +138,23 @@ export function createAutofillUnlockFlow(deps: AutofillUnlockDependencies) {
     if (!backend) return
     const status = backend.status || {}
     const [width, height] = windowSize()
+    let viewport: { x: number; y: number; width: number; height: number } | null = null
+    try {
+      const candidate = typeof deps.getViewport === 'function' ? deps.getViewport() : null
+      if (
+        candidate &&
+        [candidate.x, candidate.y, candidate.width, candidate.height].every(Number.isFinite) &&
+        candidate.width > 0 &&
+        candidate.height > 0
+      ) {
+        viewport = {
+          x: Math.round(candidate.x),
+          y: Math.round(candidate.y),
+          width: Math.round(candidate.width),
+          height: Math.round(candidate.height)
+        }
+      }
+    } catch (_) {}
     send(EVENT_SHOW, {
       backend: backend.name,
       displayName: status.displayName || backend.name,
@@ -148,7 +166,8 @@ export function createAutofillUnlockFlow(deps: AutofillUnlockDependencies) {
       unlockHint: status.unlockHint || '',
       message: message || '',
       windowWidth: width,
-      windowHeight: height
+      windowHeight: height,
+      viewport
     })
   }
 

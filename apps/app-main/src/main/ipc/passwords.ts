@@ -8,6 +8,7 @@
  */
 
 import { BrowserWindow, dialog, type WebContents } from 'electron'
+import { createHash } from 'node:crypto'
 import { writeFile } from 'node:fs/promises'
 import { createProviderInvoker } from './provider-bridge'
 import type { ProviderRegistryPort } from './provider-bridge'
@@ -15,6 +16,7 @@ import type { IpcRoutes, IpcSchemas, IpcTypedMain } from './types'
 
 type MethodPort = Record<string, (...args: unknown[]) => unknown>
 interface PasswordRuntimePort { layoutCoordinator?: MethodPort; tabManager?: MethodPort; win?: BrowserWindow }
+interface PasswordViewport { x: number; y: number; width: number; height: number }
 interface RuntimeRegistryPort {
   provide(name: string, method: string, factory: (runtime: PasswordRuntimePort) => (...args: unknown[]) => unknown): unknown
 }
@@ -285,7 +287,9 @@ export function registerPasswordIpc(
   // 避免“点一下别的输入框/按钮就反复弹”。
   let activeSaveKey = ''
   const credentialKey = (hostname: unknown, username: unknown, password: unknown): string =>
-    `${stripWww(hostname)}\u0000${username || ''}\u0000${password || ''}`
+    createHash('sha256')
+      .update(JSON.stringify([stripWww(hostname), String(username || ''), String(password || '')]))
+      .digest('hex')
 
   const sendPasswordOverlayEventTo = (lc: MethodPort | null | undefined, route: string, payload: unknown): void => {
     if (!lc) return
@@ -307,6 +311,39 @@ export function registerPasswordIpc(
 
   const stripWww = (hostname: unknown): string => { try { return String(hostname || '').replace(/^www\./, '') } catch (_) { return String(hostname || '') } }
 
+  const normalizeViewport = (value: unknown): PasswordViewport | null => {
+    const rect = asRecord(value)
+    const x = Number(rect.x)
+    const y = Number(rect.y)
+    const width = Number(rect.width)
+    const height = Number(rect.height)
+    if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return null
+    return {
+      x: Math.round(x),
+      y: Math.round(y),
+      width: Math.round(width),
+      height: Math.round(height)
+    }
+  }
+
+  /** 密码浮层唯一认可的网页区域；活动 tab 未落位时退回整个窗口内容区。 */
+  const getPasswordViewport = (): PasswordViewport | null => {
+    try {
+      if (typeof layoutCoordinator.getActiveTabViewBounds === 'function') {
+        const rect = normalizeViewport(layoutCoordinator.getActiveTabViewBounds())
+        if (rect) return rect
+      }
+    } catch (_) {}
+    try {
+      const win = (layoutCoordinator && layoutCoordinator.getWindow ? layoutCoordinator.getWindow() : null) as BrowserWindow | null
+      if (win && !win.isDestroyed()) {
+        const [width, height] = win.getContentSize()
+        return normalizeViewport({ x: 0, y: 0, width, height })
+      }
+    } catch (_) {}
+    return null
+  }
+
   /**
    * 自动填充前的「确保已解锁 / 已登录」闸门（见 password-autofill-unlock.js）。
    *
@@ -322,7 +359,8 @@ export function registerPasswordIpc(
       const win = (layoutCoordinator && layoutCoordinator.getWindow ? layoutCoordinator.getWindow() : null) as BrowserWindow | null
       if (!win || win.isDestroyed()) return [0, 0]
       try { return win.getContentSize() } catch (_) { return [0, 0] }
-    }
+    },
+    getViewport: getPasswordViewport
   })
 
   /**
@@ -432,6 +470,7 @@ export function registerPasswordIpc(
         : null)
       let mx = Math.round((req.x || 0) + Number(offset.x || 0))
       let my = Math.round((req.y || 0) + Number(offset.y || 0))
+      const viewport = getPasswordViewport()
       // 钳制在窗口内：菜单实际宽度可达 360 + 56(padding)，高度约 240 + 56(padding)，
       // 避免锚点靠右/靠底时超出被裁切。注意必须先“下移一点”再计算，
       // 否则 mx 是锚点左侧坐标，直接 min(mx, ww-360) 会过度左移。
@@ -439,9 +478,12 @@ export function registerPasswordIpc(
       const MENU_W = 360
       const MENU_H = 240
       // 粗定位后交给浮层渲染进程用**实测尺寸**做最终钳制（避免右侧溢出）
-      let winW = 0
-      let winH = 0
-      if (win && !win.isDestroyed()) {
+      let winW = viewport ? viewport.width : 0
+      let winH = viewport ? viewport.height : 0
+      if (viewport) {
+        mx = Math.max(viewport.x + 8, Math.min(mx, viewport.x + viewport.width - MENU_W - 28))
+        my = Math.max(viewport.y + 8, Math.min(my, viewport.y + viewport.height - MENU_H - 28))
+      } else if (win && !win.isDestroyed()) {
         const [ww0, wh0] = win.getContentSize()
         winW = ww0 || 0
         winH = wh0 || 0
@@ -454,7 +496,8 @@ export function registerPasswordIpc(
         x: mx,
         y: my,
         windowWidth: winW,
-        windowHeight: winH
+        windowHeight: winH,
+        viewport
       })
       return { ok: true }
     }
@@ -473,6 +516,9 @@ export function registerPasswordIpc(
       const hostname = req.hostname
       const norm = stripWww(hostname)
       const key = credentialKey(hostname, req.username, req.password)
+      const hasExactCredential = (rows: unknown): boolean =>
+        Array.isArray(rows) &&
+        rows.some((row) => row && credentialKey(hostname, row.username, row.password) === key)
 
       // 1) 用户本次会话已对同一凭据做过决定（保存/暂不保存/永不保存）→ 不再提示
       if (decidedCredentialKeys.has(key)) {
@@ -483,23 +529,50 @@ export function registerPasswordIpc(
       if (Array.isArray(neverList) && neverList.some((d) => d === norm || d === hostname)) {
         return { ok: false }
       }
-      // 3) 已保存到密码库的完全相同凭据 → 不再提示
-      const creds = await invoke('password.getSuggestions', () => passwordService.getSuggestions(hostname), { hostname })
-      if (Array.isArray(creds)) {
-        const exists = creds.some((c) => c.username === req.username && c.password === req.password)
-        if (exists) {
-          decidedCredentialKeys.add(key)
-          return { ok: false }
-        }
+      /**
+       * 3) 已保存到密码库的完全相同凭据 → 不再提示。
+       *
+       * 外部后端（Bitwarden / 1Password）可能正锁着或 CLI 卡住。保存提示不能
+       * 等它无限久后才决定是否出现，否则真实捕获已经成功，用户却什么都看不到。
+       * 这里给重复检查一个短窗口：窗口内确认重复就直接吞掉；超时则先展示，
+       * 后端稍后确认重复时再收起，并记住这条凭据。
+       */
+      let duplicateCheckTimer: ReturnType<typeof setTimeout> | null = null
+      type DuplicateCheckResult = { done: true; rows: unknown } | { done: false }
+      const duplicateCheck: Promise<DuplicateCheckResult> = Promise.resolve(invoke(
+        'password.getSuggestions',
+        () => passwordService.getSuggestions(hostname),
+        { hostname }
+      )).then(
+        (rows: unknown): DuplicateCheckResult => ({ done: true, rows }),
+        (): DuplicateCheckResult => ({ done: true, rows: null })
+      )
+      const duplicateOutcome: DuplicateCheckResult = await Promise.race([
+        duplicateCheck,
+        new Promise<{ done: false }>((resolve) => {
+          duplicateCheckTimer = setTimeout(() => resolve({ done: false }), 650)
+        })
+      ])
+      if (duplicateCheckTimer) clearTimeout(duplicateCheckTimer)
+      if (duplicateOutcome.done && hasExactCredential(duplicateOutcome.rows)) {
+        decidedCredentialKeys.add(key)
+        return { ok: false }
       }
       // 4) 同一凭据的提示卡正在展示 → 忽略重复上报（防止点别的输入框/按钮反复触发）
       if (activeSaveKey === key) {
-        return { ok: false }
+        let overlayAlive = false
+        try {
+          const wc = typeof layoutCoordinator.getPasswordOverlayWebContents === 'function'
+            ? layoutCoordinator.getPasswordOverlayWebContents() as WebContents | null
+            : null
+          overlayAlive = !!(wc && !wc.isDestroyed())
+        } catch (_) {}
+        if (overlayAlive) return { ok: false }
+        // 浮层 renderer 崩溃 / 视图已回收：解除占位，让本次捕获触发重建。
+        activeSaveKey = ''
       }
       activeSaveKey = key
-      // 窗口级尺寸：保存卡固定右上角定位
-      const win = (layoutCoordinator.getWindow ? layoutCoordinator.getWindow() : null) as BrowserWindow | null
-      const [ww, wh] = win ? win.getContentSize() : [800, 600]
+      const viewport = getPasswordViewport()
       // 只读后端（Bitwarden / 1Password）→ 保存卡必须明说"这条会进内置保险库"，
       // 否则用户会以为写进了自己的外部密码库。判定只认 listBackends 的 writable。
       let readOnlyBackend = false
@@ -513,9 +586,18 @@ export function registerPasswordIpc(
         username: req.username,
         password: req.password,
         readOnlyBackend,
-        windowWidth: ww || 800,
-        windowHeight: wh || 600
+        windowWidth: viewport ? viewport.width : 800,
+        windowHeight: viewport ? viewport.height : 600,
+        viewport
       })
+      if (!duplicateOutcome.done) {
+        void duplicateCheck.then((late: DuplicateCheckResult) => {
+          if (!late.done || activeSaveKey !== key || !hasExactCredential(late.rows)) return
+          decidedCredentialKeys.add(key)
+          activeSaveKey = ''
+          sendPasswordOverlayEvent(events.overlayHidePasswordSave, {})
+        })
+      }
       return { ok: true }
     }
   })

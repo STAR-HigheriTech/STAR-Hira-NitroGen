@@ -64,6 +64,14 @@ const WEB_PRELOAD_INVOKE_ROUTES = routeSet([
   PRELOAD_ROUTES.userscriptGmRequest
 ])
 
+/**
+ * 子 iframe 只允许一个刻意收窄的上报面：登录凭据捕获。
+ * 发送方仍必须是真实 http(s) 子框架，hostname 由主进程从 senderFrame 重写。
+ */
+const WEB_PRELOAD_FRAME_INVOKE_ROUTES = routeSet([
+  PRELOAD_ROUTES.passwordCaptured
+])
+
 /** Events consumed by tab-injected preload engines; application/UI events stay internal. */
 const WEB_PRELOAD_EVENT_ROUTES = routeSet([
   PRELOAD_EVENTS.themeChanged,
@@ -118,7 +126,8 @@ export function createIpcRoutePolicy(options: IpcRoutePolicyOptions = {}): IpcRo
       if (typeof route !== 'string' || !invokeRoutes.has(route)) return false
       const surface = senderSurface(event)
       if (surface === 'trusted-ui') return true
-      return surface === 'web-preload' && webInvokeRoutes.has(route)
+      if (surface === 'web-preload') return webInvokeRoutes.has(route)
+      return surface === 'web-preload-frame' && WEB_PRELOAD_FRAME_INVOKE_ROUTES.has(route)
     },
     authorizeEventSubscription(event, route) {
       if (typeof route !== 'string') return false
@@ -132,7 +141,11 @@ export function createIpcRoutePolicy(options: IpcRoutePolicyOptions = {}): IpcRo
       return surface === 'web-preload' && webEventRoutes.has(route)
     },
     normalizeInvokeRequest(event, route, request) {
-      if (senderSurface(event) !== 'web-preload' || !WEB_PRELOAD_HOSTNAME_ROUTES.has(route)) return request
+      const surface = senderSurface(event)
+      if (
+        (surface !== 'web-preload' && surface !== 'web-preload-frame') ||
+        !WEB_PRELOAD_HOSTNAME_ROUTES.has(route)
+      ) return request
       let hostname = ''
       try {
         const url = new URL(senderFrameUrl(event))

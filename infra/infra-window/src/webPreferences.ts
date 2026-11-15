@@ -85,7 +85,9 @@ export function buildWebPreferences(options: WebPreferenceOptions = {}): Electro
  *   V8 解析编译**：沙箱 preload 不能 require / 动态 import 本地文件，password-autofill
  *   等模块只能静态进 bundle，因此代码必然被每个 frame 编译一遍，无法靠惰性启动规避。
  *   代价（已确认接受）：iframe 内的 `alert/confirm/prompt` 不再走自定义对话框桥；
- *   iframe 内的密码自动填充失效。主框架完全不受影响（preload 照常注入主框架）。
+ *   完整密码自动填充 UI 不进入 iframe。登录后的“保存密码”捕获另有
+ *   `password-frame` 会话级轻量 preload，不依赖这里打开子框架 Node 注入。
+ *   主框架完全不受影响（preload 照常注入主框架）。
  *
  * @param {object} [options] 同 buildWebPreferences（preload / 覆盖项）
  */

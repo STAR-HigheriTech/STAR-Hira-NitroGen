@@ -22,7 +22,19 @@
 
 import { session, type Session } from 'electron'
 
-interface SessionsControllerOptions { resolveProfileDir: (profileId: string) => string }
+export interface SessionPreloadScript {
+  id: string
+  filePath: string
+  type?: 'frame' | 'service-worker'
+}
+interface SessionsControllerOptions {
+  resolveProfileDir: (profileId: string) => string
+  /**
+   * 会话级预加载脚本。当前用于给子 iframe 注入轻量密码捕获，
+   * 不打开 nodeIntegrationInSubFrames，也不把完整 tab preload 复制到每个 frame。
+   */
+  preloadScripts?: readonly SessionPreloadScript[]
+}
 export interface SessionResolveOptions { profileId?: string; incognito?: boolean; incognitoPartitionId?: string }
 export interface SessionsController {
   get(profileId?: string): Session
@@ -46,7 +58,7 @@ export interface SessionsController {
  *   list: () => string[]
  * }}
  */
-export function createSessionsController({ resolveProfileDir }: SessionsControllerOptions): SessionsController {
+export function createSessionsController({ resolveProfileDir, preloadScripts = [] }: SessionsControllerOptions): SessionsController {
   if (typeof resolveProfileDir !== 'function') {
     throw new Error('createSessionsController: resolveProfileDir 端口必填')
   }
@@ -55,6 +67,25 @@ export function createSessionsController({ resolveProfileDir }: SessionsControll
   const _sessions: Map<string, Electron.Session> = new Map<string, Session>()
   /** @type {Map<string, Electron.Session>} incognitoPartitionId → 临时会话 */
   const _incognito: Map<string, Electron.Session> = new Map<string, Session>()
+  const preloadsAttached = new WeakSet<Session>()
+
+  function ensurePreloads(target: Session): void {
+    if (!preloadScripts.length || preloadsAttached.has(target)) return
+    try {
+      const existing = new Set(target.getPreloadScripts().map((script) => script.id))
+      for (const preload of preloadScripts) {
+        if (!preload.id || !preload.filePath || existing.has(preload.id)) continue
+        target.registerPreloadScript({
+          id: preload.id,
+          type: preload.type || 'frame',
+          filePath: preload.filePath
+        })
+      }
+      preloadsAttached.add(target)
+    } catch (error) {
+      console.warn('[sessions] frame preload registration failed:', error instanceof Error ? error.message : error)
+    }
+  }
 
   /**
    * 取（或创建）某 profile 的持久会话。
@@ -70,6 +101,7 @@ export function createSessionsController({ resolveProfileDir }: SessionsControll
     if (!dir) throw new Error(`createSessionsController: 无法解析 profile 目录: ${id}`)
     const created = session.fromPath(dir)
     _sessions.set(id, created)
+    ensurePreloads(created)
     return created
   }
 
@@ -84,6 +116,7 @@ export function createSessionsController({ resolveProfileDir }: SessionsControll
     if (cached) return cached
     const created = session.fromPartition(`memory:incognito-${key}`, { cache: false })
     _incognito.set(key, created)
+    ensurePreloads(created)
     return created
   }
 

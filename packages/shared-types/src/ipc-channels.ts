@@ -1328,6 +1328,9 @@ const EVENTS_OWN = {
   overlayHidePasswordMenu: 'overlay:hide-password-menu',
   overlayShowPasswordSave: 'overlay:show-password-save',
   overlayHidePasswordSave: 'overlay:hide-password-save',
+  // 活动网页的当前矩形。窗口缩放 / 分屏 / 面板开关后由布局协调器推送，
+  // 密码浮层据此重排，始终留在网页可视区域内。
+  overlayPasswordViewport: 'overlay:password-viewport',
   // 「解锁 / 登录」卡：保险库锁着时先弹这张，用户完成后自动重试原 getSuggestions。
   overlayShowPasswordUnlock: 'overlay:show-password-unlock',
   overlayHidePasswordUnlock: 'overlay:hide-password-unlock',

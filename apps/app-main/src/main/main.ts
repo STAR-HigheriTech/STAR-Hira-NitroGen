@@ -20,6 +20,7 @@ const {
   WindowRegistry,
   createSubWindow,
   createSessionsController,
+  defaultPreloadPath,
   createLoadedProfilesController,
   createQuitController,
   createSessionTabPort,
@@ -908,7 +909,14 @@ app.whenReady().then(async () => {
     // 迁移失败不拖垮启动：留在单库模式，下次启动重试。
     console.warn('[main] L2 迁移失败（保持单库模式）:', errorMessage(e))
   }
-  const sessionsController = createSessionsController({ resolveProfileDir })
+  const sessionsController = createSessionsController({
+    resolveProfileDir,
+    preloadScripts: [{
+      id: 'hira-password-frame-capture',
+      filePath: defaultPreloadPath('password-frame'),
+      type: 'frame'
+    }]
+  })
   // 单飞加载器：并发请求共享同一 Promise，防止 ECE 被重复实例化。
   const loadedProfiles = createLoadedProfilesController()
 
