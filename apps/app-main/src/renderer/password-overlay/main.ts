@@ -192,7 +192,6 @@ html, body, #root {
 }
 .hira-password-save {
   width: ${SAVE_CARD_WIDTH}px;
-  max-width: 100%;
   border-radius: var(--hira-theme-radius, 12px);
   padding: 16px;
   font-size: 13px;
@@ -458,7 +457,8 @@ function layoutPasswordSave(): void {
   pwSave.style.top = '0px'
   pwSave.style.display = 'block'
   const rect = pwSave.getBoundingClientRect()
-  setBoundsInContent(Math.ceil(rect.width + OVERLAY_SIDE_PADDING * 2), Math.ceil(rect.height + OVERLAY_BOTTOM_PADDING), 'right', 'top', 0)
+  const cardWidth = Math.max(SAVE_CARD_WIDTH, Math.ceil(rect.width))
+  setBoundsInContent(cardWidth + OVERLAY_SIDE_PADDING * 2, Math.ceil(rect.height + OVERLAY_BOTTOM_PADDING), 'right', 'top', 0)
   setInteractive(true)
 }
 
@@ -682,7 +682,8 @@ function layoutUnlock(): void {
   pwUnlock.style.top = '0px'
   pwUnlock.style.display = 'block'
   const rect = pwUnlock.getBoundingClientRect()
-  setBoundsInContent(Math.ceil(rect.width + OVERLAY_SIDE_PADDING * 2), Math.ceil(rect.height + OVERLAY_BOTTOM_PADDING), 'center', 'top', 0)
+  const cardWidth = Math.max(UNLOCK_CARD_WIDTH, Math.ceil(rect.width))
+  setBoundsInContent(cardWidth + OVERLAY_SIDE_PADDING * 2, Math.ceil(rect.height + OVERLAY_BOTTOM_PADDING), 'center', 'top', 0)
   setInteractive(true)
 }
 
