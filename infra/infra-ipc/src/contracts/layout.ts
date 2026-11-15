@@ -4,7 +4,11 @@ const floatBoundsRequest = z.object({
   x: z.number().optional(),
   y: z.number().optional(),
   width: z.number().optional(),
-  height: z.number().optional()
+  height: z.number().optional(),
+  position: z.literal('in-content').optional(),
+  align: z.enum(['left', 'center', 'right']).optional(),
+  valign: z.enum(['top', 'bottom']).optional(),
+  margin: z.number().optional()
 })
 
 /**

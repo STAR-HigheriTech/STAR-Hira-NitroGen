@@ -644,6 +644,7 @@ class LayoutCoordinator {
   private _floatReclaimTimers: Map<string, Timer>
   private _passwordOverlayView: WebContentsView | null
   private _lastPasswordOverlayViewportKey: string
+  private _lastPasswordOverlayPlacement: FloatAnchorRequest | null
   private _panelSlots: Record<Side, string | null>
   private _panelPinned: Record<Side, string | null>
   private _pinnedWidths: Record<Side, number>
@@ -1028,6 +1029,7 @@ class LayoutCoordinator {
     this._floatReclaimTimers = new Map()
     this._passwordOverlayView = null
     this._lastPasswordOverlayViewportKey = ''
+    this._lastPasswordOverlayPlacement = null
     /**
      * 面板位：'left' | 'right' → panelId | null。
      *
@@ -3082,6 +3084,7 @@ class LayoutCoordinator {
     this._dropLayerByView(view)
     this._passwordOverlayView = null
     this._lastPasswordOverlayViewportKey = ''
+    this._lastPasswordOverlayPlacement = null
     try {
       if (this._wcm && typeof this._wcm.destroyPasswordOverlay === 'function') {
         this._wcm.destroyPasswordOverlay()
@@ -3131,6 +3134,9 @@ class LayoutCoordinator {
     }
     const viewport = this.getActiveTabViewBounds()
     if (!viewport) return
+    if (this._lastPasswordOverlayPlacement) {
+      this.anchorPasswordOverlayInContent(this._lastPasswordOverlayPlacement)
+    }
     const key = `${viewport.x}:${viewport.y}:${viewport.width}:${viewport.height}`
     if (key === this._lastPasswordOverlayViewportKey) return
     this._lastPasswordOverlayViewportKey = key
@@ -6342,18 +6348,17 @@ class LayoutCoordinator {
    * @param {{ width:number, height:number, align?:'left'|'center'|'right',
    *           valign?:'top'|'bottom', margin?:number }} rect 浮层自身尺寸 + 对齐 + 间距
    */
-  anchorFloatInContent(name: string, rect: FloatAnchorRequest = {}): void {
-    const key = String(name)
-    const v = this._floatViews.get(key)
-    if (!v || !this._win || this._win.isDestroyed()) return
+  private _resolveInContentBounds(rect: FloatAnchorRequest = {}): Rectangle | null {
+    if (!this._win || this._win.isDestroyed()) return null
     try {
       // 用**当前聚焦的那块网页面**矩形（侧栏聚焦时是侧栏，否则是活动格；分屏时是那一格）
       // ——见 `_focusedWebBounds`。若一律按整块内容区锚定，分屏下查找栏会横跨两格居中，
       // 侧栏聚焦时又会跑到旁边的标签页上去。
       const page = this._focusedWebBounds() || this._fallbackPageBounds()
-      if (!page || !(page.width > 0) || !(page.height > 0)) return
+      if (!page || !(page.width > 0) || !(page.height > 0)) return null
       const w = Math.max(0, Math.floor(rect.width || 0))
       const h = Math.max(0, Math.floor(rect.height || 0))
+      if (!w || !h) return null
       const margin = Math.max(0, Math.floor(rect.margin || 0))
       const align = rect.align === 'left' ? 'left' : rect.align === 'right' ? 'right' : 'center'
       const x = align === 'left'
@@ -6367,10 +6372,19 @@ class LayoutCoordinator {
       // 夹回网页矩形内（网页比浮层小时贴住左上角），再交给 setFloatBounds 做非负夹取。
       const clampedX = Math.max(page.x, Math.min(x, page.x + page.width - w))
       const clampedY = Math.max(page.y, Math.min(y, page.y + page.height - h))
-      this.setFloatBounds(key, { x: clampedX, y: clampedY, width: w, height: h })
+      return { x: clampedX, y: clampedY, width: w, height: h }
     } catch (e) {
-      console.error(`[layout] anchorFloatInContent(${key}) failed:`, errorMessage(e))
+      console.error('[layout] resolve in-content float failed:', errorMessage(e))
+      return null
     }
+  }
+
+  anchorFloatInContent(name: string, rect: FloatAnchorRequest = {}): void {
+    const key = String(name)
+    const v = this._floatViews.get(key)
+    if (!v) return
+    const out = this._resolveInContentBounds(rect)
+    if (out) this.setFloatBounds(key, out)
   }
 
   /**
@@ -6742,7 +6756,28 @@ class LayoutCoordinator {
     }
   }
 
+  /**
+   * 密码卡与权限 / 查找栏共用同一套 in-content 落位：
+   * renderer 只提交自己的 outer 尺寸和对齐意图，网页矩形与最大化后的夹取全在这里算。
+   */
+  anchorPasswordOverlayInContent(rect: FloatAnchorRequest = {}): void {
+    this._lastPasswordOverlayPlacement = {
+      width: Math.max(0, Math.floor(rect.width || 0)),
+      height: Math.max(0, Math.floor(rect.height || 0)),
+      align: rect.align,
+      valign: rect.valign,
+      margin: rect.margin
+    }
+    const out = this._resolveInContentBounds(rect)
+    if (out) this._applyPasswordOverlayBounds(out)
+  }
+
   setPasswordOverlayBounds(rect: Partial<Rectangle>): void {
+    this._lastPasswordOverlayPlacement = null
+    this._applyPasswordOverlayBounds(rect)
+  }
+
+  private _applyPasswordOverlayBounds(rect: Partial<Rectangle>): void {
     const w0 = Math.max(0, Math.floor((rect && rect.width) || 0))
     const h0 = Math.max(0, Math.floor((rect && rect.height) || 0))
     // 惰性：纯收起（0x0）且视图尚未创建时无需创建

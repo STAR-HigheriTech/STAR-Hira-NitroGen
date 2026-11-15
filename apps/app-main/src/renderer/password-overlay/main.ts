@@ -33,6 +33,7 @@
 import '@hira-ng/shared-ui-tokens/tokens-base.css'
 import '@hira-ng/shared-ui-tokens/tokens-light.css'
 import '@hira-ng/shared-ui-tokens/tokens-dark.css'
+import { injectOverlayCardStyles } from '@hira-ng/ui-common/src/overlayCard'
 import { createThemeController } from '../shared/theme-controller.js'
 import { getHiraBridge } from '../shared/bridge.js'
 import { IPC_EVENTS, IPC_ROUTES } from '@hira-ng/shared-types/src/ipc-channels.mjs'
@@ -102,8 +103,8 @@ function errorMessage(error: unknown): string {
 const OVERLAY_SIDE_PADDING = 28
 const OVERLAY_BOTTOM_PADDING = 28
 const OVERLAY_GAP = 12
-const SAVE_CARD_WIDTH = 320
-const UNLOCK_CARD_WIDTH = 340
+const SAVE_CARD_WIDTH = 380
+const UNLOCK_CARD_WIDTH = 380
 const MENU_CARD_WIDTH = 360
 
 // ── 互斥状态（本层有密码菜单 / 保存卡 / 解锁卡三张浮层）──────────
@@ -131,8 +132,6 @@ html, body, #root {
   background: transparent;
 }
 :root {
-  --pw-bg: var(--hira-bg-elevated, #ffffff);
-  --pw-fg: var(--hira-text-primary, #1a1a1a);
   --pw-fg-secondary: var(--hira-text-secondary, #6b7280);
   --pw-border: var(--hira-border-subtle, rgba(0, 0, 0, 0.1));
   --pw-hover: var(--hira-hover-bg, rgba(128, 128, 128, 0.12));
@@ -144,10 +143,6 @@ html, body, #root {
 .hira-password-menu, .hira-password-save {
   position: fixed;
   box-sizing: border-box;
-  background: var(--pw-bg);
-  color: var(--pw-fg);
-  border: 1px solid var(--pw-border);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
   display: none;
   pointer-events: auto;
 }
@@ -272,11 +267,12 @@ html, body, #root {
 .hira-password-unlock.is-busy button { opacity: 0.6; cursor: default; }
 .hira-password-unlock input:focus { outline: 2px solid color-mix(in srgb, var(--pw-accent) 45%, transparent); outline-offset: 1px; }
 `
+injectOverlayCardStyles(document)
 root.appendChild(style)
 
 // ── DOM：多凭据选择菜单 ─────────────────────────────────────
 const pwMenu = document.createElement('div')
-pwMenu.className = 'hira-password-menu'
+pwMenu.className = 'hira-password-menu hira-overlay-card'
 root.appendChild(pwMenu)
 
 /**
@@ -334,17 +330,6 @@ function clampIntoViewport(
   return { x: nx, y: ny }
 }
 
-function fitCardMetrics(viewport: OverlayViewport, preferredWidth: number, minWidth: number) {
-  const horizontalRoom = viewport.width - OVERLAY_GAP * 2
-  const fittedMinWidth = Math.min(minWidth, Math.max(80, horizontalRoom - 8))
-  const sidePadding = Math.min(OVERLAY_SIDE_PADDING, Math.max(4, Math.floor((horizontalRoom - fittedMinWidth) / 2)))
-  const cardWidth = Math.max(fittedMinWidth, Math.min(preferredWidth, horizontalRoom - sidePadding * 2))
-  const verticalRoom = viewport.height - OVERLAY_GAP * 2
-  const bottomPadding = Math.min(OVERLAY_BOTTOM_PADDING, Math.max(4, Math.floor((verticalRoom - 120) / 3)))
-  const cardMaxHeight = Math.max(120, verticalRoom - bottomPadding)
-  return { sidePadding, bottomPadding, cardWidth, cardMaxHeight }
-}
-
 function hidePasswordMenuInternal() {
   pwMenu.style.display = 'none'
   pwMenu.innerHTML = ''
@@ -352,18 +337,18 @@ function hidePasswordMenuInternal() {
 
 function layoutPasswordMenu(viewport: OverlayViewport, anchor = currentMenuAnchor): void {
   if (!anchor) return
-  const { sidePadding, bottomPadding, cardWidth, cardMaxHeight } = fitCardMetrics(viewport, MENU_CARD_WIDTH, 120)
-  pwMenu.style.minWidth = `${Math.min(240, cardWidth)}px`
-  pwMenu.style.maxWidth = `${cardWidth}px`
-  pwMenu.style.maxHeight = `${Math.min(240, cardMaxHeight)}px`
-  pwMenu.style.left = `${sidePadding}px`
+  pwMenu.style.width = `${MENU_CARD_WIDTH}px`
+  pwMenu.style.minWidth = `${MENU_CARD_WIDTH}px`
+  pwMenu.style.maxWidth = `${MENU_CARD_WIDTH}px`
+  pwMenu.style.maxHeight = '240px'
+  pwMenu.style.left = `${OVERLAY_SIDE_PADDING}px`
   pwMenu.style.top = '0px'
   pwMenu.style.display = 'block'
   const rect = pwMenu.getBoundingClientRect()
-  const viewW = Math.ceil(rect.width + sidePadding * 2)
-  const viewH = Math.ceil(rect.height + bottomPadding)
+  const viewW = Math.ceil(rect.width + OVERLAY_SIDE_PADDING * 2)
+  const viewH = Math.ceil(rect.height + OVERLAY_BOTTOM_PADDING)
   const pos = clampIntoViewport(
-    Math.round(anchor.x - sidePadding),
+    Math.round(anchor.x - OVERLAY_SIDE_PADDING),
     Math.round(anchor.y),
     viewW,
     viewH,
@@ -448,7 +433,7 @@ function hidePasswordMenu() {
 
 // ── DOM：保存密码提示卡 ─────────────────────────────────────
 const pwSave = document.createElement('div')
-pwSave.className = 'hira-password-save'
+pwSave.className = 'hira-password-save hira-overlay-card'
 root.appendChild(pwSave)
 // 事件委托**只注册一次**：卡片内容是每次 show 时重建的（innerHTML），
 // 若把监听写在 showPasswordSave 里，每次弹出都会多挂一份 → 一次点击保存多次。
@@ -466,24 +451,14 @@ function hidePasswordSaveInternal(collapseView = true) {
   if (collapseView) collapse()
 }
 
-function layoutPasswordSave(viewport: OverlayViewport): void {
-  const { sidePadding, bottomPadding, cardWidth, cardMaxHeight } = fitCardMetrics(viewport, SAVE_CARD_WIDTH, 140)
-  pwSave.style.width = `${cardWidth}px`
-  pwSave.style.maxHeight = `${cardMaxHeight}px`
-  pwSave.style.left = `${sidePadding}px`
+function layoutPasswordSave(): void {
+  pwSave.style.width = `${SAVE_CARD_WIDTH}px`
+  pwSave.style.maxHeight = 'none'
+  pwSave.style.left = `${OVERLAY_SIDE_PADDING}px`
   pwSave.style.top = '0px'
   pwSave.style.display = 'block'
   const rect = pwSave.getBoundingClientRect()
-  const viewW = Math.ceil(rect.width + sidePadding * 2)
-  const viewH = Math.ceil(rect.height + bottomPadding)
-  const pos = clampIntoViewport(
-    viewport.x + viewport.width - viewW - OVERLAY_GAP,
-    viewport.y + OVERLAY_GAP,
-    viewW,
-    viewH,
-    viewport
-  )
-  setBounds(pos.x, pos.y, viewW, viewH)
+  setBoundsInContent(Math.ceil(rect.width + OVERLAY_SIDE_PADDING * 2), Math.ceil(rect.height + OVERLAY_BOTTOM_PADDING), 'right', 'top', 0)
   setInteractive(true)
 }
 
@@ -556,7 +531,7 @@ function showPasswordSave({
   }
 
   const viewport = normalizeViewport(suppliedViewport, windowWidth, windowHeight)
-  if (viewport) layoutPasswordSave(viewport)
+  if (viewport) layoutPasswordSave()
 }
 
 function hidePasswordSave() {
@@ -599,7 +574,7 @@ function dismissSave() {
 //   stage='sign-in'  → 按 status.signInFields 动态渲染
 // 本页不认识 Bitwarden / 1Password，新增后端零改动。
 const pwUnlock = document.createElement('div')
-pwUnlock.className = 'hira-password-save hira-password-unlock'
+pwUnlock.className = 'hira-password-save hira-password-unlock hira-overlay-card'
 root.appendChild(pwUnlock)
 
 interface UnlockPayload {
@@ -700,27 +675,14 @@ function focusUnlockField() {
   if (first.select) first.select()
 }
 
-function layoutUnlock(payload: UnlockPayload): void {
-  const viewport = normalizeViewport(payload.viewport, payload.windowWidth, payload.windowHeight)
-  if (!viewport) return
-  const { sidePadding, bottomPadding, cardWidth, cardMaxHeight } = fitCardMetrics(viewport, UNLOCK_CARD_WIDTH, 200)
-  pwUnlock.style.width = `${cardWidth}px`
-  pwUnlock.style.maxHeight = `${cardMaxHeight}px`
-  pwUnlock.style.left = `${sidePadding}px`
+function layoutUnlock(): void {
+  pwUnlock.style.width = `${UNLOCK_CARD_WIDTH}px`
+  pwUnlock.style.maxHeight = 'none'
+  pwUnlock.style.left = `${OVERLAY_SIDE_PADDING}px`
   pwUnlock.style.top = '0px'
   pwUnlock.style.display = 'block'
   const rect = pwUnlock.getBoundingClientRect()
-  const viewW = Math.ceil(rect.width + sidePadding * 2)
-  const viewH = Math.ceil(rect.height + bottomPadding)
-  // 水平居中、垂直偏上（与浏览器原生密码弹窗体感一致），再整体钳进窗口
-  const pos = clampIntoViewport(
-    Math.round(viewport.x + (viewport.width - viewW) / 2),
-    viewport.y + Math.min(72, Math.max(OVERLAY_GAP, Math.round(viewport.height * 0.08))),
-    viewW,
-    viewH,
-    viewport
-  )
-  setBounds(pos.x, pos.y, viewW, viewH)
+  setBoundsInContent(Math.ceil(rect.width + OVERLAY_SIDE_PADDING * 2), Math.ceil(rect.height + OVERLAY_BOTTOM_PADDING), 'center', 'top', 0)
   setInteractive(true)
 }
 
@@ -745,7 +707,7 @@ function showPasswordUnlock(payload: UnlockPayload) {
   activeOverlay = 'password-unlock'
   currentUnlockPayload = payload
   renderUnlockCard(payload, payload.message || '')
-  layoutUnlock(payload)
+  layoutUnlock()
   setUnlockBusy(false)
   focusUnlockField()
 }
@@ -786,7 +748,7 @@ function switchUnlockStage(nextStage?: string): void {
   const next = { ...currentUnlockPayload, stage: nextStage === 'sign-in' ? 'sign-in' : 'unlock', message: '' }
   currentUnlockPayload = next
   renderUnlockCard(next, '')
-  layoutUnlock(next)
+  layoutUnlock()
   focusUnlockField()
 }
 
@@ -855,6 +817,27 @@ async function setBounds(x: number, y: number, width: number, height: number): P
   } catch (e) { console.error('[pw-overlay] set-bounds failed:', errorMessage(e)) }
 }
 
+async function setBoundsInContent(
+  width: number,
+  height: number,
+  align: 'left' | 'center' | 'right',
+  valign: 'top' | 'bottom',
+  margin = 0
+): Promise<void> {
+  try {
+    await getHiraBridge().provider.invoke(ROUTE_SET_BOUNDS, {
+      position: 'in-content',
+      width,
+      height,
+      align,
+      valign,
+      margin
+    })
+  } catch (e) {
+    console.error('[pw-overlay] in-content placement failed:', errorMessage(e))
+  }
+}
+
 function reflowPasswordOverlay(value: unknown): void {
   const viewport = normalizeViewport(value)
   if (!viewport) return
@@ -863,12 +846,12 @@ function reflowPasswordOverlay(value: unknown): void {
     return
   }
   if (activeOverlay === 'password-save' && currentSavePayload) {
-    layoutPasswordSave(viewport)
+    layoutPasswordSave()
     return
   }
   if (activeOverlay === 'password-unlock' && currentUnlockPayload) {
     currentUnlockPayload = { ...currentUnlockPayload, viewport }
-    layoutUnlock(currentUnlockPayload)
+    layoutUnlock()
   }
 }
 

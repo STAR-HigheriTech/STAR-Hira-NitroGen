@@ -881,7 +881,11 @@ export function registerLayoutIpc(
     requestSchema: schemas.floatBounds.request,
     responseSchema: schemas.floatBounds.response,
     handler: async (_e, req) => {
-      layoutCoordinator.setPasswordOverlayBounds(req || {})
+      if (req && req.position === 'in-content' && typeof layoutCoordinator.anchorPasswordOverlayInContent === 'function') {
+        layoutCoordinator.anchorPasswordOverlayInContent(req)
+      } else {
+        layoutCoordinator.setPasswordOverlayBounds(req || {})
+      }
       return { ok: true }
     }
   })
