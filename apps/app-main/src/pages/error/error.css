@@ -109,6 +109,11 @@ body {
   color: var(--text-soft);
 }
 
+.icon.risk {
+  background: color-mix(in srgb, #d93025 10%, transparent);
+  color: #c2410c;
+}
+
 h1 {
   font-size: 22px;
   font-weight: 650;
@@ -147,6 +152,11 @@ h1 {
   font-size: 12px;
   font-family: var(--hira-font-mono, "SF Mono", Consolas, "Microsoft YaHei UI", "Microsoft YaHei", monospace);
   letter-spacing: 0.02em;
+  max-width: 100%;
+  height: auto;
+  min-height: var(--ctl-h);
+  padding-block: 6px;
+  overflow-wrap: anywhere;
 }
 .code:empty {
   display: none;

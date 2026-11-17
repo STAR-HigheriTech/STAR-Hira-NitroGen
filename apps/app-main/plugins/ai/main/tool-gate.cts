@@ -11,8 +11,8 @@
  * 三条判定（顺序即优先级，见 `evaluate`）：
  *   1. **总授权**：审批模式 `allow` 时，除破坏性操作（`risk=destructive`）外一律放行，
  *      审计里记 `reason: 'auto'`；
- *   2. **授权记忆**：用户点过「始终允许」的工具（跨会话 / 跨重启）不再问，
- *      审计里记 `reason: 'remembered'`；
+ *   2. **授权记忆**：用户在同一站点点过「始终允许」的工具（跨会话 / 跨重启）
+ *      不再问，审计里记 `reason: 'remembered'`；
  *   3. 其余按声明：`always` 每次问，`site` 首次问，`never` 不问。
  *
  * 为什么 `allow` 从"只放行只读"放宽到"非破坏性全放行"：允许模式对用户是
@@ -75,9 +75,17 @@ function tabUrl(getTabManager: GateContext['getTabManager'], tabId: unknown): st
  * 退化成 `local`（等于"整个会话只问一次"），与 §10.1 的"按站点"不符。
  */
 function siteOf(args: ToolArgs | undefined, ctx: GateContext | undefined): string {
-  const explicit = args && typeof args.url === 'string' ? args.url : ''
-  const fromArgs = originOf(explicit)
-  if (fromArgs) return fromArgs
+  for (const key of ['url', 'origin', 'domain']) {
+    const value = args && typeof args[key] === 'string' ? String(args[key]).trim() : ''
+    if (!value) continue
+    const direct = originOf(value)
+    if (direct) return direct
+    const host = value.replace(/^\.+/, '')
+    if (/^[a-z0-9.-]+(?::\d+)?$/i.test(host)) {
+      const normalized = originOf(`https://${host}`)
+      if (normalized) return normalized
+    }
+  }
   const tabId = (args && args.tabId) || (ctx && ctx.tabId) || ''
   return originOf(tabUrl(ctx && ctx.getTabManager, tabId)) || 'local'
 }
@@ -141,7 +149,7 @@ function evaluate({ tool, args, approvalMode, granted }: {
  */
 function createToolGate({ approvals, grants, audit, logger = console }: {
   approvals: { request(payload: UnknownRecord): Promise<GateDecision> }
-  grants: { has(toolName: string): boolean; add(toolName: string, site?: string): unknown }
+  grants: { has(toolName: string, site?: string): boolean; add(toolName: string, site?: string): unknown }
   audit(row: { sessionId: string; toolName: string; args?: ToolArgs; decision: string; reason: string }): void
   logger?: Pick<Console, 'warn'>
 }) {
@@ -162,7 +170,7 @@ function createToolGate({ approvals, grants, audit, logger = console }: {
     // 而同一个工具的低风险档（如 skill_save 的 prompt）与高风险档（script）
     // 共用名字 —— 记住低风险档就会把高风险档一并放行。
     const dynamic = typeof tool.approval === 'function'
-    const policy = evaluate({ tool, args, approvalMode, granted: !dynamic && grants.has(tool.name) })
+    const policy = evaluate({ tool, args, approvalMode, granted: !dynamic && grants.has(tool.name, site) })
 
     if (!policy.needsApproval) {
       return { allowed: true, reason: policy.reason, site }

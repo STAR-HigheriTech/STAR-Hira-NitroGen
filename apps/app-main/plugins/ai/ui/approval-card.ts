@@ -4,7 +4,7 @@
  * 一条硬约束：**卡片是回合的唯一放行口**。用户不点，回合就停在 `approvals.request()` 里。
  * 因此这里不做"稍后处理"这类中间态 —— 只有三个出口：
  *   · 允许一次：只放行这一条，模式不变；
- *   · 始终允许：记住这个工具（落库，重启也免问）**并开启「允许」模式**；
+ *   · 始终允许：记住这个工具在当前站点的授权（落库，重启也免问）；
  *   · 拒绝。
  */
 
@@ -32,7 +32,7 @@ const RISK_TEXT: Record<string, string> = Object.freeze({
  * @param {{
  *   onResolve: (approvalId: string, decision: 'allow'|'deny', remember?: boolean) => void,
  *   onAlways: (approvalId: string) => void
- * }} handlers `onAlways` 由宿主实现完整语义：记住工具 + 切允许模式 + 放行本条（见 store.allowAlways）。
+ * }} handlers `onAlways` 由宿主实现完整语义：记住工具在当前站点的授权 + 放行本条。
  * @returns {HTMLElement}
  */
 export function createApprovalCard(doc: Document, payload: ApprovalCardPayload, handlers: {
@@ -74,12 +74,11 @@ export function createApprovalCard(doc: Document, payload: ApprovalCardPayload, 
   const always: HTMLButtonElement = /** @type {HTMLButtonElement} */ (h(doc, 'button', 'ai-btn is-success'))
   always.type = 'button'
   always.textContent = '始终允许'
-  always.title = '记住这个工具（重启后也免问），并开启「允许」模式'
+  always.title = '记住这个工具在当前站点的授权（重启后也免问）'
   always.addEventListener('click', () => handlers.onAlways(payload.approvalId))
 
   attach(actions, deny, allow, always)
   card.appendChild(actions)
-  // 说清"始终允许"的副作用：它既记住这个工具，也把模式开关拨到「允许」。
-  card.appendChild(h(doc, 'div', 'ai-approval__hint', '「始终允许」会记住这个工具并切换到允许模式；输入栏按钮可随时切回询问。'))
+  card.appendChild(h(doc, 'div', 'ai-approval__hint', '仅记住这个工具在当前站点的授权；全局允许模式仍需在输入栏单独开启。'))
   return card
 }

@@ -165,12 +165,6 @@ export interface PermissionRequestRegistry {
   clear(): void
 }
 
-export interface PermissionGrantRegistry {
-  add(key: string): void
-  has(key: string): boolean
-  removeScope(prefix: string): number
-}
-
 export interface PermissionServiceOptions {
   profileId?: string
   emit?: PermissionEmitter
@@ -178,7 +172,6 @@ export interface PermissionServiceOptions {
   permissionTypes?: PermissionTypeList
   repository?: PermissionRepository
   requestRegistry?: PermissionRequestRegistry
-  grantRegistry?: PermissionGrantRegistry
   now?: () => number
   createId?: (prefix: string) => string
 }
@@ -222,11 +215,6 @@ export interface PermissionService {
   pendingWithFlags(): PendingPermissionFlagged[]
   rejectAllPending(): void
   rejectPendingForScope(scopeId?: PermissionScopeId | null): number
-
-  isGrantedFor(origin: string, permissionType: string, scopeId?: PermissionScopeId): boolean
-  hasGrant(origin: string, permissionType: string, scopeId?: PermissionScopeId): boolean
-  addGrant(origin: string, permissionType: string, scopeId?: PermissionScopeId): void
-  clearGrants(scopeId?: PermissionScopeId | null): number
 
   normalizeDomain(origin: string): string
   readonly PERMISSION_TYPES: PermissionTypeList

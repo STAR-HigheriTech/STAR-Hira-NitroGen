@@ -3,7 +3,7 @@ import { createRequestLanes } from './request-lanes'
 import { makeTranslationGroups } from './text-batches'
 
 const PAGE_URL = 'https://www.bing.com/translator'
-const TRANSLATE_URL = 'https://www.bing.com/ttranslatev3'
+const TRANSLATE_URL = 'https://cn.bing.com/ttranslatev3'
 const MAX_TEXTS_PER_REQUEST = 48
 const MAX_CHARS_PER_REQUEST = 900
 
@@ -94,6 +94,7 @@ export function createBingTranslationProvider(
     const task = http.requestText(PAGE_URL, {
       signal,
       timeoutMs: 4_000,
+      followRedirects: true,
       headers: {
         Accept: 'text/html,application/xhtml+xml',
         'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
@@ -130,11 +131,11 @@ export function createBingTranslationProvider(
         method: 'POST',
         signal,
         timeoutMs: 6_000,
+        followRedirects: true,
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           Accept: '*/*',
-          Origin: 'https://www.bing.com',
-          Referer: PAGE_URL,
+          Referer: 'https://cn.bing.com/translator',
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36 Edg/140.0.0.0'
         },
         body: body.toString()
@@ -154,7 +155,7 @@ export function createBingTranslationProvider(
     label: options.label || 'Bing 中国',
     kind: 'online',
     order: 5,
-    timeoutMs: 9_000,
+    timeoutMs: 18_000,
     async warmup(): Promise<void> {
       await getToken(false)
     },

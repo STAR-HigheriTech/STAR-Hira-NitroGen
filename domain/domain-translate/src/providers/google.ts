@@ -50,7 +50,7 @@ export function createGoogleTranslationProvider(
     label: options.label || 'Google 翻译',
     kind: 'online',
     order: 10,
-    timeoutMs: 8_000,
+    timeoutMs: 12_000,
     async translate(request: TranslationProviderRequest): Promise<readonly string[]> {
       const target = TARGET_TAGS[request.to] || request.to
       const source = request.from && request.from !== 'auto' ? request.from : 'auto'

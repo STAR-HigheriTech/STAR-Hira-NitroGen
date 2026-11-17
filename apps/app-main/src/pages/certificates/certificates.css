@@ -1,49 +1,142 @@
-/* 证书页 —— 只覆盖 base.css 之外的少量局部规则。
-   口径同面板原子层：零描边、软底分区、靠底色分层。 */
+.certificate-page {
+  padding-bottom: 28px;
+}
+
+.certificate-page > .notice {
+  margin-bottom: 14px;
+}
 
 .status {
   color: var(--text-soft);
   font-size: 13px;
 }
 
-/* 顶部说明走骨架的 .notice，这里只补与列表的间距 */
-.notice {
-  margin-bottom: 14px;
-}
-
-/* 证书卡片：容器用骨架的 .card（surface / 圆角 / 卡片间距都交给骨架），
-   本页只补卡片内部的域名 / 错误码 / 明细网格这几行。 */
-.card-host {
-  font-size: 14px;
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-
-.card-error {
-  margin-top: 2px;
-  color: var(--danger);
-  font-family: var(--hira-font-mono, ui-monospace, Consolas, "Microsoft YaHei UI", "Microsoft YaHei", monospace);
-  font-size: 12px;
-}
-
-/* 明细网格：与骨架 .def-grid 同口径（次要文字不低于 text-soft），
-   只是等宽值更密，所以单独收紧字号与列距。 */
-.card-grid {
-  margin-top: 10px;
+.certificate-list {
   display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 4px 14px;
+  gap: 12px;
+}
+
+.certificate-list .card + .card {
+  margin-top: 0;
+}
+
+.certificate-card,
+.certificate-error-card {
+  min-width: 0;
+}
+
+.certificate-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.certificate-card__identity {
+  min-width: 0;
+}
+
+.certificate-card__host {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.certificate-card__url {
+  margin-top: 3px;
+  color: var(--text-soft);
+  font-family: var(--hira-font-mono, ui-monospace, Consolas, "Microsoft YaHei UI", "Microsoft YaHei", monospace);
+  font-size: 11.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.certificate-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.certificate-card__meta {
+  margin-top: 10px;
+  color: var(--text-soft);
   font-size: 12px;
 }
 
-.card-grid dt {
-  color: var(--text-soft);
-  white-space: nowrap;
+.certificate-grid {
+  margin-top: 14px;
 }
 
-.card-grid dd {
-  margin: 0;
+.certificate-grid dd {
+  white-space: pre-wrap;
+}
+
+.certificate-chain {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hira-divider, color-mix(in srgb, currentColor 10%, transparent));
+}
+
+.certificate-chain__summary {
+  width: fit-content;
+  color: var(--text-soft);
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.certificate-chain__list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.certificate-chain__item {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.certificate-chain__text {
+  min-width: 0;
+}
+
+.certificate-chain__subject {
   color: var(--text);
-  font-family: var(--hira-font-mono, ui-monospace, Consolas, "Microsoft YaHei UI", "Microsoft YaHei", monospace);
+  font-size: 12.5px;
   overflow-wrap: anywhere;
+}
+
+.certificate-chain__issuer {
+  margin-top: 2px;
+  color: var(--text-soft);
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+}
+
+.certificate-empty {
+  margin-top: 0;
+}
+
+@media (max-width: 640px) {
+  .certificate-card__head {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .certificate-card__badges {
+    justify-content: flex-start;
+  }
+
+  .certificate-grid {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .certificate-grid dd {
+    margin-bottom: 7px;
+  }
 }

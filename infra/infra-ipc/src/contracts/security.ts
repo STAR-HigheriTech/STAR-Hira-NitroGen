@@ -57,10 +57,31 @@ const siteCertificate = z.object({
   san: z.array(z.string())
 })
 
+const observedSiteCertificate = z.object({
+  origin: z.string(),
+  observedAt: z.number(),
+  secure: z.boolean(),
+  protocol: z.string(),
+  hostname: z.string().nullable(),
+  tabId: z.string().nullable(),
+  certificate: siteCertificate.nullable(),
+  certificateChain: z.array(siteCertificate),
+  error: z.string().nullable()
+})
+
 const certificateSchemas = Object.freeze({
   list: Object.freeze({
     request: z.unknown().optional(),
-    response: z.object({ certificates: z.array(certificateErrorItem) })
+    response: z.object({
+      /** 本会话发生过的证书校验失败 */
+      certificates: z.array(certificateErrorItem),
+      /** 本会话成功读取过的站点证书，供证书页在非来源标签场景复用 */
+      siteCertificates: z.array(observedSiteCertificate)
+    })
+  }),
+  safeContinue: Object.freeze({
+    request: z.object({ url: z.string().url() }),
+    response: z.object({ ok: z.boolean() })
   }),
   /**
    * `security:site` —— 活动标签的传输安全与证书链。
@@ -75,9 +96,12 @@ const certificateSchemas = Object.freeze({
       secure: z.boolean(),
       protocol: z.string(),
       hostname: z.string().nullable(),
+      origin: z.string().nullable(),
       /** 本次结果对应的标签 id；渲染层用它丢弃切换标签后迟到的旧结果 */
       tabId: z.string().nullable(),
       certificate: siteCertificate.nullable(),
+      /** CDP 返回的完整证书链，叶子证书在前 */
+      certificateChain: z.array(siteCertificate),
       /** 查询降级原因（仅用于诊断展示，不阻断 UI） */
       error: z.string().nullable()
     })

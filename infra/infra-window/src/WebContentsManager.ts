@@ -410,8 +410,29 @@ class WebContentsManager {
       if (event.level !== 'error' && event.level !== 'warning') return
       console.error(`[float:${key}] console:`, event.message, `${event.sourceId || ''}:${event.lineNumber}`)
     })
+    let crashAttempts = 0
+    let lastCrashAt = 0
     wc.on('render-process-gone', (_e, details) => {
       console.error(`[float:${key}] render-process-gone`, details && details.reason, details && details.exitCode)
+      if (!details || details.reason === 'clean-exit') return
+      const now = Date.now()
+      if (now - lastCrashAt > 60_000) crashAttempts = 0
+      lastCrashAt = now
+      if (crashAttempts >= 3) {
+        console.error(`[float:${key}] renderer crashed repeatedly; automatic recovery stopped`)
+        return
+      }
+      crashAttempts += 1
+      // 同一 WebContentsView 的 renderer 崩溃后页面是空的。重载页面本身；
+      // 权限浮层会在 ready 时让外壳重推 pending，避免恢复成一块空白浮层。
+      this._floatLoadPromises.delete(key)
+      const timer = setTimeout(() => {
+        if (wc.isDestroyed()) return
+        this.loadFloatView(key).catch((error: unknown) => {
+          console.error(`[float:${key}] crash recovery failed:`, error instanceof Error ? error.message : String(error))
+        })
+      }, 250 * crashAttempts)
+      if (typeof timer.unref === 'function') timer.unref()
     })
 
     this._floatViews.set(key, view)
@@ -506,8 +527,27 @@ class WebContentsManager {
     const wc = view.webContents
     wc.on('did-fail-load', (_e, code, desc, url) => console.error('[pw-overlay] did-fail-load', code, desc, url))
     wc.on('preload-error', (_e, preloadPath, err) => console.error('[pw-overlay] preload-error', preloadPath, err && err.message))
+    let crashAttempts = 0
+    let lastCrashAt = 0
     wc.on('render-process-gone', (_e, details) => {
       console.error('[pw-overlay] render-process-gone', details && details.reason, details && details.exitCode)
+      if (!details || details.reason === 'clean-exit') return
+      const now = Date.now()
+      if (now - lastCrashAt > 60_000) crashAttempts = 0
+      lastCrashAt = now
+      if (crashAttempts >= 3) {
+        console.error('[pw-overlay] renderer crashed repeatedly; automatic recovery stopped')
+        return
+      }
+      crashAttempts += 1
+      this._passwordOverlayLoadPromise = null
+      const timer = setTimeout(() => {
+        if (wc.isDestroyed()) return
+        this.loadPasswordOverlay().catch((error: unknown) => {
+          console.error('[pw-overlay] crash recovery failed:', error instanceof Error ? error.message : String(error))
+        })
+      }, 250 * crashAttempts)
+      if (typeof timer.unref === 'function') timer.unref()
     })
 
     this._passwordOverlayView = view

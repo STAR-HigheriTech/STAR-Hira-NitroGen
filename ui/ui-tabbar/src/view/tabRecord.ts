@@ -114,10 +114,13 @@ export function createTabRecord(
   })
 
   // 拖拽排序（原生 HTML5 DnD）。生命周期交给落点控制器：它只管「开始 / 结束」，
-  // 落点语义全部由那边的六条规则解释（本模块不解释任何手势）。
+  // 落点语义全部由那边的七条规则解释（本模块不解释任何手势）。
   el.addEventListener('dragstart', (e: DragEvent) => {
     const dataTransfer = e.dataTransfer
     if (!dataTransfer) return
+    // 拖拽是移动意图，不是 hover：立即收起并暂停预览，避免 dragstart 后的补发
+    // mouseover 重新起表（此时键盘 / 操作焦点都已经不在被 hover 的标签上）。
+    if (preview) preview.suspend()
     // 先记下「拖动前正在看的那一格」——分屏落点要配对的正是它。
     // 必须**在下面的切换之前**取：拖拽会把当前标签切到被拖的这个（Edge / Chrome 同口径），
     // 切完再问就只剩被拖的那个了（见 gestures.js#currentActiveTabIdFromDom 的说明）。
@@ -156,6 +159,8 @@ export function createTabRecord(
   })
   el.addEventListener('dragend', () => {
     el.style.opacity = ''
+    // 保持暂停到指针真实移动：拖拽结束时的合成 mouseover 不能重新拉起预览。
+    if (preview) preview.resume()
     if (drag) drag.end()
     // ── Arc 式入口：拖到**网页区域**松手 = 与"拖动前正在看的那一格"分屏 ─────────
     // 这里只报两个 id（"拖前在看哪个"可能为空）—— **落点与判定全在主进程**：
@@ -174,8 +179,15 @@ export function createTabRecord(
   // 右键菜单：弹层与动作分发都在菜单模块里，本行只上报坐标与快照
   el.addEventListener('contextmenu', async (e: MouseEvent) => {
     e.preventDefault()
-    if (typeof ports.openMenu !== 'function') return
-    await ports.openMenu(e.clientX, e.clientY, state)
+    if (preview) preview.suspend()
+    try {
+      if (typeof ports.openMenu === 'function') {
+        await ports.openMenu(e.clientX, e.clientY, state)
+      }
+    } finally {
+      // 菜单关闭后仍要求先有真实的 pointermove，不能靠补发 mouseover 自动弹回。
+      if (preview) preview.resume()
+    }
   })
 
   return {

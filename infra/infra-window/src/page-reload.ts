@@ -1,12 +1,12 @@
 /**
  * page-reload —— 「刷新」的**唯一语义实现**。
  *
- * 错误页是过渡视图，不是用户要访问的页面：此刻 `webContents.getURL()` 是
- * `hira://error?...`，直接 `reload()` 只会把错误页再加载一遍，表现就是
- * 「点刷新没反应 / 网络恢复后仍停在错误页」。用户按刷新想重试的是**原网址**。
+ * 错误页与安全警告页都是过渡视图，不是用户要访问的页面：此刻
+ * `webContents.getURL()` 是 `hira://error?...` / `hira://security-warning?...`，
+ * 直接 `reload()` 只会把过渡页再加载一遍。用户按刷新想重试的是**原网址**。
  *
  * 所以「刷新」只有两条分支，且必须全项目同源：
- *   · 当前在错误页 → `loadURL(失败地址)`（= 重试）；
+ *   · 当前在错误页 / 安全警告页 → `loadURL(目标地址)`（= 重试 / 继续前往）；
  *   · 其余情况     → `reload()`（保留 POST / 滚动等原生语义）。
  *
  * 消费者：
@@ -22,6 +22,8 @@
 import type { WebContents } from 'electron'
 
 const { isWebErrorUrl, failedUrlOfErrorPage } = require('@hira-ng/shared-types/src/web-error')
+const { isSecurityWarningUrl, targetUrlOfSecurityWarning } =
+  require('@hira-ng/shared-types/src/security-warning')
 
 /**
  * 当前页面地址（webContents 不可用时返回 ''）。
@@ -45,6 +47,7 @@ function liveUrlOf(wc: WebContents | null | undefined): string {
  */
 export function retryUrlOf(wc: WebContents | null | undefined, fallbackUrl: string = ''): string {
   const current = liveUrlOf(wc)
+  if (isSecurityWarningUrl(current)) return targetUrlOfSecurityWarning(current)
   if (!isWebErrorUrl(current)) return ''
   const recorded = String(fallbackUrl == null ? '' : fallbackUrl).trim()
   if (recorded && !isWebErrorUrl(recorded)) return recorded

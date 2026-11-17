@@ -154,14 +154,17 @@ window.addEventListener('load', function () {
 
   function getTabOrder (): HTMLElement[] {
     const suppressVisible = !!suppressWrap && suppressWrap.style.display !== 'none'
+    const cancelVisible = currentType !== 'alert' && cancelBtn.style.display !== 'none'
     if (currentType === 'prompt') {
-      return suppressVisible
-        ? [inputEl, okBtn, cancelBtn, suppressCheckbox]
-        : [inputEl, okBtn, cancelBtn]
+      const order: HTMLElement[] = [inputEl, okBtn]
+      if (cancelVisible) order.push(cancelBtn)
+      if (suppressVisible) order.push(suppressCheckbox)
+      return order
     }
-    return suppressVisible
-      ? [okBtn, cancelBtn, suppressCheckbox]
-      : [okBtn, cancelBtn]
+    const order: HTMLElement[] = [okBtn]
+    if (cancelVisible) order.push(cancelBtn)
+    if (suppressVisible) order.push(suppressCheckbox)
+    return order
   }
 
   function focusNext (forward: boolean): void {

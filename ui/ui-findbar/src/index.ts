@@ -39,7 +39,7 @@ const STYLE_ID = 'hira-findbar-styles'
  * 浮层视图比胶囊本身多出来的四周留白（投影扩散范围）。
  * 宿主按「胶囊尺寸 + 2×本值」上报 view 尺寸，胶囊自己按本值内缩定位。
  */
-export const FINDBAR_SHADOW_PAD = 18
+export const FINDBAR_SHADOW_PAD = 24
 
 export interface FindQueryOptions {
   forward: boolean
@@ -84,7 +84,7 @@ export function injectFindbarStyles(doc: Document): void {
       border-radius: var(--hira-theme-radius, 12px);
       background: var(--hira-bg-elevated, #f7f9fc);
       border: 1px solid var(--hira-border-subtle, rgba(0, 0, 0, 0.1));
-      box-shadow: var(--hira-findbar-shadow, 0 8px 24px rgba(0, 0, 0, 0.2));
+      box-shadow: var(--hira-findbar-shadow, 0 4px 15px rgba(0, 0, 0, 0.17));
       /* 唯一字体令牌（shared-types/theme.mjs#UI_FONT_STACK）；兜底串同值。 */
       font-family: var(--hira-font-ui, "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", system-ui, -apple-system, sans-serif);
       font-size: 13px;
@@ -96,7 +96,7 @@ export function injectFindbarStyles(doc: Document): void {
     }
     .hira-findbar:focus-within {
       border-color: var(--hira-accent-soft-strong, rgba(0, 0, 0, 0.2));
-      box-shadow: var(--hira-findbar-focus-shadow, 0 10px 28px rgba(0, 0, 0, 0.24));
+      box-shadow: var(--hira-findbar-focus-shadow, 0 6px 19px rgba(0, 0, 0, 0.2));
     }
     .hira-findbar.is-shown { animation: hira-findbar-in 140ms cubic-bezier(0.2, 0.8, 0.3, 1); }
     @keyframes hira-findbar-in {
@@ -171,12 +171,12 @@ export function injectFindbarStyles(doc: Document): void {
   const shadow = doc.createElement('style')
   shadow.textContent = `
     :root {
-      --hira-findbar-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-      --hira-findbar-focus-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
+      --hira-findbar-shadow: 0 4px 15px rgba(0, 0, 0, 0.17);
+      --hira-findbar-focus-shadow: 0 6px 19px rgba(0, 0, 0, 0.2);
     }
     body.dark, body.dark-mode, html[data-theme='dark'] {
-      --hira-findbar-shadow: 0 10px 30px rgba(0, 0, 0, 0.58);
-      --hira-findbar-focus-shadow: 0 12px 34px rgba(0, 0, 0, 0.66);
+      --hira-findbar-shadow: 0 5px 17px rgba(0, 0, 0, 0.46);
+      --hira-findbar-focus-shadow: 0 7px 21px rgba(0, 0, 0, 0.52);
     }
   `
   doc.head.appendChild(shadow)

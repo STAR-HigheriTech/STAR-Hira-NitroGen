@@ -65,7 +65,7 @@ interface AutofillUnlockDependencies {
     listBackends(): unknown
     backendAction(name: string, action: string, payload?: Record<string, unknown>): Promise<unknown>
   }
-  sendOverlayEvent?(route: string, payload?: Record<string, unknown>): void
+  sendOverlayEvent?(route: string, payload?: Record<string, unknown>): void | boolean | Promise<boolean>
   events: { overlayShowPasswordUnlock: string; overlayHidePasswordUnlock: string }
   getWindowSize?(): [number, number] | null
   getViewport?(): { x: number; y: number; width: number; height: number } | null
@@ -103,10 +103,14 @@ export function createAutofillUnlockFlow(deps: AutofillUnlockDependencies) {
   let suppressedHost = ''
   let suppressedUntil = 0
 
-  const send = (route: string, payload?: Record<string, unknown>): void => {
+  const send = (route: string, payload?: Record<string, unknown>): boolean | Promise<boolean> => {
     try {
-      if (typeof sendOverlayEvent === 'function') sendOverlayEvent(route, payload || {})
-    } catch (_) { /* 浮层不可用不影响主流程 */ }
+      if (typeof sendOverlayEvent !== 'function') return false
+      const result = sendOverlayEvent(route, payload || {})
+      return typeof result === 'boolean' || result instanceof Promise ? result : true
+    } catch (_) {
+      return false
+    }
   }
 
   function windowSize(): [number, number] {
@@ -135,7 +139,12 @@ export function createAutofillUnlockFlow(deps: AutofillUnlockDependencies) {
 
   /** 把卡片推到密码浮层（stage: 'unlock' | 'sign-in'，message 为行内错误）。 */
   function present(backend: { name: string; status: BackendStatus } | null, stage: 'unlock' | 'sign-in', message: string): void {
-    if (!backend) return
+    // 后端在等待期间被停用 / 卸载：结束本次等待，让原 getSuggestions 继续走
+    // 内置库回落，不能让卡片停在 busy，也不能让 Promise 永久悬着。
+    if (!backend) {
+      finish()
+      return
+    }
     const status = backend.status || {}
     const [width, height] = windowSize()
     let viewport: { x: number; y: number; width: number; height: number } | null = null
@@ -155,7 +164,8 @@ export function createAutofillUnlockFlow(deps: AutofillUnlockDependencies) {
         }
       }
     } catch (_) {}
-    send(EVENT_SHOW, {
+    const request = pending
+    const delivery = send(EVENT_SHOW, {
       backend: backend.name,
       displayName: status.displayName || backend.name,
       stage,
@@ -169,6 +179,14 @@ export function createAutofillUnlockFlow(deps: AutofillUnlockDependencies) {
       windowHeight: height,
       viewport
     })
+    if (delivery === false) {
+      settlePending()
+    } else if (delivery instanceof Promise) {
+      delivery.then(
+        (delivered) => { if (delivered === false && pending === request) settlePending() },
+        () => { if (pending === request) settlePending() }
+      )
+    }
   }
 
   function settlePending(): void {

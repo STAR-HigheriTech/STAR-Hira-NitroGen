@@ -41,6 +41,7 @@ export interface OverviewSectionSpec {
   limit: number
   zone: 'above' | 'below'
   searchable: boolean
+  keepEmpty?: boolean
   matchKeys: readonly string[]
   target: Readonly<{ panel: string; label: string }>
   headerTarget?: boolean
@@ -57,6 +58,9 @@ export const OVERVIEW_SECTIONS: readonly OverviewSectionSpec[] = Object.freeze([
     limit: 2,
     zone: 'above',
     searchable: false,
+    // 空间为空时仍保留块头：profile 选项卡住在这里，不能因为当前 profile
+    // 暂时没有空间就把唯一的切换入口一起藏掉。
+    keepEmpty: true,
     matchKeys: Object.freeze(['name']),
     target: Object.freeze({ panel: 'spaces-panel', label: '空间面板' }),
     // 无溢出时块头给「转到空间面板」小字；有溢出时由省略行承担（不重复）。
@@ -107,6 +111,9 @@ export const OVERVIEW_SECTIONS: readonly OverviewSectionSpec[] = Object.freeze([
     actionLabel: '刷新'
   })
 ])
+
+/** 总览空间块最多展示的近期 profile 数。 */
+export const OVERVIEW_PROFILE_LIMIT = 3
 
 /** 由单表派生一张「kind → 某字段」的只读表（派生而不是再抄一份）。 */
 function derive<T>(pick: (section: OverviewSectionSpec) => T): Readonly<Record<string, T>> {
@@ -187,10 +194,18 @@ export type OverviewItem = Record<string, unknown>
 
 export interface OverviewInput {
   spaces?: OverviewItem[]
+  profiles?: OverviewItem[]
   tabs?: OverviewItem[]
   recent?: OverviewItem[]
   sessions?: OverviewItem[]
+  activeProfileId?: string
   query?: string
+}
+
+export interface OverviewProfileTab {
+  id: string
+  name: string
+  color: string
 }
 
 export interface OverviewSection {
@@ -205,6 +220,36 @@ export interface OverviewSection {
   headerTarget: boolean
   action: string
   actionLabel: string
+}
+
+/**
+ * 近期 profile 选项卡。输入顺序由 profile 服务保证为 lastActiveAt 降序；
+ * 这里只做去重、上限与「活动项必须可见」的保护。
+ */
+function buildProfileTabs(
+  input: OverviewItem[],
+  activeProfileId: string
+): { profiles: OverviewProfileTab[]; activeProfileId: string } {
+  const seen = new Set<string>()
+  const profiles: OverviewProfileTab[] = []
+  for (const item of input) {
+    if (!item || typeof item.id !== 'string' || !item.id || seen.has(item.id)) continue
+    seen.add(item.id)
+    profiles.push({
+      id: item.id,
+      name: typeof item.name === 'string' && item.name ? item.name : item.id,
+      color: typeof item.color === 'string' ? item.color : ''
+    })
+  }
+
+  const activeIndex = activeProfileId ? profiles.findIndex((profile) => profile.id === activeProfileId) : -1
+  if (activeIndex > 0) profiles.unshift(profiles.splice(activeIndex, 1)[0])
+  const visible = profiles.slice(0, OVERVIEW_PROFILE_LIMIT)
+  const selected = visible.find((profile) => profile.id === activeProfileId)
+  return {
+    profiles: visible,
+    activeProfileId: selected?.id || visible[0]?.id || activeProfileId
+  }
 }
 
 function buildSection(spec: OverviewSectionSpec, items: OverviewItem[], limit: number | null, searching: boolean): OverviewSection {
@@ -229,20 +274,30 @@ function buildSection(spec: OverviewSectionSpec, items: OverviewItem[], limit: n
   }
 }
 
-/** 空块一律不画（浏览态没内容、搜索态没命中，都不该顶着个空标题）。 */
-function isVisible(section: OverviewSection): boolean {
-  return section.items.length > 0
+/** 空块默认不画；显式 keepEmpty 的块（空间）仍保留块头与自己的切换入口。 */
+function isVisible(section: OverviewSection, spec: OverviewSectionSpec): boolean {
+  return section.items.length > 0 || spec.keepEmpty === true
 }
 
 /**
  * 把各块数据 + 查询串，编成搜索框上下两组 Section。
  *
  * @param {Record<string, any[]> & { query?: string }} [input] 键 = descriptor 的 kind
- * @returns {{ mode: 'browse'|'search', query: string, top: object[], bottom: object[] }}
+ * @returns {{
+ *   mode: 'browse'|'search', query: string, top: object[], bottom: object[],
+ *   profiles: OverviewProfileTab[], activeProfileId: string
+ * }}
  *   top    = 搜索框**上方**的块
  *   bottom = 搜索框**下方**的块
  */
-export function buildOverview(input: OverviewInput = {}) : { mode: 'browse'|'search', query: string, top: OverviewSection[], bottom: OverviewSection[] } {
+export function buildOverview(input: OverviewInput = {}) : {
+  mode: 'browse'|'search'
+  query: string
+  top: OverviewSection[]
+  bottom: OverviewSection[]
+  profiles: OverviewProfileTab[]
+  activeProfileId: string
+} {
   const query = normalizeQuery(input.query)
   const searching = query.length > 0
   const sections = input as Record<string, unknown>
@@ -256,11 +311,22 @@ export function buildOverview(input: OverviewInput = {}) : { mode: 'browse'|'sea
     // 搜索态的可搜索块不截断（结果已是命中子集）—— 避免"搜了还看不到"的怪相。
     const limit = searching && spec.searchable ? null : spec.limit
     const section = buildSection(spec, items, limit, searching)
-    if (!isVisible(section)) continue
+    if (!isVisible(section, spec)) continue
     ;(spec.zone === 'above' ? top : bottom).push(section)
   }
 
-  return { mode: searching ? 'search' : 'browse', query, top, bottom }
+  const profileState = buildProfileTabs(
+    Array.isArray(input.profiles) ? input.profiles : [],
+    String(input.activeProfileId || '')
+  )
+  return {
+    mode: searching ? 'search' : 'browse',
+    query,
+    top,
+    bottom,
+    profiles: profileState.profiles,
+    activeProfileId: profileState.activeProfileId
+  }
 }
 
 /**

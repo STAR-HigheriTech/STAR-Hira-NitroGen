@@ -33,6 +33,7 @@ interface DropControllerContext {
   getItems?: () => TabbarProjectionItem[]
   onDragEnd?: (payload: DropPayload) => unknown
   onDragHintChange?: (active: boolean) => unknown
+  onSessionEnd?: () => unknown
   claimDrop?: ((payload: UnknownRecord) => unknown) | null
   onExternalDrop?: ((item: DragItem, target: DropTargetDescription) => unknown) | null
 }
@@ -67,6 +68,8 @@ export function createDropController(
   const onDragEnd = typeof ctx.onDragEnd === 'function' ? ctx.onDragEnd : null
   /** 拖拽期"可以拖到网页区域分屏"的能力提示开关（宿主据此显隐提示；见 index.js#setDropHint）。 */
   const onDragHintChange = typeof ctx.onDragHintChange === 'function' ? ctx.onDragHintChange : null
+  /** 拖拽会话无论经 drop 还是 dragend 收尾，都要释放预览暂停态。 */
+  const onSessionEnd = typeof ctx.onSessionEnd === 'function' ? ctx.onSessionEnd : null
   /** 插件**拖放目标认领器**（渲染侧插槽 `tabbar.drop-target`，MULTI），见下面 drop 的处理。 */
   const claimDrop = typeof ctx.claimDrop === 'function' ? ctx.claimDrop : null
   /**
@@ -377,6 +380,7 @@ export function createDropController(
   // 外部拖拽可能在不经过本视图 drop/dragleave 的情况下结束；下一次 begin/dragenter
   // 会重新测量，但这里顺手清掉可避免把旧几何当成新会话的真相。
   doc.addEventListener('dragend', () => {
+    if (onSessionEnd) onSessionEnd()
     if (!draggedId) resetDropGeometry()
   })
 
@@ -399,6 +403,7 @@ export function createDropController(
       return
     }
     e.preventDefault()
+    if (onSessionEnd) onSessionEnd()
     // 立刻收尾：落库会触发重渲染，源节点可能因此被移出 DOM，那之后 `dragend`
     // 就未必还会冒泡到标签行上 —— 中和类留在根元素上会让整窗再也拖不动。
     dragRegion.disarm()

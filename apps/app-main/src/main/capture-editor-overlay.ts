@@ -23,6 +23,7 @@
  */
 
 import { ipcMain, type BrowserWindow, type WebContents } from 'electron'
+import { onWebContentsDestroyed } from '@hira-ng/infra-window'
 
 const { stageCapture, discardCapture } = require('./capture-editor') as {
   stageCapture(buffer: Uint8Array | null | undefined, meta?: Record<string, unknown>): string | null
@@ -126,6 +127,7 @@ export function createCaptureEditorOverlay(deps: CaptureEditorOverlayDependencie
   let target: WebContents | null = null
   /** 被监听 'destroyed' 的 webContents（切一次目标就换一次，旧监听必须摘掉）。 */
   let watched: WebContents | null = null
+  let unwatchTarget: () => void = () => {}
   /** 本次 open 的「首帧回执」等待器：{ resolve, timer } | null（见 settleReady）。 */
   let pendingReady: ReadyWaiter | null = null
   /** 尚未被渲染页取走的底图；窗口关闭 / 打开失败 / 下一次截图时主动释放。 */
@@ -177,11 +179,9 @@ export function createCaptureEditorOverlay(deps: CaptureEditorOverlayDependencie
   }
 
   function watchTarget(wc: WebContents | null | undefined): void {
-    if (watched && typeof watched.removeListener === 'function') {
-      try { watched.removeListener('destroyed', onTargetDestroyed) } catch (_) {}
-    }
-    watched = wc && typeof wc.once === 'function' ? wc : null
-    if (watched) watched.once('destroyed', onTargetDestroyed)
+    unwatchTarget()
+    watched = wc || null
+    unwatchTarget = watched ? onWebContentsDestroyed(watched, onTargetDestroyed) : () => {}
   }
 
   /**

@@ -84,6 +84,7 @@ function createLocalTools(host: AiToolHost): AiToolDefinition[] {
   async function readBuffer(abs: string): Promise<Buffer> {
     const stat = await fs.stat(abs)
     if (!stat.isFile()) throw fail('目标不是文件', 'AI_NOT_FILE')
+    if (stat.nlink > 1) throw fail('文件存在多个硬链接，已拒绝读取以保护工作区外数据', 'AI_HARDLINKED_FILE')
     if (stat.size > MAX_READ_BYTES) throw fail(`文件超过 ${Math.round(MAX_READ_BYTES / 1024 / 1024)}MB 读取上限`, 'AI_FILE_TOO_LARGE')
     return fs.readFile(abs)
   }
@@ -91,6 +92,7 @@ function createLocalTools(host: AiToolHost): AiToolDefinition[] {
   async function readOfficeBuffer(abs: string): Promise<Buffer> {
     const stat = await fs.stat(abs)
     if (!stat.isFile()) throw fail('目标不是文件', 'AI_NOT_FILE')
+    if (stat.nlink > 1) throw fail('Office 文件存在多个硬链接，已拒绝读取以保护工作区外数据', 'AI_HARDLINKED_FILE')
     if (stat.size > MAX_OFFICE_BYTES) throw fail('Office 文件超过 32MB 读取上限', 'AI_FILE_TOO_LARGE')
     return fs.readFile(abs)
   }
@@ -253,7 +255,7 @@ function createLocalTools(host: AiToolHost): AiToolDefinition[] {
               continue
             }
             const stat = await fs.stat(full).catch(() => null)
-            if (!stat || stat.size > 512 * 1024) continue
+            if (!stat || stat.nlink > 1 || stat.size > 512 * 1024) continue
             const buffer = await fs.readFile(full).catch(() => null)
             if (!buffer || !isProbablyText(buffer)) continue
             const content = buffer.toString('utf8')

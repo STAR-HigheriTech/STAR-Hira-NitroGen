@@ -1,4 +1,4 @@
-export const TRANSLATION_MODES = Object.freeze(['auto', 'bing', 'google', 'microsoft'] as const)
+export const TRANSLATION_MODES = Object.freeze(['auto', 'custom', 'bing', 'google', 'microsoft'] as const)
 
 export type TranslationMode = (typeof TRANSLATION_MODES)[number]
 export type TranslationProviderKind = 'plugin' | 'offline' | 'online'
@@ -7,6 +7,7 @@ export interface TranslationProviderRequest {
   texts: readonly string[]
   from: string
   to: string
+  url?: string
   signal?: AbortSignal
 }
 
@@ -50,14 +51,24 @@ export interface TranslationServiceOptions {
   failureThreshold?: number
   cooldownMs?: number
   now?: () => number
+  postprocess?: (context: TranslationPostprocessContext) => Promise<readonly string[] | null>
 }
 
 export interface TranslationRequest {
   texts: readonly unknown[]
   from?: string
   to: string
+  url?: string
   /** 用户主动发起的翻译：允许越过熔断，立即重新探测来源。 */
   force?: boolean
+}
+
+export interface TranslationPostprocessContext {
+  texts: readonly string[]
+  sourceTexts: readonly string[]
+  from: string
+  to: string
+  url?: string
 }
 
 export interface TranslationProviderHttp {
@@ -71,6 +82,8 @@ export interface TranslationHttpRequestInit {
   body?: string
   signal?: AbortSignal
   timeoutMs?: number
+  /** 受信任的固定 Web 页面需要自动跟随重定向。 */
+  followRedirects?: boolean
 }
 
 export class TranslationProviderUnavailableError extends Error {

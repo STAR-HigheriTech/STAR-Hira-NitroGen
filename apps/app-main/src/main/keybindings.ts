@@ -2,6 +2,7 @@
 // 读的是同一份文件（构建期复制成 hira://shared/keybindings.mjs）。
 // 这里保留 DEFAULT_KEYBINDINGS 这个既有导出名，IPC / 测试 / 调用方无需改动。
 import type { Input, WebContents } from 'electron'
+import { onWebContentsDestroyed } from '@hira-ng/infra-window'
 import {
   KEYBINDING_DEFAULTS,
   MODIFIER_ORDER,
@@ -192,10 +193,10 @@ export function createKeybindingsManager({ actions = {}, settingsService = null,
     recordingWc = webContents
     const release = () => stopRecording()
     try {
-      webContents.once('destroyed', release)
+      const offDestroyed = onWebContentsDestroyed(webContents, release)
       webContents.once('did-navigate', release)
       recordingCleanups.push(() => {
-        webContents.removeListener('destroyed', release)
+        offDestroyed()
         webContents.removeListener('did-navigate', release)
       })
     } catch (_) {
@@ -241,9 +242,7 @@ export function createKeybindingsManager({ actions = {}, settingsService = null,
      * wc 走**。不用 `detach()` 是因为它会对已销毁的 wc 调 `removeListener`；
      * 直接出表更贴合"对象都没了"的事实。`detach` 保留给将来"显式停用"的用法。
      */
-    try {
-      webContents.once('destroyed', () => attached.delete(webContents))
-    } catch (_) {}
+    onWebContentsDestroyed(webContents, () => attached.delete(webContents))
   }
 
   function detach(webContents: WebContents | null | undefined): void {

@@ -6,7 +6,8 @@
  *
  * ── 落位（对齐 RT omnibox）────────────────────────────────────────────
  * 本层**只上报事实**，几何一律收在主进程：
- *   · `anchor` —— 地址栏在窗口 content 坐标系里的矩形与展开方向（由 ui-searchbar 上报）；
+ *   · `anchor` —— 地址栏在窗口 content 坐标系里的矩形、横向展开方向与底部模式下的
+ *     垂直居中意图（由 ui-searchbar 上报）；
  *   · `width` / `height` —— **卡片实测尺寸 + 四边 pad**（含阴影留白的 outer 尺寸）；
  *   · `position: 'anchor-below'` + `pad` / `gap` / `margin`。
  * 主进程 `LayoutCoordinator#anchorFloatBelow` 用窗口 content 尺寸算 x/y 并夹取
@@ -275,6 +276,7 @@ interface SearchbarAnchor {
   width: number
   height: number
   align?: 'left' | 'right'
+  valign?: 'below' | 'center'
 }
 
 interface SearchbarPayload {
@@ -873,7 +875,7 @@ function commitSuggestion(s: SearchSuggestion): void {
 function display(width: number, height: number, anchor: SearchbarAnchor, interactive: boolean): void {
   // 同一份"落位事实"不重复上报：主进程每次都要 anchorFloatBelow + setBounds，
   // 打字期间锚点与尺寸通常不变 —— 逐键 IPC 纯属白烧。
-  const nextKey = `${width}x${height}|${anchor.left},${anchor.top},${anchor.width},${anchor.height},${anchor.align || 'left'}|${interactive ? 1 : 0}`
+  const nextKey = `${width}x${height}|${anchor.left},${anchor.top},${anchor.width},${anchor.height},${anchor.align || 'left'},${anchor.valign || 'below'}|${interactive ? 1 : 0}`
   if (nextKey === lastDisplayKey) return
   try {
     getHiraBridge().provider.send('searchbar-overlay:display', {

@@ -10,6 +10,9 @@ interface OfficeSlide { title?: string; bullets?: unknown[] }
 
 const XML_DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
 const XML_ILLEGAL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g
+const MAX_ZIP_ENTRIES = 4096
+const MAX_ZIP_ENTRY_BYTES = 64 * 1024 * 1024
+const MAX_ZIP_TOTAL_BYTES = 128 * 1024 * 1024
 
 function xmlText(value: unknown): string {
   return String(value == null ? '' : value).replace(XML_ILLEGAL, '').replace(/[&<>"']/g, (c) => (
@@ -119,6 +122,11 @@ function zipStore(files: ZipEntry[]): Buffer {
 }
 
 function unzip(buffer: Buffer): Map<string, Buffer> {
+  const need = (offset: number, length: number, label: string) => {
+    if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(length) || offset < 0 || length < 0 || offset + length > buffer.length) {
+      throw new Error(`Office ZIP ${label}越界`)
+    }
+  }
   const out = new Map<string, Buffer>()
   let eocd = -1
   const start = Math.max(0, buffer.length - 65_557)
@@ -127,25 +135,51 @@ function unzip(buffer: Buffer): Map<string, Buffer> {
   }
   if (eocd < 0) throw new Error('Office 文件不是有效的 ZIP 容器')
   const count = buffer.readUInt16LE(eocd + 10)
+  if (count > MAX_ZIP_ENTRIES) throw new Error(`Office ZIP 条目过多：${count}`)
   let at = buffer.readUInt32LE(eocd + 16)
+  let totalUncompressed = 0
   for (let i = 0; i < count; i += 1) {
+    need(at, 46, '中央目录')
     if (buffer.readUInt32LE(at) !== 0x02014B50) throw new Error('Office ZIP 中央目录损坏')
+    const flags = buffer.readUInt16LE(at + 8)
     const method = buffer.readUInt16LE(at + 10)
     const compressedSize = buffer.readUInt32LE(at + 20)
+    const uncompressedSize = buffer.readUInt32LE(at + 24)
     const nameLength = buffer.readUInt16LE(at + 28)
     const extraLength = buffer.readUInt16LE(at + 30)
     const commentLength = buffer.readUInt16LE(at + 32)
     const localOffset = buffer.readUInt32LE(at + 42)
+    need(at + 46, nameLength + extraLength + commentLength, '中央目录条目')
     const name = buffer.subarray(at + 46, at + 46 + nameLength).toString('utf8')
     if (!name.endsWith('/')) {
+      if (flags & 0x1) throw new Error('Office ZIP 不支持加密条目')
+      if (uncompressedSize > MAX_ZIP_ENTRY_BYTES) {
+        throw new Error(`Office ZIP 单条目解压后超过 ${Math.round(MAX_ZIP_ENTRY_BYTES / 1024 / 1024)}MB`)
+      }
+      if (totalUncompressed + uncompressedSize > MAX_ZIP_TOTAL_BYTES) {
+        throw new Error(`Office ZIP 解压总量超过 ${Math.round(MAX_ZIP_TOTAL_BYTES / 1024 / 1024)}MB`)
+      }
+      need(localOffset, 30, '本地目录')
       if (buffer.readUInt32LE(localOffset) !== 0x04034B50) throw new Error('Office ZIP 本地目录损坏')
       const localNameLength = buffer.readUInt16LE(localOffset + 26)
       const localExtraLength = buffer.readUInt16LE(localOffset + 28)
       const dataAt = localOffset + 30 + localNameLength + localExtraLength
+      need(dataAt, compressedSize, '压缩数据')
       const compressed = buffer.subarray(dataAt, dataAt + compressedSize)
-      if (method === 0) out.set(name, Buffer.from(compressed))
-      else if (method === 8) out.set(name, zlib.inflateRawSync(compressed))
-      else throw new Error(`不支持的 ZIP 压缩方式：${method}`)
+      let data: Buffer
+      if (method === 0) {
+        if (compressedSize > MAX_ZIP_ENTRY_BYTES) throw new Error('Office ZIP 单条目超过读取上限')
+        data = Buffer.from(compressed)
+      } else if (method === 8) {
+        const remaining = MAX_ZIP_TOTAL_BYTES - totalUncompressed
+        const maxOutputLength = Math.min(MAX_ZIP_ENTRY_BYTES, remaining)
+        data = zlib.inflateRawSync(compressed, { maxOutputLength })
+      } else {
+        throw new Error(`不支持的 ZIP 压缩方式：${method}`)
+      }
+      totalUncompressed += data.length
+      if (totalUncompressed > MAX_ZIP_TOTAL_BYTES) throw new Error('Office ZIP 解压总量超过读取上限')
+      out.set(name, data)
     }
     at += 46 + nameLength + extraLength + commentLength
   }

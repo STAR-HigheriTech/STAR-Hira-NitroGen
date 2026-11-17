@@ -84,9 +84,15 @@ const Z_INDEX: Readonly<Record<string, number>> = Object.freeze({
   // focusPriority 仍为 0（见上）：只浮在表面，绝不抢键盘焦点。
   'float:tabpreview-overlay': 38,
   'float:searchbar-overlay': 40,
+  // 通用选择目标浮层铺满整窗，只是鼠标下拉；必须高于面板 / rail / 网页，
+  // 但低于站点信息与权限询问，保持“随手下拉”的层级。
+  'float:target-picker-overlay': 41,
   // 站点信息卡：地址栏左端按钮的正下方，必须压过地址栏下拉之外的所有 chrome 层；
   // 与地址栏下拉不会同屏（点站点按钮会先让地址栏失焦并收起建议）。
   'float:siteinfo-overlay': 42,
+  // 权限询问属于网页内容上的决定面，必须压过站点信息卡；
+  // 仍让插件浮层 / 总览 / 编辑层按各自语义压在它上面。
+  'float:permission-overlay': 43,
   // 「总览」浮层（空间胶囊的下拉卡片）：铺满整窗的模态层，必须压过地址栏下拉之外的
   // 所有 chrome 层 —— 卡片是"随手一次"的操作面，被任何一条浮层切成半张都算画错。
   // 仍低于按钮编辑浮层（46）：那是编辑期间唯一的交互面。

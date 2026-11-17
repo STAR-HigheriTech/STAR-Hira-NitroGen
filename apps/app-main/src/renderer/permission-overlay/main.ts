@@ -22,7 +22,6 @@
 import '@hira-ng/shared-ui-tokens/tokens-base.css'
 import '@hira-ng/shared-ui-tokens/tokens-light.css'
 import '@hira-ng/shared-ui-tokens/tokens-dark.css'
-import { dismissOnOutsidePointerDown } from '@hira-ng/ui-common/src/overlayCard'
 import { createThemeController } from '../shared/theme-controller.js'
 import { getHiraBridge } from '../shared/bridge.js'
 import { IPC_EVENTS } from '@hira-ng/shared-types/src/ipc-channels.mjs'
@@ -40,8 +39,10 @@ const root = ((): HTMLElement => {
 
 const popover = document.createElement('div')
 popover.className = 'hira-permission-popover'
+popover.setAttribute('role', 'dialog')
+popover.setAttribute('aria-label', '网站权限请求')
 // 留白值只从 PERMISSION_METRICS 来（CSS 侧读同一个变量）—— 免得 CSS 写 28、JS 写 24。
-popover.style.setProperty('--pp-pad', `${PERMISSION_METRICS.pad}px`)
+popover.style.setProperty('--pp-left-pad', `${PERMISSION_METRICS.leftPad}px`)
 root.appendChild(popover)
 
 /** 是否在屏上（外壳推 show 且有请求）。 */
@@ -69,8 +70,8 @@ function reportLayout() {
     align: 'left',
     valign: 'top',
     margin: 0,
-    width: Math.ceil(rect.width + PERMISSION_METRICS.pad * 2),
-    height: Math.ceil(rect.height + PERMISSION_METRICS.pad),
+    width: Math.ceil(rect.width + PERMISSION_METRICS.leftPad + PERMISSION_METRICS.rightPad),
+    height: Math.ceil(rect.height + PERMISSION_METRICS.bottomPad),
     interactive: true
   })
 }
@@ -81,7 +82,8 @@ function paint() {
   // **同步量一次**：`getBoundingClientRect()` 会强制同步布局，不依赖绘制帧；
   // 首次打开时原生视图还是 0×0，rAF 可能永远不触发，不在这里先报一次，
   // 主进程就永远拿不到尺寸 —— 用户看到的就是「浮层弹了但点不动」。
-  if (visible) reportLayout()
+  if (!visible) return
+  reportLayout()
 }
 
 /** 外壳推来的真值列表（空列表 = 没有待处理请求，直接收起）。 */
@@ -101,6 +103,8 @@ function hide() {
   requests = []
   popover.classList.remove('is-open')
   view.render([])
+  const active = document.activeElement
+  if (active instanceof HTMLElement && popover.contains(active)) active.blur()
 }
 
 /**
@@ -163,14 +167,6 @@ function display(payload: Record<string, unknown>): void {
   } catch (_) {}
 }
 
-// 「点卡片外留白 → 收起」用共享判据（ui-common#dismissOnOutsidePointerDown）——
-// 与选择目标 / 站点信息浮层同一份实现，不在这里另写一条 mousedown 判据。
-dismissOnOutsidePointerDown(document, {
-  isOpen: () => visible,
-  element: popover,
-  onDismiss: dismiss
-})
-
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') dismiss()
 })
@@ -179,6 +175,10 @@ const bridge = getHiraBridge()
 bridge.on.subscribe('permission-overlay:show', (payload) => show(payload && payload.requests))
 bridge.on.subscribe('permission-overlay:hide', hide)
 bridge.on.subscribe(IPC_EVENTS.profileChanged, dismiss)
+
+document.fonts?.ready.then(() => {
+  if (visible) reportLayout()
+}).catch(() => {})
 
 ;(async () => {
   try { await bridge.provider.invoke('permission-overlay:ready', {}) } catch (_) {}

@@ -156,18 +156,24 @@ export function createMicrosoftTranslationProvider(
         : 'auto'
       const output = new Array<string>(request.texts.length)
 
-      for (const indices of chunkTexts(request.texts)) {
-        if (request.signal?.aborted) throw new DOMException('翻译已取消', 'AbortError')
-        const translated = await requestChunk(
-          indices.map((index) => request.texts[index]),
-          source,
-          target,
-          request.signal
-        )
-        indices.forEach((index, offset) => {
-          output[index] = translated[offset] ?? request.texts[index]
-        })
-      }
+      const chunks = chunkTexts(request.texts)
+      let cursor = 0
+      const workers = Array.from({ length: Math.min(3, chunks.length) }, async () => {
+        while (cursor < chunks.length) {
+          if (request.signal?.aborted) throw new DOMException('翻译已取消', 'AbortError')
+          const indices = chunks[cursor++]
+          const translated = await requestChunk(
+            indices.map((index) => request.texts[index]),
+            source,
+            target,
+            request.signal
+          )
+          indices.forEach((index, offset) => {
+            output[index] = translated[offset] ?? request.texts[index]
+          })
+        }
+      })
+      await Promise.all(workers)
       return output
     }
   }

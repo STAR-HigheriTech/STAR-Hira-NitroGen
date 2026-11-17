@@ -33,6 +33,7 @@
  */
 
 import type { WebContents } from 'electron'
+import { onWebContentsDestroyed } from '@hira-ng/infra-window'
 
 interface FindLayoutCoordinatorPort {
   getFloatWebContents(name: string): WebContents | null | undefined
@@ -202,7 +203,7 @@ export function createFindBarController(deps: FindBarControllerOptions) {
         finalUpdate: !!result.finalUpdate
       })
     })
-    wc.once('destroyed', () => {
+    onWebContentsDestroyed(wc, () => {
       cancelCleanup(wcId)
       if (lastSearched === wc) lastSearched = null
     })

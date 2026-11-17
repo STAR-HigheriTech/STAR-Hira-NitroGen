@@ -46,6 +46,7 @@
  *   各浮层 bounds 独立管理（0x0 = 隐藏），互不争抢，可同时存在而不串扰。
  */
 import { BrowserWindow, screen, systemPreferences, type Event as ElectronEvent, type Input, type Rectangle, type View, type WebContents, type WebContentsView } from 'electron'
+import { onWebContentsDestroyed } from './webContentsLifecycle'
 import { Layer, LayerManager } from './LayerManager'
 import { TabHostLayer } from './TabHostLayer'
 import { installPanelLayoutController } from './PanelLayoutController'
@@ -520,7 +521,14 @@ interface SideOverlayGeometry {
 }
 
 interface FloatAnchorRequest extends Partial<Rectangle> {
-  anchor?: { left?: number; top?: number; width?: number; height?: number; align?: 'left' | 'right' | 'center' }
+  anchor?: {
+    left?: number
+    top?: number
+    width?: number
+    height?: number
+    align?: 'left' | 'right' | 'center'
+    valign?: 'below' | 'center'
+  }
   card?: { width?: number; height?: number }
   width?: number
   height?: number
@@ -1749,7 +1757,7 @@ class LayoutCoordinator {
         // 记住"用户最后在哪个内容面里"—— 窗口失活再激活时靠它把焦点送回来。
         this._rememberContentFocus(wc, 'tab')
       })
-      wc.once('destroyed', () => { this.forgetContentFocus(wc) })
+      onWebContentsDestroyed(wc, () => { this.forgetContentFocus(wc) })
     } catch (_) {}
   }
 
@@ -1911,7 +1919,7 @@ class LayoutCoordinator {
       this.restoreContentFocus({ reason: 'chrome-focus-sink', immediate: true, retries: false })
     }
     try { wc.on('focus', onFocus) } catch (_) {}
-    try { wc.once('destroyed', () => { this._chromeFocusViews.delete(wc) }) } catch (_) {}
+    try { onWebContentsDestroyed(wc, () => { this._chromeFocusViews.delete(wc) }) } catch (_) {}
     return () => {
       this._chromeFocusViews.delete(wc)
       try { wc.removeListener('focus', onFocus) } catch (_) {}
@@ -2013,7 +2021,7 @@ class LayoutCoordinator {
       const onFocus = () => this._scheduleShellFocusBounce()
       try { shell.on('focus', onFocus) } catch (_) { return false }
       try {
-        shell.once('destroyed', () => {
+        onWebContentsDestroyed(shell, () => {
           const l = this._shellFocusListener
           if (l && l.wc === shell) this._shellFocusListener = null
         })
@@ -2715,6 +2723,11 @@ class LayoutCoordinator {
     return this._floatVisible.get(String(name)) === true
   }
 
+  /** 某浮层是否**逻辑可见且原生尺寸大于零**（主进程驱动型浮层的自愈探针）。 */
+  isFloatShown(name: string): boolean {
+    return this._isFloatShown(String(name))
+  }
+
   /**
    * 某个**内容区坐标**的点是否落在**别的可见浮层**的矩形内。
    *
@@ -3110,16 +3123,26 @@ class LayoutCoordinator {
    * @param {string} channel IPC 事件通道
    * @param {unknown} payload
    */
-  async sendToPasswordOverlay(channel: string, payload: unknown): Promise<void> {
+  async sendToPasswordOverlay(channel: string, payload: unknown): Promise<boolean> {
+    // 这次 send 就是"马上要用"的明确意图。先撤销闲置回收，避免加载中的视图
+    // 恰好在 bounds 落地前被回收，表现为保存 / 解锁卡永远不出现。
+    this._cancelPasswordReclaim()
     const view = this._ensurePasswordOverlay()
-    if (!view) return
+    if (!view) return false
     const wc = view.webContents
-    if (!wc || wc.isDestroyed()) return
+    if (!wc || wc.isDestroyed()) return false
     try {
       if (typeof this._wcm.loadPasswordOverlay === 'function') await this._wcm.loadPasswordOverlay()
-    } catch (_) {}
-    if (wc.isDestroyed()) return
-    try { wc.send(channel, payload) } catch (_) {}
+    } catch (_) {
+      return false
+    }
+    if (wc.isDestroyed()) return false
+    try {
+      wc.send(channel, payload)
+      return true
+    } catch (_) {
+      return false
+    }
   }
 
   /** 只在密码浮层可见时同步网页矩形；相同几何不重复发 IPC。 */
@@ -6404,7 +6427,7 @@ class LayoutCoordinator {
    *
    * @param {string} name 浮层逻辑名
    * @param {{ anchor?: {left?:number, top?:number, width?:number, height?:number,
-   *           align?: 'left'|'right'|'center'},
+   *           align?: 'left'|'right'|'center', valign?: 'below'|'center'},
    *           width?:number, height?:number, pad?:number, gap?:number, margin?:number }} rect
    *        margin：与窗口内容区四边的最小留白（缺省见 DEFAULT_FLOAT_EDGE_MARGIN）
    */
@@ -6445,8 +6468,18 @@ class LayoutCoordinator {
       const outerH = Math.max(0, Math.floor(num(rect.height, 0)))
       const cardW = Math.max(0, outerW - pad.left - pad.right)
       const cardH = Math.max(0, outerH - pad.top - pad.bottom)
+      // 外边距先算：卡片本身也要留白，不能只裁 view 的外壳。
+      const margin = Math.max(0, Math.min(
+        Math.floor(num(rect.margin, DEFAULT_FLOAT_EDGE_MARGIN)),
+        Math.floor(cw / 4),
+        Math.floor(ch / 4)
+      ))
+      const minCardX = margin + pad.left
+      const maxCardX = Math.max(
+        Math.min(minCardX, Math.max(0, cw - cardW)),
+        cw - margin - pad.right - cardW
+      )
       // 展开方向由锚点声明：左栏向右、右栏向左扩张，常规横向栏保持左缘对齐。
-      // 先按卡片真实宽度算锚定侧，再整体夹回窗口，避免方向对了却越出另一侧。
       const align = a.align === 'right' ? 'right' : a.align === 'center' ? 'center' : 'left'
       const anchorLeft = num(a.left, 0)
       const anchorWidth = Math.max(0, num(a.width, cardW))
@@ -6455,17 +6488,28 @@ class LayoutCoordinator {
         : align === 'center'
           ? anchorLeft + Math.round((anchorWidth - cardW) / 2)
           : anchorLeft
-      const cardX = Math.max(0, Math.min(preferredX, Math.max(0, cw - cardW)))
-      // 卡片顶 = 锚点下缘 + gap（RT：地址栏正下方），同样先夹窗口内。
-      const cardY = Math.max(0, Math.min(num(a.top, 0) + num(a.height, 0) + gap, Math.max(0, ch - cardH)))
-      // 外缘留白：**整块浮层**（含阴影留白）都不许贴到窗口内容区边缘 ——
-      // 只在最后一步收紧 view 的四条边，**不动卡片坐标**：卡片是按地址栏锚点对齐的，
-      // 在这里改它就会与地址栏错位。margin 夹到窗口的 1/4，避免窄窗把它压成 0 宽而消失。
-      const margin = Math.max(0, Math.min(
-        Math.floor(num(rect.margin, DEFAULT_FLOAT_EDGE_MARGIN)),
-        Math.floor(cw / 4),
-        Math.floor(ch / 4)
-      ))
+      const cardX = Math.min(Math.max(preferredX, minCardX), maxCardX)
+
+      const anchorTop = num(a.top, 0)
+      const anchorBottom = anchorTop + num(a.height, 0)
+      const safeTop = margin + pad.top
+      const safeBottom = Math.max(safeTop, ch - margin - pad.bottom)
+      const maxCardY = Math.max(safeTop, safeBottom - cardH)
+      const belowY = anchorBottom + gap
+      let cardY = Math.max(safeTop, Math.min(belowY, maxCardY))
+
+      // 底部导航栏没有足够的下方空间时，在输入框上方的安全区里垂直居中 ——
+      // 既保持命令面板的完整高度，也绝不会压住搜索框本身。
+      if (a.valign === 'center') {
+        const centerTop = safeTop
+        const centerBottom = anchorTop - gap
+        if (centerBottom - centerTop >= cardH) {
+          cardY = centerTop + Math.round((centerBottom - centerTop - cardH) / 2)
+        }
+      }
+
+      // 外缘留白：卡片与阴影整体都不许贴窗口边；只裁最终 view，卡片坐标已按左右
+      // 对称留白夹好，这样侧栏在右时不会比在左时少一截右边距。
       const maxRight = Math.max(margin, cw - margin)
       const maxBottom = Math.max(margin, ch - margin)
       const x = Math.min(Math.max(margin, cardX - pad.left), maxRight)

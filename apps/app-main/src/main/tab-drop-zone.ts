@@ -29,7 +29,10 @@
  *        info = { dragId, baseId }；mode ∈ 'split'（两格新建）| 'join'（并入已有组）
  *        | 'blocked'（那一组已满）；pairId 为 null 表示**没有可配对的对象**（只有一个标签）。
  *        这条是"标签世界"的知识，只有宿主知道，所以由它回答。
+ *   prepareOverlay()                              拖动开始时预热预览视口（可选）
  *   showOverlay(rect, payload) / hideOverlay()      预览浮层的读写（矩形 = 预览块本身）
+ *   isOverlayVisible()                            预览此刻是否真的在屏上（用于自愈重推）
+ *   expectsAcknowledgement                        renderer 是否回传 previewId 落帧确认
  *   onPreviewShown(info) / onPreviewHidden(info)    **预览显 / 隐**（边沿触发，见下）
  *        info = { tabId, baseTabId, pairId }。它回答的是另一件事：**内容区此刻该显示哪一格**。
  *        框画着 = 显示 `pairId`（用户要看着"即将与谁分屏"的那一页来判断落点），
@@ -84,8 +87,11 @@ export interface TabDropZoneDependencies {
   previewDelayMs?: number
   now?(): number
   describePair?(info: DropPairInfo): DropPair | null
-  showOverlay?(rect: Rect, payload: Record<string, unknown>): void
+  prepareOverlay?(): void
+  showOverlay?(rect: Rect, payload: Record<string, unknown>): void | boolean
   hideOverlay?(): void
+  isOverlayVisible?(): boolean
+  expectsAcknowledgement?: boolean
   onPreviewShown?(info: DropPreviewInfo | null): void
   onPreviewHidden?(info: DropPreviewInfo | null): void
   onSessionChange?(active: boolean, detail: { sourceWcId: number | null }): void
@@ -102,6 +108,8 @@ export interface TabDropZoneDependencies {
  *（越贵的动作要求停得越久），同时短到不会让人觉得卡。
  */
 const PREVIEW_DELAY_MS = 250
+/** 未收到 renderer 落帧确认时，同一形态的重推间隔。 */
+const PREVIEW_ACK_RETRY_MS = 120
 
 /**
  * **出窗自愈**的宽限（ms）：指针在窗口外持续这么久，就判定这场拖动已经被系统放弃。
@@ -133,8 +141,11 @@ export function createTabDropZone(deps: TabDropZoneDependencies = {}) {
   /** 时钟（可注入）：停留门禁要读时间戳，注入时钟才能**同步**验"停够没停够"。 */
   const now = typeof deps.now === 'function' ? deps.now : () => Date.now()
   const describePair = typeof deps.describePair === 'function' ? deps.describePair : () => null
+  const prepareOverlay = typeof deps.prepareOverlay === 'function' ? deps.prepareOverlay : () => {}
   const showOverlay = typeof deps.showOverlay === 'function' ? deps.showOverlay : () => {}
   const hideOverlay = typeof deps.hideOverlay === 'function' ? deps.hideOverlay : () => {}
+  const isOverlayVisible = typeof deps.isOverlayVisible === 'function' ? deps.isOverlayVisible : null
+  const expectsAcknowledgement = deps.expectsAcknowledgement === true
   /**
    * 预览显 / 隐的两条通报（可选注入）—— 见文件头 deps 里那一段。
    * 缺省空实现：不接线时本模块的行为与加这两条之前**一字不差**。
@@ -163,6 +174,10 @@ export function createTabDropZone(deps: TabDropZoneDependencies = {}) {
   let overlayShown = false
   /** 上次推给浮层的载荷签名（矩形 + 形态）—— 只在真的变了才推。 */
   let lastSignature = ''
+  /** renderer 最后一次确认已应用预览帧的签名。 */
+  let acknowledgedSignature = ''
+  /** 上一次推送时刻（未确认时的低频重推按它节流）。 */
+  let lastPushAt = 0
   /**
    * **本轮"光标在网页上且能落"的起始时刻**（0 = 尚未开始计时）。
    *
@@ -186,6 +201,19 @@ export function createTabDropZone(deps: TabDropZoneDependencies = {}) {
    * 用时间戳而不是 setTimeout：采样每 33ms 一拍，时间戳判据天然幂等、停表时也不用清理。
    */
   let outsideSince = 0
+
+  function overlayIsVisible(): boolean {
+    if (!isOverlayVisible) return true
+    try { return isOverlayVisible() === true } catch (_) { return false }
+  }
+
+  function pushOverlay(rect: Rect, payload: Record<string, unknown>, signature: string): boolean {
+    try {
+      const ok = showOverlay(rect, { ...payload, previewId: signature }) !== false
+      if (ok) lastPushAt = now()
+      return ok
+    } catch (_) { return false }
+  }
 
   const monitor = createCursorEdgeMonitor({
     getCursorPoint,
@@ -282,10 +310,14 @@ export function createTabDropZone(deps: TabDropZoneDependencies = {}) {
    *   `silent` = 只收浮层、不通报名下这一场（整场结束那两条路，见文件头 deps 说明）。
    */
   function hideNow(opts: DropHideOptions = {}): void {
-    if (!overlayShown) return
+    const wasShown = overlayShown
     overlayShown = false
     lastSignature = ''
-    try { hideOverlay() } catch (_) {}
+    acknowledgedSignature = ''
+    lastPushAt = 0
+    if (wasShown) {
+      try { hideOverlay() } catch (_) {}
+    }
     if (!opts.silent) notifyPreview(false, opts.info)
   }
 
@@ -392,18 +424,50 @@ export function createTabDropZone(deps: TabDropZoneDependencies = {}) {
      * 框没画出来 = 这一下不算数，松手什么都不发生。
      */
     if (!dwellSince || now() - dwellSince < previewDelayMs) { hideNow(); return }
-    if (!overlayShown) {
+    /**
+     * 预览的"已显示"不能只记一次意图：浮层可能在冷启动、原生拖拽或窗口图层重排中
+     * 没真正落到屏上。此后同一落点的签名会完全相同，若继续信任旧标志，用户等到
+     * 任意久也不会再推一次 —— 这正是概率性不显示的来源。这里每次确认原生可见态，
+     * 不在屏上就把同一形态重新推一遍。
+     */
+    const nativeVisible = overlayShown && overlayIsVisible()
+    if (!nativeVisible) {
+      // 原生 bounds 已丢或 show 失败：按低频节拍重推，既自愈又不把 30fps 拖成 IPC 洪峰。
+      if (overlayShown && now() - lastPushAt < PREVIEW_ACK_RETRY_MS) return
+      if (!pushOverlay(rect, payload, signature)) {
+        overlayShown = false
+        lastSignature = ''
+        acknowledgedSignature = ''
+        return
+      }
       overlayShown = true
-      try { showOverlay(rect, payload) } catch (_) {}
       lastSignature = signature
+      acknowledgedSignature = ''
       // 框画出来了 —— 通报宿主把内容区切到**配对那一格**（见文件头 deps 的说明）。
       // 位置在 showOverlay 之后：先让框真的出现，再动内容区，两者是同一拍、无中间帧。
       notifyPreview(true)
       return
     }
-    if (signature === lastSignature) return
+    if (signature === lastSignature) {
+      /**
+       * bounds 在屏上并不等于 renderer 真把内容画出来了。首次创建、合成器重建或
+       * 一次丢失的 IPC 都可能留下透明空层；只有收到同一 previewId 的回执才算闭环。
+       */
+      if (!expectsAcknowledgement || acknowledgedSignature === signature) return
+      if (now() - lastPushAt < PREVIEW_ACK_RETRY_MS) return
+      if (pushOverlay(rect, payload, signature)) return
+      overlayShown = false
+      lastSignature = ''
+      acknowledgedSignature = ''
+      return
+    }
     lastSignature = signature
-    try { showOverlay(rect, payload) } catch (_) {}
+    acknowledgedSignature = ''
+    if (!pushOverlay(rect, payload, signature)) {
+      overlayShown = false
+      lastSignature = ''
+      acknowledgedSignature = ''
+    }
   }
 
   return {
@@ -426,6 +490,9 @@ export function createTabDropZone(deps: TabDropZoneDependencies = {}) {
         sourceWcId: Number.isFinite(info.sourceWcId) ? Number(info.sourceWcId) : null
       }
       outsideSince = 0
+      // 拖动是预览即将出现的强意图：先在 250ms 停留门禁期间把独立渲染进程载好，
+      // 避免"停够了才开始冷启动"的随机空窗。
+      try { prepareOverlay() } catch (_) {}
       if (!monitor.running) monitor.start()
       // **起表之后再通报**：宿主收到"拖动开始"就去冻结侧栏唤出，
       // 而本模块从这一拍起才真的会读光标 —— 顺序反了会在冻结前先空跑一拍判据。
@@ -465,6 +532,14 @@ export function createTabDropZone(deps: TabDropZoneDependencies = {}) {
     /** 此刻的意图（测试与调试用；正常提交走 `end()`）。 */
     get intent() {
       return intent
+    },
+
+    /** renderer 已把某一帧应用到 DOM（只接受当前在途签名）。 */
+    acknowledge(previewId: unknown): boolean {
+      const id = previewId == null ? '' : String(previewId)
+      if (!overlayShown || !id || id !== lastSignature) return false
+      acknowledgedSignature = id
+      return true
     },
 
     /** 供测试直接喂一个采样周期（不必真的起定时器）。 */

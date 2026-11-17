@@ -1,7 +1,7 @@
 import { generateId, normalizeDomain } from '@hira-ng/shared-utils'
 import { DEFAULT_RULE_DOMAIN } from './constants'
 import * as P from './permissionUtil'
-import { InMemoryPermissionGrantRegistry, InMemoryPermissionRequestRegistry } from './registry'
+import { InMemoryPermissionRequestRegistry } from './registry'
 import { createDrizzlePermissionRepository } from './repository'
 import type {
   PendingPermissionFlagged,
@@ -34,7 +34,6 @@ export function createPermissionService(
     ? Object.freeze([...options.permissionTypes])
     : P.KNOWN_TYPES
   const requestRegistry = options.requestRegistry || new InMemoryPermissionRequestRegistry()
-  const grantRegistry = options.grantRegistry || new InMemoryPermissionGrantRegistry()
   const now = options.now || Date.now
   const createId = options.createId || generateId
   const emit = typeof options.emit === 'function' ? options.emit : null
@@ -54,23 +53,6 @@ export function createPermissionService(
 
   function notifyRuleChanged(origin = '', permissionType = ''): void {
     try { onChange?.({ origin, permissionType }) } catch {}
-  }
-
-  function grantKey(origin: string, permissionType: string, scopeId?: PermissionScopeId): string {
-    const domain = normalizeDomain(origin) || String(origin || '')
-    return `${scopeId == null ? '' : String(scopeId)}::${domain}::${permissionType}`
-  }
-
-  function addGrant(origin: string, permissionType: string, scopeId?: PermissionScopeId): void {
-    if (permissionType) grantRegistry.add(grantKey(origin, permissionType, scopeId))
-  }
-
-  function hasGrant(origin: string, permissionType: string, scopeId?: PermissionScopeId): boolean {
-    return grantRegistry.has(grantKey(origin, permissionType, scopeId))
-  }
-
-  function clearGrants(scopeId?: PermissionScopeId | null): number {
-    return grantRegistry.removeScope(`${scopeId == null ? '' : String(scopeId)}::`)
   }
 
   function getPermission(
@@ -144,14 +126,6 @@ export function createPermissionService(
 
   function isBlocked(origin: string, permissionType: string, profileId?: string): boolean {
     return getPermission(origin, permissionType, profileId) === 'block'
-  }
-
-  function isGrantedFor(
-    origin: string,
-    permissionType: string,
-    scopeId?: PermissionScopeId
-  ): boolean {
-    return hasGrant(origin, permissionType, scopeId) || getPermission(origin, permissionType) === 'allow'
   }
 
   function getSitePermissions(origin: string, profileId?: string): PermissionRuleMap {
@@ -294,8 +268,13 @@ export function createPermissionService(
     return repository.listByType(currentProfile(profileId), permissionType)
   }
 
-  function pendingKey(origin: string, permissionType: string): string {
-    return `${normalizeDomain(origin) || String(origin || '')}::${permissionType}`
+  function pendingKey(
+    origin: string,
+    permissionType: string,
+    scopeId?: PermissionScopeId
+  ): string {
+    const scope = scopeId == null ? '' : String(scopeId)
+    return `${scope}::${normalizeDomain(origin) || String(origin || '')}::${permissionType}`
   }
 
   function firstScope(request: PendingPermissionRequest): PermissionScopeId | null {
@@ -311,7 +290,7 @@ export function createPermissionService(
     callback: (allow: boolean) => void,
     scopeId?: PermissionScopeId
   ): string {
-    const key = pendingKey(origin, permissionType)
+    const key = pendingKey(origin, permissionType, scopeId)
     const created = requestRegistry.register(key, {
       id: createId('preq'),
       origin,
@@ -338,9 +317,6 @@ export function createPermissionService(
   function respondToRequest(id: string, allow: boolean, persist?: boolean): boolean {
     const request = requestRegistry.remove(id)
     if (!request) return false
-    if (allow) {
-      for (const waiter of request.waiters) addGrant(request.origin, request.permissionType, waiter.scopeId)
-    }
     for (const waiter of request.waiters) {
       try { waiter.callback(allow) } catch {}
     }
@@ -449,10 +425,6 @@ export function createPermissionService(
     pendingWithFlags,
     rejectAllPending,
     rejectPendingForScope,
-    isGrantedFor,
-    hasGrant,
-    addGrant,
-    clearGrants,
     normalizeDomain,
     PERMISSION_TYPES: permissionTypes
   }

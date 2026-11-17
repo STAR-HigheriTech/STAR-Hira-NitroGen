@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 import type { NavigationEntry, WebContents, WebContentsView } from 'electron'
 import { createTabIdGenerator, createTabRecordFactory, type TabRecord } from './tabRecord'
-import { bindTabEvents, type TabEventsHost } from './tabEvents'
+import { bindTabEvents, exitWebContentsHtmlFullscreen, type TabEventsHost } from './tabEvents'
 import { TabChangeEmitter, type TabChangeHost } from './TabChangeEmitter'
 import { TabAutoRefreshController } from './TabAutoRefresh'
 import { installTabGroupController, type TabGroupHost } from './TabGroupController'
@@ -49,6 +49,7 @@ interface TabLayoutPort {
   getActiveTabId(): string | null
   getActiveSplit?(): { splitId?: string; members?: string[] } | null
   getActiveGlance?(): { glanceId?: string; members?: string[]; frontTabId?: string } | null
+  setTabFullscreen?(fullscreen: boolean): boolean
   showTab(tabId: string): void
   hideTab(tabId?: string): void
   forgetView(view: WebContentsView): void
@@ -1541,10 +1542,17 @@ class TabManager extends EventEmitter {
     // ⚠ 但「切到同一组的另一格」根本没隐藏任何东西（分屏同伴 / 速览的两张卡都还亮着），
     //   这时**绝不许**发这两条信号 —— 见 `_prevStaysVisible`。
     const prevId = this.getActiveTabId()
-    if (prevId && prevId !== id && !this._prevStaysVisible(prevId, id)) {
-      this._notifyTabWillHide(prevId)
-      // 可见性变化：旧标签被隐藏 → 消费方（自动画中画）可在此进 PiP
-      this._notifyTabVisibility(prevId, false)
+    if (prevId && prevId !== id) {
+      const prevStaysVisible = this._prevStaysVisible(prevId, id)
+      if (!prevStaysVisible) {
+        const prevView = this._wcm.getTab(prevId)
+        if (prevView && prevView.webContents && !prevView.webContents.isDestroyed()) {
+          exitWebContentsHtmlFullscreen(prevView.webContents)
+        }
+        this._notifyTabWillHide(prevId)
+        // 可见性变化：旧标签被隐藏 → 消费方（自动画中画）可在此进 PiP
+        this._notifyTabVisibility(prevId, false)
+      }
     }
     // 若标签休眠中，_showTab 会自动唤醒（恢复 webContents 并还原导航历史）
     this._showTab(id)

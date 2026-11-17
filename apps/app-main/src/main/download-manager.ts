@@ -14,6 +14,7 @@ import { app, BrowserWindow, dialog, net, Notification, shell, type BaseWindow, 
 import fs from 'node:fs'
 import path from 'node:path'
 import { createFilePort } from '@hira-ng/infra-fs'
+import { onWebContentsDestroyed } from '@hira-ng/infra-window'
 import {
   createDownloadSecurity,
   createSpeedTracker,
@@ -522,7 +523,7 @@ function registerDownloadHandler(session: Session, downloadService: DownloadServ
       if (lastDownloadWebContents !== webContents) {
         lastDownloadWebContents = webContents
         try {
-          webContents.once('destroyed', () => {
+          onWebContentsDestroyed(webContents, () => {
             if (lastDownloadWebContents === webContents) lastDownloadWebContents = null
           })
         } catch (_) {}
@@ -540,10 +541,41 @@ function registerDownloadHandler(session: Session, downloadService: DownloadServ
     const safeBrowsing = settingsService
       ? normalizeSafeBrowsing(settingsService.get(DOWNLOAD_SETTING_KEYS.safeBrowsing))
       : normalizeSafeBrowsing(undefined)
-    if (safeBrowsing === 'reject' && isDangerousFile(originalFilename)) {
+    const dangerousMime = /^application\/(?:x-msdownload|x-msi|x-msdos-program|x-dosexec|vnd\.microsoft\.portable-executable)$/i
+      .test(String(mimeType || ''))
+    const dangerousFile = isDangerousFile(originalFilename) || dangerousMime
+    if (safeBrowsing === 'reject' && dangerousFile) {
       // 自动拒绝：拦截能力保留，直接取消危险下载
       item.cancel()
       return
+    }
+    if (safeBrowsing === 'prompt' && dangerousFile) {
+      try { item.pause() } catch (_) {}
+      const owner = webContents ? BrowserWindow.fromWebContents(webContents) : null
+      let sourceHost = url
+      try { sourceHost = new URL(url).hostname || url } catch {}
+      const options: Electron.MessageBoxOptions = {
+        type: 'warning',
+        title: '危险文件',
+        message: `“${originalFilename}”可能危害你的设备`,
+        detail: `来源：${sourceHost}\n请只在你明确信任文件来源时继续。`,
+        buttons: ['取消下载', '仍然下载'],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true
+      }
+      let response = 0
+      try {
+        const result = owner && !owner.isDestroyed()
+          ? await dialog.showMessageBox(owner, options)
+          : await dialog.showMessageBox(options)
+        response = result.response
+      } catch {}
+      if (response !== 1) {
+        item.cancel()
+        return
+      }
+      try { item.resume() } catch (_) {}
     }
 
     // ── 站点守卫（自动下载）────────────────────────────────────────────
@@ -607,7 +639,7 @@ function registerDownloadHandler(session: Session, downloadService: DownloadServ
     activeId = id
 
     // 危险文件标记
-    if (isDangerousFile(safeName)) {
+    if (dangerousFile || isDangerousFile(safeName)) {
       downloadService.setDanger(id, 'suspicious')
     }
 

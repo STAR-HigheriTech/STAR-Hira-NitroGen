@@ -3,7 +3,7 @@
  *
  * 完全对齐 Hira main/ipc/jsDialog.js + main/ipc/findBar.js 的窗口特性：
  *   - 独立浮层窗口：frame:false、hasShadow、alwaysOnTop、skipTaskbar、parent 关联
- *   - ready-to-show 后 showInactive()（**不抢焦点**，否则会把焦点从网页输入框上夺走）
+ *   - ready-to-show 后 show() + focus()：模态询问必须立刻可键盘操作
  *   - 父窗口 move/resize 时销毁重开（位置会错位）
  *
  * ⚠ 历史问题：本文件曾直接构造 BrowserWindow，绕开了 infra-window 的
@@ -15,7 +15,7 @@
  *   - 原生系统阴影（hasShadow）
  *   - alwaysOnTop 始终置顶 + skipTaskbar 不占任务栏
  *   - 多显示器 / DPI 缩放由系统处理
- *   - 不抢焦点（showInactive）
+ *   - 模态询问显示后接管键盘焦点
  */
 
 import type { BrowserWindow, WebContents } from 'electron'
@@ -114,10 +114,8 @@ function clampHeight (contentHeight: unknown, x: number, y: number): number {
  * @param {Object} opts
  * @param {import('electron').BrowserWindow} opts.parentWindow
  * @param {number} [opts.navbarExtraHeight] - navbar 额外高度（tabbar 第二行展开时）
- * @param {boolean} [opts.focusOnReveal] - 出现时**接管焦点**（应用级确认框用）。
- *   网页弹窗必须 showInactive（否则会把焦点从输入框上夺走）；但应用级确认框是
- *   `show()` 建出来的 **modal** 子窗 —— 父窗口被禁用，用户此刻按 Enter / Esc 没有任何
- *   目标，只有先点一下浮层才能用键盘。因此这类弹窗要主动拿焦点，键盘才是立刻可用的。
+ * @param {boolean} [opts.focusOnReveal] - 出现时**接管焦点**。
+ *   对话框是 modal 子窗，父窗口已被禁用；不接管焦点会让 Enter / Esc 暂时没有落点。
  */
 export function createOverlay ({ parentWindow, navbarExtraHeight, focusOnReveal }: DialogOverlayOptions): DialogOverlayController {
   let _win: BrowserWindow | null = null
@@ -127,8 +125,11 @@ export function createOverlay ({ parentWindow, navbarExtraHeight, focusOnReveal 
   // 否则用户会看到「小窗先闪一下 → 再长高」的跳动（内容越长越明显）。
   let _shown = false
   let _revealTimer: ReturnType<typeof setTimeout> | null = null
+  // renderer 崩溃后 WindowFactory 会重载页面；重载后的文档必须重新收到当前请求，
+  // 否则会留下一个尺寸正常但内容全空的对话框。
+  let _lastInitData: unknown = null
 
-  /** 显示浮层（不抢焦点）。幂等。 */
+  /** 显示浮层并接管键盘。幂等。 */
   function reveal () {
     if (_shown || !_win || _win.isDestroyed()) return
     _shown = true
@@ -138,7 +139,7 @@ export function createOverlay ({ parentWindow, navbarExtraHeight, focusOnReveal 
     }
     try {
       if (focusOnReveal) {
-        // 应用级确认框：模态窗必须自己拿焦点，否则父窗口被禁用后键盘无处可去。
+        // 模态窗必须自己拿焦点，否则父窗口被禁用后键盘无处可去。
         _win.show()
         _win.focus()
       } else {
@@ -191,7 +192,7 @@ export function createOverlay ({ parentWindow, navbarExtraHeight, focusOnReveal 
         height: DIALOG_DEFAULT_HEIGHT,
         parent: parentWindow || undefined,
         modal: Boolean(parentWindow),
-        // 先隐藏；尺寸由渲染层量出的内容高度决定后再 showInactive（不白闪、不抢焦点、
+        // 先隐藏；尺寸由渲染层量出的内容高度决定后再显示（不白闪，
         // 也不会先用兜底高度闪一下再跳变）。
         show: false,
         showOnReady: false,
@@ -220,6 +221,17 @@ export function createOverlay ({ parentWindow, navbarExtraHeight, focusOnReveal 
     }
     _win = win
     _shown = false
+
+    win.webContents.on('render-process-gone', (_event, details) => {
+      if (details && details.reason === 'clean-exit') return
+      _shown = false
+      const wc = _win && !_win.isDestroyed() ? _win.webContents : null
+      if (!wc || wc.isDestroyed()) return
+      wc.once('did-finish-load', () => {
+        if (_lastInitData == null || wc.isDestroyed()) return
+        try { wc.send(JS_DIALOG_CHANNELS.init, _lastInitData) } catch (_) {}
+      })
+    })
 
     // 计算位置并设置（唯一需要窗口实例的操作：WindowFactory 不认识业务定位规则）
     const pos = getJsDialogWindowPosition(parentWindow, navbarExtraHeight, DIALOG_DEFAULT_HEIGHT)
@@ -259,6 +271,7 @@ export function createOverlay ({ parentWindow, navbarExtraHeight, focusOnReveal 
    * 发送 init 数据到浮层
    */
   function sendInit (data: unknown): void {
+    _lastInitData = data
     if (!_win || _win.isDestroyed()) return
     const wc = _win.webContents
     if (wc.isLoading()) {

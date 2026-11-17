@@ -169,6 +169,7 @@ export interface SuggestionAnchor {
   width: number
   height: number
   align: 'left' | 'right'
+  valign: 'below' | 'center'
 }
 
 export interface SearchbarOverlayPayload {

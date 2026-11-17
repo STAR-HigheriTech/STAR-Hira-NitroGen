@@ -37,6 +37,7 @@ const PERMISSION_PRIORITY: Readonly<Record<string, number>> = Object.freeze({
   pointerLock: 70,
   'clipboard-read': 65,
   notifications: 60,
+  push: 59,
   notification: 60,
   'clipboard-sanitized-write': 55,
   'clipboard-write': 54,

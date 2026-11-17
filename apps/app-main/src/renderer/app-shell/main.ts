@@ -18,6 +18,8 @@ import { pluginsClient } from '../shared/plugins-client.js'
 // 官方插槽的渲染侧客户端（navbar 插件按钮 / 标签动作都从这里取实现）。
 import { slotsClient } from '../shared/slots-client.js'
 import { getHiraBridge } from '../shared/bridge.js'
+import { failedUrlOfErrorPage, isWebErrorUrl } from '@hira-ng/shared-types/src/web-error.mjs'
+import { isSecurityWarningUrl, targetUrlOfSecurityWarning } from '@hira-ng/shared-types/src/security-warning.mjs'
 // 外壳的键盘焦点哨兵：上报「外壳是否在吃键盘」+ 点外壳空白处时请求把焦点还给网页。
 // 与主进程 LayoutCoordinator#restoreContentFocus 配套，是「点标签栏后网页失焦」的修复点。
 import { installFocusSentinel } from './focus-sentinel.js'
@@ -442,17 +444,20 @@ addDisposer(getHiraBridge().on.subscribe('overlay:commit', (payload: UnknownReco
       id: payload.id,
       allow: payload.allow === true,
       persist: payload.persist === true
-    }).then((result) => {
+    }).then(async (result) => {
       // `{ ok:false }` 是**正常 resolve 的失败**（这条 pending 已不在主进程：
       // 已被别处响应 / 页面导航销毁）。本地必须与主进程真值对齐，否则死请求会一直挂在
       // 浮层上 —— 用户看到的就是「点了允许，什么都没发生」。
-      if (permissionState) permissionState.refresh()
+      if (permissionState) await permissionState.refresh()
+      // 响应失败但请求仍在主进程时，浮层不能保持本地已隐藏的空白状态。
+      syncPermissionOverlay()
       if (result && result.ok === false) return
       // 成功：权限库可能刚多/少了一条规则（「始终」两档）→ 聚合按钮的规则圆点跟上来。
       refreshSiteRules()
-    }).catch((error) => {
+    }).catch(async (error) => {
       console.error('[overlay] permission:respond failed:', error)
-      if (permissionState) permissionState.refresh()
+      if (permissionState) await permissionState.refresh()
+      syncPermissionOverlay()
     })
   } else if (payload.kind === 'permission-open-panel') {
     // 权限申请浮层末尾那条「还有 N 项 · 转到权限面板」：浮层只报动作，
@@ -473,6 +478,10 @@ addDisposer(getHiraBridge().on.subscribe('overlay:commit', (payload: UnknownReco
 }))
 addDisposer(getHiraBridge().on.subscribe(IPC_EVENTS.overlayAction, (payload) => {
   if (disposed) return
+  if (payload && payload.kind === 'permission-overlay-ready') {
+    syncPermissionOverlay()
+    return
+  }
   console.log('[overlay] action:', payload)
 }))
 
@@ -532,6 +541,14 @@ function isNewTabPageUrl(url: unknown): boolean {
   return next !== '' && target === next
 }
 
+function visibleAddressForUrl(url: unknown): string {
+  const raw = String(url || '')
+  if (isNewTabPageUrl(raw)) return ''
+  if (isWebErrorUrl(raw)) return failedUrlOfErrorPage(raw) || raw
+  if (isSecurityWarningUrl(raw)) return targetUrlOfSecurityWarning(raw) || raw
+  return raw
+}
+
 /**
  * 上一次**自动回填**进地址栏的值，以及它属于哪个标签。
  *
@@ -572,7 +589,7 @@ function syncAddressBar(force: boolean = false): boolean {
   const active = tabSession && typeof tabSession.getActiveTab === 'function' ? tabSession.getActiveTab() : null
   const url = (active && active.url) || ''
   const tabId = active ? active.tabId : null
-  const next = isNewTabPageUrl(url) ? '' : url
+  const next = visibleAddressForUrl(url)
   const switched = tabId !== lastSyncedTabId
   const addressChanged = next !== lastSyncedAddress
   if (force || switched || addressChanged) {
@@ -1046,7 +1063,9 @@ function handleSiteInfoAction(action: string): void {
       navigateInternal('cookies', { newTab: true })
       break
     case 'open-certificates':
-      navigateInternal('certificates')
+      // 新标签打开并显式带上来源：证书页读到的是用户刚才正在看的站点，
+      // 不是证书页自己，也不会把原站点顶掉。
+      navigateInternal('certificates', { newTab: true, query: { tabId: sourceTabId } })
       break
     case 'open-page-info':
       // 必须新标签 + 显式来源 tabId：替换当前标签再去问「当前活动标签」，
@@ -2986,7 +3005,7 @@ addDisposer(getHiraBridge().on.subscribe('tab:navigated', (payload) => {
     : (!!payload.tabId && payload.tabId === tabSession.getActiveTabId())
   if (!isActive) return
   const active = typeof tabSession.getActiveTab === 'function' ? tabSession.getActiveTab() : null
-  writeAddress(isNewTabPageUrl(url) ? '' : url, active)
+  writeAddress(visibleAddressForUrl(url), active)
 }))
 
 // ── 渲染侧插件插槽（`plugin-slots.js`）激活 ────────────────────────────

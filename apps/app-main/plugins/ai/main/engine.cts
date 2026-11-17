@@ -368,9 +368,9 @@ function createEngine({ kernel, extensionPoints, contributions, getDomainService
           if (dataUrl) payloadRecord.dataUrl = dataUrl
         }
         item.payload = payload
-      } else if (item.kind === 'file' && payloadRecord && payloadRecord.path && !payloadRecord.text) {
-        const text = attachments.readTextFile(payloadRecord.path)
-        if (text) payloadRecord.text = text
+      } else if (item.kind === 'file' && payloadRecord && payloadRecord.path) {
+        // 文件内容在用户采集时已经固化；历史事件里的 path 是展示信息，不是读取授权，
+        // 不能因为数据库 / 旧事件里出现任意路径就在发送时重新读盘。
         if (!payloadRecord.name) payloadRecord.name = basename(payloadRecord.path)
         item.payload = payload
       } else if (item.kind === 'page') {
@@ -438,10 +438,7 @@ function createEngine({ kernel, extensionPoints, contributions, getDomainService
       } catch (_) { return null }
     }
 
-    if (kind === 'file' && payload.path && !payload.text) {
-      const text = attachments.readTextFile(payload.path)
-      return text ? { ...payload, text } : payload
-    }
+    if (kind === 'file' && payload.path) return payload
 
     return payload && Object.keys(payload).length ? payload : null
   }
@@ -494,7 +491,7 @@ function createEngine({ kernel, extensionPoints, contributions, getDomainService
   }
 
   function state(req: UnknownRecord = {}) {
-    const sessions = store.listSessions({ limit: SESSION_PAGE })
+    let sessions = store.listSessions({ limit: SESSION_PAGE })
     const shared = uiState.get()
     const host = normalizeHost(req.host)
     // 「当前会话」按宿主分槽：侧栏 / 窗口 / 内部页各自记忆，互不拽走。
@@ -502,11 +499,18 @@ function createEngine({ kernel, extensionPoints, contributions, getDomainService
     const wanted = req.sessionId ? store.getSession(String(req.sessionId)) : null
     const remembered = !wanted && slotId ? store.getSession(slotId) : null
     const current = wanted || remembered || sessions[0] || null
+    // 深链 / 搜索结果可能指向 50 条列表之外的旧会话。当前会话必须始终出现在
+    // 列表投影里，否则顶栏能显示标题、列表却没有选中项，后续刷新还会把标题带回旧会话。
+    if (current && !sessions.some((session: { id?: string }) => session.id === current.id)) {
+      sessions = [current, ...sessions].slice(0, Math.max(1, SESSION_PAGE))
+    }
 
     // 把解析结果写回**本宿主**的槽位：下次挂载落在同一条会话上。
     // 其它宿主的槽位不动 —— 那正是"三种宿主可以停在不同对话"的前提。
     const currentId = current ? current.id : null
-    if (currentId !== slotId) uiState.set({ host, sessionId: currentId })
+    // 快速连续切换时，旧 state 请求可能晚返回。渲染层读取会话投影时用
+    // `select:false`，只有最新一次选择才允许写共享槽位，避免旧请求把当前对话写回去。
+    if (req.select !== false && currentId !== slotId) uiState.set({ host, sessionId: currentId })
 
     const projected = current
       ? projectMessages(store.listRecentEvents(current.id, STATE_EVENT_LIMIT))
@@ -526,6 +530,7 @@ function createEngine({ kernel, extensionPoints, contributions, getDomainService
       skills: skillService.list({ enabledOnly: true }).skills,
       skillKinds: skillService.kinds(),
       running: runner.snapshot(),
+      approvals: approvals.list(),
       messages: projected.messages,
       lastSeq: projected.lastSeq,
       // 共享界面状态（模型 / 推理 / 审批）：三个宿主读同一份，不再各自记 settings。

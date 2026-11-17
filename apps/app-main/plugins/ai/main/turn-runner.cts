@@ -517,7 +517,7 @@ function createTurnRunner(deps: TurnRunnerDeps) {
         const policy = evaluate({
           tool: PAGE_CONTEXT_DECL,
           approvalMode,
-          granted: grants.has(PAGE_CONTEXT_TOOL)
+          granted: grants.has(PAGE_CONTEXT_TOOL, site)
         })
         if (!policy.needsApproval) {
           verdict = 'allow'
@@ -594,8 +594,17 @@ function createTurnRunner(deps: TurnRunnerDeps) {
   /** 首条用户消息顺便把空标题补上（省一次手动改名，且会话列表里立刻可辨认）。 */
   function maybeAutoTitle(session: Record<string, unknown> | null, req: Record<string, unknown>, blocks: AiBlock[]) {
     if (!session || session.title) return
-    const firstVisible = blocks.find((block) => block.type === 'text' && !block.hidden) || blocks.find((block) => block.type === 'text')
-    const title = String((req.text || (firstVisible && firstVisible.type === 'text' ? firstVisible.text : '') || '')).replace(/\s+/g, ' ').trim().slice(0, 40)
+    const firstVisible = blocks.find((block) => block.type === 'text' && !block.hidden)
+    const contextTitle = (Array.isArray(req.context) ? req.context : [])
+      .map((item) => item && typeof item === 'object' ? item as Record<string, unknown> : {})
+      .map((item) => String(item.title || (item.payload && typeof item.payload === 'object'
+        ? (item.payload as Record<string, unknown>).title || (item.payload as Record<string, unknown>).name || ''
+        : '')))
+      .find(Boolean) || ''
+    const title = String(req.text || (firstVisible && firstVisible.type === 'text' ? firstVisible.text : '') || contextTitle)
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 40)
     if (!title) return
     const sessionId = String(session.id)
     store.touchSession(sessionId, { title })

@@ -1343,15 +1343,18 @@ export function registerBuiltinSettingsSections(registry: SettingsRegistry): voi
 
   registry.registerSection({
     id: 'languages',
-    label: '翻译与语言',
-    group: 'tools',
+    label: '翻译设置',
+    group: 'translation',
     icon: 'globe',
     blurb: '网页翻译与拼写检查偏好。插件引擎优先，在线通道自动故障切换。',
     subtabs: [
       { id: 'translate', label: '翻译', keys: [
         TRANSLATE_SETTING_KEYS.translatePages,
         TRANSLATE_SETTING_KEYS.targetLanguage,
-        TRANSLATE_SETTING_KEYS.engine
+        TRANSLATE_SETTING_KEYS.engine,
+        TRANSLATE_SETTING_KEYS.customEndpoint,
+        TRANSLATE_SETTING_KEYS.customApiKey,
+        TRANSLATE_SETTING_KEYS.customModel
       ] },
       { id: 'spellcheck', label: '拼写检查', keys: [
         SPELLCHECK_SETTING_KEYS.enabled, SPELLCHECK_SETTING_KEYS.languages, SPELLCHECK_SETTING_KEYS.dictionary
@@ -1368,6 +1371,17 @@ export function registerBuiltinSettingsSections(registry: SettingsRegistry): voi
         desc: '自动模式先走 Bing 中国直连，再切 Google / Microsoft。插件 translate.provider 始终优先。',
         options: TRANSLATION_ENGINE_OPTIONS,
         default: translateDefault('engine') },
+      { key: TRANSLATE_SETTING_KEYS.customEndpoint, label: '自定义 API 地址', type: 'text', effect: 'live',
+        placeholder: 'https://api.example.com/v1/chat/completions',
+        desc: 'OpenAI 兼容 Chat Completions 接口；只填以 /v1 结尾的地址时会自动补全。',
+        default: translateDefault('customEndpoint') },
+      { key: TRANSLATE_SETTING_KEYS.customApiKey, label: '自定义 API Key', type: 'password', effect: 'live',
+        placeholder: '可留空',
+        default: translateDefault('customApiKey') },
+      { key: TRANSLATE_SETTING_KEYS.customModel, label: '自定义 API 模型', type: 'text', effect: 'live',
+        placeholder: 'gpt-4.1-mini / 本地模型名',
+        desc: '地址和模型都填写后，自定义 API 会排在插件之后、内置通道之前。',
+        default: translateDefault('customModel') },
       // ── 拼写检查（与翻译同属「语言」能力，故并入本分区而不是另起一页）──────
       { key: SPELLCHECK_SETTING_KEYS.enabled, label: '拼写检查', type: 'toggle', effect: 'live',
         desc: '在输入框里标出拼写错误，右键可替换或加入词典。',

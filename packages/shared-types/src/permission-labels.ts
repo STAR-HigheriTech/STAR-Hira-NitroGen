@@ -35,7 +35,7 @@
  * 现在两边 require 同一个数组，清单变更只有一处。
  *
  * 清单内容承接自旧 Hira permissionManager 的真实处理清单：
- *   · pagePermissionRequestHandler 显式分支：notifications / media / pointerLock /
+ *   · pagePermissionRequestHandler 显式分支：notifications / push / media / pointerLock /
  *     geolocation / clipboard-sanitized-write / fullscreen
  *   · isSupportedSitePermission 白名单：midi / midiSysex / hid / serial / bluetooth /
  *     usb / sensors / idle-detection / idleDetection / clipboard-read / clipboard-write /
@@ -60,6 +60,7 @@
 export const PERMISSION_TYPES = Object.freeze([
   // 核心（Hira pagePermissionRequestHandler 显式分支）
   'notifications',
+  'push',
   'media',
   'pointerLock',
   'geolocation',
@@ -109,6 +110,7 @@ export const PERMISSION_TYPES = Object.freeze([
  */
 const LABELS = Object.freeze({
   notifications: '通知',
+  push: '推送通知',
   notification: '通知',
   media: '摄像头和麦克风',
   camera: '摄像头',
@@ -163,6 +165,7 @@ const FALLBACK_PREFIX = '其它权限'
  */
 const ICON_KEYS = Object.freeze({
   notifications: ['Bell'],
+  push: ['Bell'],
   notification: ['Bell'],
   media: ['Camera', 'Mic'],
   camera: ['Camera'],
@@ -242,8 +245,8 @@ export function permissionFilterOptions () : string[] {
  * 权限决定的**四档**（浮层 / 侧栏面板 / 内部页三处共用同一份规格）。
  *
  * 为什么要四档而不是"允许 / 拒绝"两个按钮：`persist` 是**语义不同**的两种决定 ——
- * 「一次」只在本次会话内生效（domain-permission#addGrant，导航即撤销），
- * 「始终」会写进权限库、之后同站点不再询问。合成两个按钮就等于替用户默认选了"始终"，
+ * 「一次」只回答当前请求，不生成可复用的授权；「始终」会写进权限库，
+ * 之后同站点不再询问。合成两个按钮就等于替用户默认选了"始终"，
  * 那是一个用户没做过的决定（对齐 Chrome / Edge 的 once / always 两轴）。
  *
  * 字段是**纯数据**，不含任何界面细节（类名 / 图标 / 布局各视图自己定）：

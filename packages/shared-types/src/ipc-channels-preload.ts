@@ -61,6 +61,8 @@ export const PRELOAD_ROUTES = Object.freeze({
   // Domain: Translate（C3 网页翻译）
   /** 页面翻译引擎请求一批文本的译文（页面 → 主进程，invoke），返回**等长同序**的译文。 */
   translateText: 'translate:text',
+  /** 页面翻译引擎读取插件提供的语言检测与 DOM 策略。 */
+  translatePageContext: 'translate:page-context',
   /** 翻译浮层切换目标语言（页面 → 主进程，invoke），同时持久化设置。 */
   translateTarget: 'translate:target',
 

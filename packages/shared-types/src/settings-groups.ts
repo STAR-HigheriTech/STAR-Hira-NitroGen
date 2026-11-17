@@ -9,7 +9,7 @@
  *   · 插件贡献的设置分区（`main/settings/ipc.js#collectPluginSections`）
  *     —— 只接受这里的 id，未知分组不会被静默塞进某个角落。
  *
- * ⚠ 新增一个分区时，`group` **只能**填下面 8 个 id 之一。
+ * ⚠ 新增一个分区时，`group` **只能**填下面导航表中的 id 之一。
  *   想加一个新大类？先在这里加一行（id / label / icon 三件套），再改分区。
  *   不准再把中文组名直接写进 `registerSection({ group: '外观' })` ——
  *   那正是「设置页一套词表、内部页另一套词表」漂移的起点。
@@ -37,6 +37,7 @@ export const SETTINGS_GROUPS: ReadonlyArray<SettingsGroup> = Object.freeze(
   [
     { id: 'appearance', label: '外观', icon: 'palette' },
     { id: 'search', label: '搜索引擎', icon: 'search' },
+    { id: 'translation', label: '翻译', icon: 'globe' },
     { id: 'startup', label: '启动与行为', icon: 'window' },
     { id: 'privacy', label: '隐私与安全', icon: 'shield' },
     { id: 'extensions', label: '扩展与插件', icon: 'puzzle' },

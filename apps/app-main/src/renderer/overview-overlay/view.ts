@@ -3,6 +3,7 @@
  *
  * ── 布局（对齐 Edge 左上角「标签操作菜单」）────────────────────────────
  *   ┌ 空间（最多 2 + 「还有 N 个 · 转到空间面板」）
+ *   │  └ 近期 3 个 profile 小选项卡（切换后只替换本块的空间列表）
  *   ├ 搜索（独立区块：自带「搜索」标题 + 发丝线，字段本体在标题下方）
  *   ├ 打开的标签（最多 6 + 「还有 N 项 · 转到标签面板」）
  *   ├ 会话（最多 3 + 「还有 N 项 · 转到会话面板」）
@@ -24,7 +25,7 @@
  */
 
 import { overflowRowText, ROW_SEARCH_DEBOUNCE_MS, iconByName } from '@hira-ng/ui-common'
-import type { OverviewSection } from '@hira-ng/shared-types/src/overview.mjs'
+import type { OverviewProfileTab, OverviewSection } from '@hira-ng/shared-types/src/overview.mjs'
 
 const STYLE_ID = 'hira-overview-styles'
 
@@ -67,6 +68,40 @@ export function injectOverviewStyles(doc: Document): void {
       padding-top: 4px;
     }
     .overview-overlay__section-label { order: 0; white-space: nowrap; }
+    /* Space 标题下的近期 profile 选项卡：轻量、单行、可横向滚动。
+       选项卡只改变本块展示哪个 profile 的空间，不接管原空间行的点击 / 菜单语义。 */
+    .overview-overlay__profiles {
+      display: flex; align-items: center; gap: 2px;
+      min-width: 0; padding: 0 6px 6px;
+      overflow-x: auto; scrollbar-width: none;
+    }
+    .overview-overlay__profiles::-webkit-scrollbar { display: none; }
+    .overview-overlay__profiles[hidden] { display: none; }
+    .overview-overlay__profile-tab {
+      display: inline-flex; align-items: center; gap: 6px;
+      flex: 0 0 auto; min-width: 0; max-width: 116px; height: 26px;
+      padding: 0 8px; border: 0; border-radius: var(--hira-radius-xs, 7px);
+      background: transparent; color: var(--hira-text-tertiary, #8a8f98);
+      font: inherit; font-size: 11.5px; font-weight: 500;
+      cursor: pointer;
+      transition: background var(--hira-dur-fast, 120ms) var(--hira-ease-standard, ease),
+                  color var(--hira-dur-fast, 120ms) var(--hira-ease-standard, ease);
+    }
+    .overview-overlay__profile-tab:hover {
+      background: var(--hira-hover-bg, rgba(0,0,0,0.06));
+      color: var(--hira-text-primary, #1a1a1a);
+    }
+    .overview-overlay__profile-tab[aria-selected="true"] {
+      background: var(--hira-control-bg, rgba(0,0,0,0.06));
+      color: var(--hira-text-primary, #1a1a1a);
+    }
+    .overview-overlay__profile-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      flex-shrink: 0; background: var(--hira-text-tertiary, #8a8f98);
+    }
+    .overview-overlay__profile-name {
+      min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
     /* 块头动作按钮（刷新 / 保存当前…）：次级小按钮（软底、无描边），hover 才显底。
        文案与是否出现全部由纯层 descriptor 给（section.action / actionLabel）——
        视图里不再出现「只有最近关闭有刷新」这类 kind 硬编码。 */
@@ -210,6 +245,8 @@ export interface OverviewModel {
   mode: 'browse' | 'search'
   top: OverviewSection[]
   bottom: OverviewSection[]
+  profiles?: OverviewProfileTab[]
+  activeProfileId?: string
   query?: string
   active?: { spaceId?: string; profileId?: string }
 }
@@ -250,7 +287,7 @@ export function createOverviewView(doc: Document, handlers: OverviewHandlers = {
   wrap.append(aboveEl, searchbar, scroll)
 
   /** 当前模型（唯一一份状态）：`{ mode, top, bottom, active }`。 */
-  let model: OverviewModel = { mode: 'browse', top: [], bottom: [], active: {} }
+  let model: OverviewModel = { mode: 'browse', top: [], bottom: [], profiles: [], activeProfileId: '', active: {} }
 
   /**
    * kind → 外壳（标题 + 宿主 + 溢出按钮）。**每种 kind 只造一次**，跨渲染复用：
@@ -261,6 +298,7 @@ export function createOverviewView(doc: Document, handlers: OverviewHandlers = {
     box: HTMLElement
     title: HTMLElement
     label: HTMLElement
+    profiles: HTMLElement | null
     go: HTMLButtonElement
     action: HTMLButtonElement
     host: OverviewHost
@@ -300,6 +338,12 @@ export function createOverviewView(doc: Document, handlers: OverviewHandlers = {
       if (panel) onIntent({ type: 'go', panel })
     })
     title.append(label, go, action)
+    const profileTabs = kind === 'spaces' ? el(doc, 'div', 'overview-overlay__profiles') : null
+    if (profileTabs) {
+      profileTabs.role = 'tablist'
+      profileTabs.setAttribute('aria-label', '近期配置文件')
+      profileTabs.hidden = true
+    }
     const hostEl = el(doc, 'div', 'overview-overlay__host')
     hostEl.appendChild(host.element)
     const overflow = el(doc, 'button', 'overview-overlay__overflow')
@@ -309,11 +353,47 @@ export function createOverviewView(doc: Document, handlers: OverviewHandlers = {
       const panel = overflow.dataset.panel
       if (panel) onIntent({ type: 'go', panel })
     })
-    box.append(title, hostEl, overflow)
+    if (profileTabs) box.append(title, profileTabs, hostEl, overflow)
+    else box.append(title, hostEl, overflow)
 
-    const entry: OverviewBox = { box, title, label, go, action, host, overflow, sig: '' }
+    const entry: OverviewBox = { box, title, label, profiles: profileTabs, go, action, host, overflow, sig: '' }
     boxes.set(kind, entry)
     return entry
+  }
+
+  let profileTabsSig = ''
+
+  /** Space 标题下的近期 profile 选项卡（最多 3 个，数量与活动项由纯层给）。 */
+  function renderProfileTabs(): void {
+    const entry = boxes.get('spaces')
+    const container = entry?.profiles
+    if (!container) return
+    const tabs = Array.isArray(model.profiles) ? model.profiles : []
+    const activeProfileId = model.activeProfileId || ''
+    const sig = tabs
+      .map((profile) => [profile.id, profile.name, profile.color, profile.id === activeProfileId ? 1 : 0].join('\u0003'))
+      .join('\u0002')
+    if (sig === profileTabsSig) return
+    profileTabsSig = sig
+    container.textContent = ''
+    container.hidden = tabs.length < 2
+    for (const profile of tabs) {
+      const tab = el(doc, 'button', 'overview-overlay__profile-tab')
+      tab.type = 'button'
+      tab.role = 'tab'
+      tab.dataset.profileId = profile.id
+      tab.setAttribute('aria-selected', profile.id === activeProfileId ? 'true' : 'false')
+      tab.title = profile.name
+      const dot = el(doc, 'span', 'overview-overlay__profile-dot')
+      if (profile.color) dot.style.background = profile.color
+      const name = el(doc, 'span', 'overview-overlay__profile-name')
+      name.textContent = profile.name
+      tab.append(dot, name)
+      tab.addEventListener('click', () => {
+        if (profile.id !== activeProfileId) onIntent({ type: 'profile-switch', profileId: profile.id })
+      })
+      container.appendChild(tab)
+    }
   }
 
   /**
@@ -422,6 +502,8 @@ export function createOverviewView(doc: Document, handlers: OverviewHandlers = {
       mode: (next && next.mode) || 'browse',
       top: (next && next.top) || [],
       bottom: (next && next.bottom) || [],
+      profiles: next && Array.isArray(next.profiles) ? next.profiles : [],
+      activeProfileId: (next && next.activeProfileId) || '',
       active: (next && next.active) || {}
     }
     const visible = new Set([...model.top, ...model.bottom].map((s) => s.kind))
@@ -430,6 +512,7 @@ export function createOverviewView(doc: Document, handlers: OverviewHandlers = {
 
     layout(aboveEl, model.top)
     layout(belowEl, model.bottom)
+    renderProfileTabs()
 
     const empty = model.top.length === 0 && model.bottom.length === 0
     emptyEl.hidden = !empty

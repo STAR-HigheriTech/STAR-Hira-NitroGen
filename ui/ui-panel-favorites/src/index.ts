@@ -303,12 +303,18 @@ export function injectFavoritesPanelStyles(doc: Document): void {
     /* 插件包裹层（bookmark.tree-renderer-item）：行本身没有外边距，包一层不该改变
        列表的排版 —— 显式声明为块级、不带任何间距，把"加了一层"对布局的影响收成零。 */
     .favorites-panel__row-slot { display: block; margin: 0; padding: 0; }
+    /* 展开文件夹的子级：缩进落在分支容器上，行本身不再按 depth 重复缩进。
+       竖线对齐文件夹展开箭头的中心，视觉与标签视图的分组导线一致。 */
+    .favorites-panel__branch {
+      margin-left: 15px;
+      border-left: 1px solid var(--hira-border-soft, rgba(0,0,0,0.12));
+    }
     .favorites-panel__row {
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 6px 10px;
-      min-height: var(--hira-row-height, 36px);
+      padding: 4px 10px;
+      min-height: calc(var(--hira-row-height, 36px) - 2px);
       box-sizing: border-box;
       border-radius: var(--hira-radius-md, 10px);
       cursor: pointer;
@@ -1070,12 +1076,12 @@ export function createFavoritesPanel(doc: Document, ctx: PanelContext = {}) : { 
   }
 
   /** 草稿行：不挂 data-row —— 它不是树节点，绝不能被点击/拖拽/右键委托当成一行书签。 */
-  function buildDraftRow(depth = 0) {
+  function buildDraftRow() {
     if (!draft) return doc.createElement('div')
     const row = doc.createElement('div')
     row.className = 'favorites-panel__row favorites-panel__row--folder favorites-panel__row--draft'
     row.dataset.control = 'draft'
-    row.style.paddingLeft = `${6 + depth * 16}px`
+    row.style.paddingLeft = '6px'
     row.appendChild(createFolderIcon(doc, { size: 15, className: 'favorites-panel__folder-ico' }))
 
     const input = doc.createElement('input')
@@ -1158,7 +1164,7 @@ export function createFavoritesPanel(doc: Document, ctx: PanelContext = {}) : { 
     row.className = 'favorites-panel__row'
     row.setAttribute('data-row', '')
     row.setAttribute('data-id', node.id || '')
-    row.style.paddingLeft = `${6 + depth * 16}px`
+    row.style.paddingLeft = '6px'
     // 书签与文件夹都可拖（文件夹可拖进另一个文件夹 → 形成更深的嵌套）
     row.draggable = !flat
     if (isFolder) {
@@ -1292,23 +1298,32 @@ export function createFavoritesPanel(doc: Document, ctx: PanelContext = {}) : { 
       list.appendChild(empty)
       return
     }
-    const frag = doc.createDocumentFragment()
-    ;(function walk(children: readonly FavoriteNode[], depth: number, parentId: string | null) {
+    function buildLevel(children: readonly FavoriteNode[], depth: number, parentId: string | null) {
+      const level = doc.createDocumentFragment()
       // 草稿行插在**它父级的第一个子项位置**（根目录 = 列表最前）
-      if (draft && draft.parentId === parentId) frag.appendChild(buildDraftRow(depth))
+      if (draft && draft.parentId === parentId) level.appendChild(buildDraftRow())
       for (const node of children) {
         if (!node) continue
         if (node.id) visibleIds.push(node.id)
         const isFolder = !node.url
         if (isFolder) {
           const row = buildNodeRow(node, depth)
-          frag.appendChild(row)
-          if (isExpanded(node.id)) walk(node.children || [], depth + 1, node.id)
+          level.appendChild(row)
+          if (isExpanded(node.id)) {
+            const branch = doc.createElement('div')
+            branch.className = 'favorites-panel__branch'
+            branch.appendChild(buildLevel(node.children || [], depth + 1, node.id))
+            level.appendChild(branch)
+          }
         } else {
-          frag.appendChild(buildNodeRow(node, depth))
+          level.appendChild(buildNodeRow(node, depth))
         }
       }
-    })(source, 0, null)
+      return level
+    }
+
+    const frag = doc.createDocumentFragment()
+    frag.appendChild(buildLevel(source, 0, null))
     list.appendChild(frag)
     focusDraftIfNeeded()
   }

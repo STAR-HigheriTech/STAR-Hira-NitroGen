@@ -50,7 +50,7 @@ pages/
 | `profiles`     | 配置文件（Profile）管理 + Profile 内 Space 列表                              |
 | `spaces`       | 空间（Space）管理                                                            |
 | `extensions`   | 扩展管理                                                                     |
-| `certificates` | 证书错误列表                                                                 |
+| `certificates` | 来源站点完整证书链、本会话证书快照与证书校验失败记录                         |
 | `crash-report` | 崩溃报告                                                                     |
 | `page-info`    | 页面信息                                                                     |
 | `automation`   | 自动化（命令链 / 鼠标手势）                                                  |

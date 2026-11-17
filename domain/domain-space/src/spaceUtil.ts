@@ -181,7 +181,10 @@ function mergeSpaceMeta(base: unknown, patch: unknown): Record<string, unknown> 
 }
 
 /**
- * 按 order 升序排序（缺失按 999），order 相同按 lastUsed 降序，再按原顺序稳定。
+ * 按持久化 order 升序排序（缺失按 999），order 相同保持输入顺序。
+ *
+ * `lastUsed` 只用于选择「上次使用的空间」，不能参与列表排序：切换空间会刷新
+ * 该字段，若拿它做次级排序，用户点一下当前项，整张空间列表就会当场跳位。
  * @param {Array<object>} list
  * @returns {Array<object>}
  */
@@ -195,9 +198,6 @@ function sortSpaces<T extends Record<string, unknown>>(list: readonly T[] | null
       const va = Number.isFinite(oa) ? oa : FALLBACK_ORDER
       const vb = Number.isFinite(ob) ? ob : FALLBACK_ORDER
       if (va !== vb) return va - vb
-      const la = Number(a.item && a.item.lastUsed) || 0
-      const lb = Number(b.item && b.item.lastUsed) || 0
-      if (lb !== la) return lb - la
       return a.index - b.index
     })
     .map(({ item }) => item)

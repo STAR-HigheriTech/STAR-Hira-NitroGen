@@ -285,6 +285,7 @@ export interface SharedWindowContext {
   runAsProfile?: RuntimeDeps['runAsProfile']
   guardWindowOpen?(payload: Record<string, unknown>): boolean
   guardDownload?(payload: Record<string, unknown>): boolean
+  getSafeBrowsingWarning?(url: string): string
   getWindowSpace?(source: BrowserWindowRuntime | null, options: { incognito: boolean }): Partial<SpaceIdentity> | null | undefined
   getNewTabUrl(options?: { incognito?: boolean; containerProfileId?: string | null; profileId?: string }): string
   emit: RuntimeDeps['emit']
@@ -878,6 +879,7 @@ export function createBrowserWindowAssembly(shared: SharedWindowContext) {
         return shared.getNewTabUrl({ ...(options || {}), profileId })
       },
       getAutoPictureInPictureEnabled: shared.getAutoPictureInPictureEnabled,
+      getSafeBrowsingWarning: shared.getSafeBrowsingWarning,
       getFaviconService: shared.getFaviconService,
       getHistoryService: shared.getHistoryService,
       getExtensionService: (profileId?: string) => {
@@ -1116,6 +1118,7 @@ export function createBrowserWindowAssembly(shared: SharedWindowContext) {
         wcm: webContentsManager,
         layoutCoordinator,
         getOwnerWindow: () => win,
+        getSafeBrowsingWarning: shared.getSafeBrowsingWarning,
         // 状态广播（顶条之外还要告诉外壳，让入口按钮能反映"侧栏正开着"）
         emit: (route: string, payload?: unknown) => shared.emit(route, payload, { windowId: win.id }),
         // 身份：与标签同一条链（profile / 无痕）—— 不同 session 会出现"标签登录了侧栏没登录"
@@ -1362,8 +1365,9 @@ export function createBrowserWindowAssembly(shared: SharedWindowContext) {
       // 「总览」浮层也是瞬态浮层：切到别的应用后必须收起（它铺满整窗且捕获鼠标，
       // 留着会挡住回切后的第一次点击）。
       try { hideFloat('overview-overlay') } catch (_) {}
-      // 按钮编辑浮层同理：切走后退出编辑（外壳 / rail 会经 overlay:closed 复位自己的隐身态）。
-      try { hideFloat('buttons-edit-overlay') } catch (_) {}
+      // 按钮编辑浮层不能在窗口 blur 时自动关闭：原生 select / 菜单弹层会短暂触发
+      // 窗口级 blur，立即 hideFloat 会让编辑界面在用户选择下拉项时凭空消失。
+      // 编辑模式只由 Esc、完成/取消或明确的开关退出。
       // 通用「选择目标」浮层：切到别的应用后它就是"挂在触发项上的一块面板"，必须收起
       // （它锚在触发项下缘，回窗口后也未必还指得到同一项）。
       try { hideFloat('target-picker-overlay') } catch (_) {}
@@ -1415,6 +1419,14 @@ export function createBrowserWindowAssembly(shared: SharedWindowContext) {
     // 只报事实（OS 级 focus），不在这里做任何浮层开合 —— 谁消费谁决定。
     win.on('focus', () => {
       try { win.webContents.send('ngipc:event:window:focus', {}) } catch (_) {}
+      // 编辑浮层是模态界面，重新聚焦时优先把键盘交还浮层，避免原生下拉关闭后
+      // 焦点被恢复链送到下层网页。
+      try {
+        if (layoutCoordinator.isFloatVisible('buttons-edit-overlay')) {
+          layoutCoordinator.focusFloat('buttons-edit-overlay')
+          return
+        }
+      } catch (_) {}
       // 把键盘焦点还给「用户切走前正在打字的那一面」。
       //
       // 为什么非做不可：窗口激活时 Chromium 只恢复「上一次持焦的 webContents」，

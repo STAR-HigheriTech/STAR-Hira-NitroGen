@@ -38,12 +38,15 @@ export const PERMISSION_STYLE_ID = 'hira-permission-styles'
 
 /**
  * 几何常量：main.js 与 CSS 共用。
- * `pad` 是阴影留白（视图 outer 尺寸 = 卡片尺寸 + 2×pad），
+ * 三个方向分开留白：左侧只负责离网页边缘的距离，右侧与底部分别承接
+ * `box-shadow` 的水平扩散和向下偏移。视图 outer 尺寸因此不会被阴影边界裁切。
  * `width` 是卡片固定宽度 —— 四个中文按钮要一字排开且都够大，宽度必须由宿主定死，
  * 不能随内容（域名长短 / 权限名长短）抖动；高度则由内容自然决定、实测上报。
  */
 export const PERMISSION_METRICS = Object.freeze({
-  pad: 28,
+  leftPad: 28,
+  rightPad: 48,
+  bottomPad: 56,
   width: 380
 })
 
@@ -51,7 +54,7 @@ export const PERMISSION_CSS = `
 /* ── 浮层根：贴视图左上角，卡片纵向排（多条请求同时到达时叠成一列）──────── */
 .hira-permission-popover {
   position: fixed;
-  left: var(--pp-pad, ${PERMISSION_METRICS.pad}px);
+  left: var(--pp-left-pad, ${PERMISSION_METRICS.leftPad}px);
   top: 0;
   display: none;
   flex-direction: column;
@@ -110,9 +113,8 @@ export const PERMISSION_CSS = `
 .hira-permission-desc {
   font-size: 12px;
   color: var(--hira-text-secondary, #6b7280);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 /* 敏感权限标记：琥珀色药丸，与侧栏权限面板 .perm-panel__sensitive 同一语义色 */
 .hira-permission-sensitive {

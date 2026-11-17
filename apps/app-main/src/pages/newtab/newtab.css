@@ -69,6 +69,15 @@
   --ntp-hover: #eef0f4;
   --ntp-accent: var(--hira-accent, #3b82f6);
 
+  /* 小组件共用一档；外层只按内边距外扩，保证内外弧线同圆心。 */
+  --ntp-radius-component: calc(var(--hira-theme-radius, 6px) + var(--hira-radius-step, 1px) * 12);
+  --ntp-radius-badge: var(--ntp-radius-component);
+  --ntp-radius-control: var(--ntp-radius-component);
+  --ntp-radius-card: var(--ntp-radius-component);
+  --ntp-radius-control-shell: calc(var(--ntp-radius-component) + var(--hira-radius-step, 1px) * 4);
+  --ntp-radius-surface: calc(var(--ntp-radius-component) + var(--hira-radius-step, 1px) * 8);
+  --ntp-radius-round: 999px;
+
   /* 抬升（投影）：三档语义各一处，选择器里不再写字面量 */
   --ntp-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.06);
   --ntp-shadow-lift: 0 18px 44px rgba(16, 24, 40, 0.22);
@@ -291,14 +300,14 @@ html[data-ntp-wallpaper='1'] body {
   align-items: center;
   gap: 4px;
   padding: 4px;
-  border-radius: 999px;
+  border-radius: var(--ntp-radius-control-shell);
 }
 
 .ntp-tab {
   padding: 7px 16px;
   /* 边框槽位一直留着（透明），选中时才显色 —— 否则选中瞬间会跳 2px */
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--ntp-radius-control);
   background: transparent;
   color: var(--ntp-text-soft);
   font-family: inherit;
@@ -350,7 +359,7 @@ html[data-ntp-wallpaper='1'] body {
   justify-content: center;
   padding: 0;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--ntp-radius-control);
   background: transparent;
   color: var(--ntp-text-soft);
   cursor: pointer;
@@ -400,7 +409,7 @@ html[data-ntp-wallpaper='1'] body {
   display: flex;
   align-items: center;
   padding: 0 14px;
-  border-radius: 999px;
+  border-radius: var(--ntp-radius-control-shell);
   font-size: 16px;
   line-height: 1;
   letter-spacing: 0.02em;
@@ -470,7 +479,7 @@ html[data-ntp-wallpaper='1'] body {
   top: 0;
   left: 0;
   z-index: var(--hira-z-base);
-  border-radius: 16px;
+  border-radius: var(--ntp-radius-card);
   /* 底色 = 主题底色 × 本卡不透明度（--wgt-bg-alpha 由组件设置写进来，默认 1 = 原样）。
      写成乘法而不是给"半透明"另开一条规则：所以调透明度不需要按模式分叉。 */
   background: color-mix(in srgb, var(--surface) calc(var(--wgt-bg-alpha, 1) * 100%), transparent);
@@ -578,7 +587,7 @@ html[data-ntp-wallpaper='1'] body {
   justify-content: center;
   padding: 0;
   border: none;
-  border-radius: var(--radius);
+  border-radius: var(--ntp-radius-control);
   background: var(--ntp-btn-on-scrim-bg);
   color: var(--ntp-btn-on-scrim-fg);
   cursor: pointer;
@@ -618,7 +627,7 @@ html[data-ntp-wallpaper='1'] body {
   height: 10px;
   border-right: 2px solid color-mix(in srgb, var(--ntp-text) 45%, transparent);
   border-bottom: 2px solid color-mix(in srgb, var(--ntp-text) 45%, transparent);
-  border-radius: 0 0 3px 0;
+  border-radius: 0 0 var(--ntp-radius-badge) 0;
 }
 
 /* ── 形状语言：胶囊 ───────────────────────────────────────────────────────
@@ -626,7 +635,7 @@ html[data-ntp-wallpaper='1'] body {
  * 于是"这块区域长什么样"是**组件属性**，不是板层里的一个 id 判断。
  * 目前只有搜索框用（它就是控件本身，不该被套一层圆角矩形卡）。 */
 .wgt[data-shape='capsule'] {
-  border-radius: 999px;
+  border-radius: var(--ntp-radius-control);
 }
 /* 焦点环画在**整个胶囊**上，而不是框内再套一圈（输入框自己是透明的） */
 .wgt[data-shape='capsule']:focus-within {
@@ -685,7 +694,7 @@ html[data-ntp-wallpaper='1'] body {
   min-width: 208px;
   max-width: 320px;
   padding: 8px;
-  border-radius: 14px;
+  border-radius: var(--ntp-radius-surface);
   background: var(--surface);
   border: 1px solid var(--border);
   box-shadow: var(--ntp-shadow-pop);
@@ -715,7 +724,7 @@ html[data-ntp-wallpaper='1'] body {
   width: 100%;
   padding: 9px 12px;
   border: none;
-  border-radius: var(--radius);
+  border-radius: var(--ntp-radius-control);
   background: transparent;
   color: var(--ntp-text);
   font-family: inherit;
@@ -762,7 +771,7 @@ html[data-ntp-wallpaper='1'] body {
   flex-wrap: wrap;
   gap: 10px;
   padding: 7px 10px;
-  border-radius: var(--radius);
+  border-radius: var(--ntp-radius-control);
   font-size: 13px;
 }
 .ntp-form__row:hover {
@@ -794,7 +803,7 @@ html[data-ntp-wallpaper='1'] body {
   width: 34px;
   height: 20px;
   margin: 0;
-  border-radius: 999px;
+  border-radius: var(--ntp-radius-control);
   background: color-mix(in srgb, var(--ntp-text) 22%, transparent);
   position: relative;
   cursor: pointer;
@@ -825,7 +834,7 @@ html[data-ntp-wallpaper='1'] body {
   color: var(--ntp-text);
   background: var(--ntp-bg);
   border: 1px solid var(--ntp-border);
-  border-radius: var(--radius);
+  border-radius: var(--ntp-radius-control);
   padding: 4px 6px;
   outline: none;
 }
@@ -844,7 +853,7 @@ html[data-ntp-wallpaper='1'] body {
   appearance: none;
   width: 96px;
   height: 4px;
-  border-radius: 999px;
+  border-radius: var(--ntp-radius-control);
   background: color-mix(in srgb, var(--ntp-text) 20%, transparent);
   outline: none;
   cursor: pointer;
@@ -878,7 +887,7 @@ html[data-ntp-wallpaper='1'] body {
  * 改成"透明 + 描边"的平铺块 —— 层次由描边和 hover 着色给。 */
 .ntp-sheet {
   padding: 26px 28px;
-  border-radius: 20px;
+  border-radius: var(--ntp-radius-surface);
   background: var(--surface);
   border: 1px solid var(--border);
   box-shadow: var(--ntp-shadow);
@@ -901,14 +910,14 @@ html[data-ntp-wallpaper='1'] body {
   flex-direction: column;
   gap: 12px;
   padding: 30px 32px;
-  border-radius: 20px;
+  border-radius: var(--ntp-radius-surface);
   background: color-mix(in srgb, var(--ntp-accent) 7%, transparent);
   border: 1px solid color-mix(in srgb, var(--ntp-accent) 26%, var(--border));
 }
 .ntp-promo__eyebrow {
   align-self: flex-start;
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: var(--ntp-radius-badge);
   background: color-mix(in srgb, var(--ntp-accent) 16%, transparent);
   color: var(--ntp-accent);
   font-size: 12px;
@@ -935,7 +944,7 @@ html[data-ntp-wallpaper='1'] body {
 }
 .ntp-promo__chip {
   padding: 5px 12px;
-  border-radius: 999px;
+  border-radius: var(--ntp-radius-badge);
   border: 1px solid var(--border);
   font-size: 12px;
   line-height: 1;
@@ -953,7 +962,7 @@ html[data-ntp-wallpaper='1'] body {
   display: inline-flex;
   align-items: center;
   padding: 9px 18px;
-  border-radius: 999px;
+  border-radius: var(--ntp-radius-control);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--ntp-text);
@@ -1004,7 +1013,7 @@ html[data-ntp-wallpaper='1'] body {
   flex-direction: column;
   gap: 6px;
   padding: 18px;
-  border-radius: 16px;
+  border-radius: var(--ntp-radius-card);
   /* 大底之上的平铺块：透明 + 描边（同色底会和大底糊成一片） */
   background: transparent;
   border: 1px solid var(--border);
@@ -1023,7 +1032,7 @@ html[data-ntp-wallpaper='1'] body {
 .ntp-promo__tag {
   align-self: flex-start;
   padding: 3px 9px;
-  border-radius: 6px;
+  border-radius: var(--ntp-radius-badge);
   background: color-mix(in srgb, var(--ntp-text) 8%, transparent);
   font-size: 11px;
   line-height: 1.4;
@@ -1051,7 +1060,7 @@ html[data-ntp-wallpaper='1'] body {
   flex-direction: column;
   gap: 14px;
   padding: 22px 24px;
-  border-radius: 18px;
+  border-radius: var(--ntp-radius-surface);
   border: 1px solid color-mix(in srgb, var(--ntp-accent) 46%, transparent);
   background: color-mix(in srgb, var(--ntp-accent) 9%, transparent);
 }
@@ -1063,7 +1072,7 @@ html[data-ntp-wallpaper='1'] body {
 }
 .ntp-promo__ad-label {
   padding: 3px 8px;
-  border-radius: 5px;
+  border-radius: var(--ntp-radius-badge);
   border: 1px solid color-mix(in srgb, var(--ntp-text) 28%, transparent);
   font-size: 10px;
   line-height: 1.5;
@@ -1093,7 +1102,7 @@ html[data-ntp-wallpaper='1'] body {
   flex-direction: column;
   gap: 8px;
   padding: 16px;
-  border-radius: 14px;
+  border-radius: var(--ntp-radius-card);
   background: transparent;
   border: 1px solid var(--border);
   text-decoration: none;
@@ -1123,7 +1132,7 @@ html[data-ntp-wallpaper='1'] body {
 }
 .ntp-promo__plan-badge {
   padding: 2px 7px;
-  border-radius: 5px;
+  border-radius: var(--ntp-radius-badge);
   background: color-mix(in srgb, var(--ntp-accent) 16%, transparent);
   font-size: 10px;
   line-height: 1.6;
@@ -1199,7 +1208,7 @@ html[data-ntp-wallpaper='1'] body {
 }
 .ntp-news__src {
   padding: 6px 14px;
-  border-radius: 999px;
+  border-radius: var(--ntp-radius-control);
   border: 1px solid transparent;
   background: transparent;
   color: var(--ntp-text-soft);
@@ -1224,7 +1233,7 @@ html[data-ntp-wallpaper='1'] body {
 .ntp-news__refresh {
   margin-left: auto;
   padding: 6px 16px;
-  border-radius: 999px;
+  border-radius: var(--ntp-radius-control);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--ntp-text);
@@ -1261,7 +1270,7 @@ html[data-ntp-wallpaper='1'] body {
   align-items: flex-start;
   gap: 12px;
   padding: 15px 16px;
-  border-radius: 14px;
+  border-radius: var(--ntp-radius-card);
   background: transparent;
   border: 1px solid var(--border);
   text-decoration: none;
@@ -1359,7 +1368,7 @@ html[data-ntp-wallpaper='1'] body {
   height: 100%;
   padding: 0 22px 0 48px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--ntp-radius-control);
   background: transparent;
   color: var(--ntp-text);
   font-family: inherit;
@@ -1399,7 +1408,7 @@ html[data-ntp-wallpaper='1'] body {
   height: 30px;
   padding: 0 10px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--ntp-radius-control);
   background: transparent;
   color: var(--ntp-text-soft);
   font: inherit;
@@ -1537,14 +1546,14 @@ html[data-ntp-wallpaper='1'] body {
 }
 .wg-date__bar {
   height: 4px;
-  border-radius: 999px;
+  border-radius: var(--ntp-radius-round);
   background: color-mix(in srgb, var(--ntp-text) 12%, transparent);
   overflow: hidden;
 }
 .wg-date__bar > i {
   display: block;
   height: 100%;
-  border-radius: 999px;
+  border-radius: inherit;
   background: var(--ntp-accent);
   transform-origin: left center;
   transform: scaleX(0);
@@ -1593,7 +1602,7 @@ html[data-ntp-wallpaper='1'] body {
 .wg-news__refresh {
   flex: none;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--ntp-radius-control);
   padding: 4px 11px;
   font-size: 11px;
   font-family: inherit;
@@ -1633,7 +1642,7 @@ html[data-ntp-wallpaper='1'] body {
   align-items: baseline;
   column-gap: 8px;
   padding: 6px 8px;
-  border-radius: var(--radius);
+  border-radius: var(--ntp-radius-control);
   transition: background 0.1s ease;
 }
 .wg-news__item:hover {
@@ -1687,7 +1696,7 @@ html[data-ntp-wallpaper='1'] body {
 }
 .wg-news__skeleton-row {
   height: 12px;
-  border-radius: var(--radius);
+  border-radius: var(--ntp-radius-control);
   background: linear-gradient(
     90deg,
     color-mix(in srgb, var(--ntp-text) 8%, transparent),
@@ -1731,7 +1740,7 @@ html[data-ntp-wallpaper='1'] body {
   height: 84px;
   padding: 8px 4px;
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: var(--ntp-radius-card);
   background: transparent;
   color: var(--ntp-text);
   font-family: inherit;
@@ -1789,13 +1798,13 @@ html[data-ntp-wallpaper='1'] body {
   flex-shrink: 0;
 }
 .wg-speed-dial .favicon {
-  border-radius: 7px;
+  border-radius: var(--ntp-radius-control);
   object-fit: contain;
 }
 /* base.css 里的 .favicon-fallback 是按列表行（16px / 浅底）定的全局规则，
    组件内按自己的令牌与尺寸重设一次，避免整页出现两套"首字母徽标" */
 .wg-speed-dial .favicon-fallback {
-  border-radius: 7px;
+  border-radius: var(--ntp-radius-control);
   background: color-mix(in srgb, var(--ntp-text) 12%, transparent);
   color: var(--ntp-text-soft);
   font-weight: 600;
@@ -1821,7 +1830,7 @@ html[data-ntp-wallpaper='1'] body {
   width: 100%;
   padding: 8px 12px;
   border: none;
-  border-radius: var(--radius);
+  border-radius: var(--ntp-radius-control);
   background: transparent;
   color: var(--ntp-text);
   font-family: inherit;
@@ -1854,7 +1863,7 @@ html[data-ntp-wallpaper='1'] body {
   box-sizing: border-box;
   padding: 7px 9px;
   border: 1px solid var(--ntp-border);
-  border-radius: var(--radius);
+  border-radius: var(--ntp-radius-control);
   background: var(--ntp-bg);
   color: var(--ntp-text);
   font-family: inherit;
@@ -1874,7 +1883,7 @@ html[data-ntp-wallpaper='1'] body {
 .wg-speed-dial__cancel {
   padding: 6px 14px;
   border: 1px solid transparent;
-  border-radius: var(--radius);
+  border-radius: var(--ntp-radius-control);
   font-family: inherit;
   font-size: 12.5px;
   cursor: pointer;

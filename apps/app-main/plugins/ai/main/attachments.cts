@@ -27,17 +27,25 @@ const ATTACH_DIR = 'ai-attachments'
 const THUMB_WIDTH = 480
 /** 单张图硬上限：超过直接拒绝（解码超大图会把主进程内存打满）。 */
 const HARD_MAX_BYTES = 16 * 1024 * 1024
+/** dataURL 字符上限必须在解码前检查，避免恶意 base64 先分配一大块 Buffer。 */
+const MAX_BASE64_CHARS = Math.ceil(HARD_MAX_BYTES / 3) * 4 + 1024
+const MAX_PERCENT_CHARS = HARD_MAX_BYTES * 3 + 1024
+const MAX_DATA_URL_CHARS = Math.max(MAX_BASE64_CHARS, MAX_PERCENT_CHARS)
 /** 读盘 dataURL 的 LRU（读盘 + base64 都贵，重复发送同一张图时直接命中）。 */
 const CACHE_LIMIT = 40
 
 function dataUrlToBuffer(dataUrl: string): { buffer: Buffer; mime: string } | null {
-  const m = /^data:([^;,]+)?(;base64)?,([\s\S]*)$/.exec(String(dataUrl || ''))
+  const raw = typeof dataUrl === 'string' ? dataUrl : ''
+  if (!raw || raw.length > MAX_DATA_URL_CHARS) return null
+  const m = /^data:([^;,]+)?(;base64)?,([\s\S]*)$/.exec(raw)
   if (!m) return null
+  const encoded = m[3]
+  if (m[2] ? encoded.length > MAX_BASE64_CHARS : encoded.length > MAX_PERCENT_CHARS) return null
   const mime = String(m[1] || 'image/png').trim().toLowerCase()
   try {
     const buffer = m[2]
-      ? Buffer.from(m[3], 'base64')
-      : Buffer.from(decodeURIComponent(m[3]), 'binary')
+      ? Buffer.from(encoded, 'base64')
+      : Buffer.from(decodeURIComponent(encoded), 'binary')
     if (!/^image\//.test(mime)) return null
     return { buffer, mime }
   } catch (_) {
@@ -105,6 +113,7 @@ function createAttachments({ userDataPath }: { userDataPath: string }) {
    */
   function saveDataUrl(sessionId: string, dataUrl: string) : { ok: boolean, reason?: string, path?: string, mime?: string,
   width?: number, height?: number, bytes?: number, thumb?: string|null } {
+    if (typeof dataUrl !== 'string' || dataUrl.length > MAX_DATA_URL_CHARS) return { ok: false, reason: 'too-large' }
     const parsed = dataUrlToBuffer(dataUrl)
     if (!parsed) return { ok: false, reason: 'bad-data-url' }
     const { buffer, mime } = parsed

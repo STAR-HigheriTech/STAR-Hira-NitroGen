@@ -709,6 +709,18 @@ export function createPwaAppWindow(input: PwaAppWindowInput): PwaAppWindowContro
     })
     wc.on('did-start-loading', pushWindowState)
     wc.on('did-stop-loading', pushWindowState)
+    let htmlFullscreen = false
+    const setHtmlFullscreen = (active: boolean): void => {
+      const next = Boolean(active)
+      if (next === htmlFullscreen) return
+      htmlFullscreen = next
+      if (!win.isDestroyed()) {
+        try { win.setFullScreen(next) } catch {}
+      }
+      placePage()
+    }
+    wc.on('enter-html-full-screen', () => setHtmlFullscreen(true))
+    wc.on('leave-html-full-screen', () => setHtmlFullscreen(false))
     // 主框架开始真实导航 = 错误页使命结束（错误页自身是 data:，不算）。
     // 仓库内 did-start-navigation 存在两种签名（位置参数 / details 对象），这里都兼容。
     wc.on('did-start-navigation', (...args: unknown[]) => {

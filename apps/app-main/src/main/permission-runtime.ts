@@ -7,6 +7,8 @@
 
 import type { App, BrowserWindow, DesktopCapturerSource, Session, WebContents } from 'electron'
 import type { PermissionService } from '@hira-ng/domain-permission'
+import { onWebContentsDestroyed } from '@hira-ng/infra-window'
+import { attachDeviceSelectionHandlers, chooseDisplayMediaSource } from './media-devices'
 
 interface RuntimeSpace { getCurrent(): { profileId?: string } | null | undefined }
 interface RuntimeTabManager { getTabIdByWebContents(webContents: WebContents): string | null | undefined }
@@ -221,7 +223,7 @@ export function createPermissionRuntime({
     const scopeId = wc.id
     const reset = () => { try { if (siteGuard) siteGuard.resetForScope(scopeId) } catch (_) {} }
     try {
-      wc.once('destroyed', reset)
+      onWebContentsDestroyed(wc, reset)
       wc.on('did-navigate', reset)
       // 用户激活：只有"按下"那几类输入才算（判据在 site-guard#isActivationInput，
       // 这里先过滤 —— mousemove / 滚轮每帧都来，不能每次都进守卫）。
@@ -302,29 +304,32 @@ export function createPermissionRuntime({
   //
   // Hira：fullscreen 直接放行（L84-87）
   const ALWAYS_ALLOW_PERMISSIONS = new Set(['fullscreen'])
-  // Hira：clipboard-sanitized-write 由用户手势触发，默认放行，仅「始终阻止」时拒绝（L100-115）
-  const DEFAULT_ALLOW_PERMISSIONS = new Set(['clipboard-sanitized-write'])
-
-  // 会话内授予的撤销时机（对齐 Hira：did-start-navigation / destroyed → removePermissionsForContents）。
-  // 只在「该 webContents 首次处理权限请求」时挂一次监听，语义等价且比 Hira 的「每请求都挂」更省。
-  const grantScopesWatched = new Set<WebContents>()
-  function watchGrantScope(wc: WebContents): void {
-    if (!wc || grantScopesWatched.has(wc)) return
-    grantScopesWatched.add(wc)
-    // Hira removePermissionsForContents 一次清两样：pending + granted（permissionManager.js L26-31）。
-    // 只清 granted 不清 pending 的缺口：页面已导航走/标签已关，浮层还挂着一条
-    // 永远等不到回答的请求，网页侧的 await 也随之悬空 —— 两条必须同生共死。
-    const revokeForContents = () => {
-      try { permissionService.clearGrants(wc.id) } catch {}
+  // 页面导航或销毁时，拒绝该页面尚未回答的请求，避免网页侧永久挂起。
+  const requestScopesWatched = new Set<WebContents>()
+  const deviceSelectionAttached = new WeakSet<Session>()
+  function attachDeviceHandlersOnce(session: Session): void {
+    if (!session || deviceSelectionAttached.has(session)) return
+    deviceSelectionAttached.add(session)
+    try {
+      attachDeviceSelectionHandlers(session)
+    } catch (error) {
+      deviceSelectionAttached.delete(session)
+      console.warn('[devices] attach handlers failed:', errorMessage(error))
+    }
+  }
+  function watchRequestScope(wc: WebContents): void {
+    if (!wc || requestScopesWatched.has(wc)) return
+    requestScopesWatched.add(wc)
+    const rejectForContents = () => {
       try { permissionService.rejectPendingForScope(wc.id) } catch {}
     }
     try {
       wc.on('did-start-navigation', (_e: unknown, _url: string, isInPlace: boolean, isMainFrame: boolean) => {
-        if (isMainFrame && !isInPlace) revokeForContents()
+        if (isMainFrame && !isInPlace) rejectForContents()
       })
-      wc.once('destroyed', () => {
-        grantScopesWatched.delete(wc)
-        revokeForContents()
+      onWebContentsDestroyed(wc, () => {
+        requestScopesWatched.delete(wc)
+        rejectForContents()
       })
     } catch {}
   }
@@ -411,23 +416,18 @@ export function createPermissionRuntime({
          * 置顶窗口 —— 这是可见的用户意图，而不是某个页面在后台偷偷开流。框一关，
          * 这条通道立刻关上（连请求处理器也一起拒绝，见下面的 setDisplayMediaRequestHandler）。
          */
-        if (permType === 'display-capture') {
+        const requestingUrl = details && typeof details.requestingUrl === 'string'
+          ? details.requestingUrl
+          : (() => { try { return wc.getURL() } catch { return '' } })()
+        const internalCapture = requestingUrl.startsWith('file:') || requestingUrl.startsWith('hira:')
+        if (permType === 'display-capture' && internalCapture) {
           callback(Boolean(qrFrame()?.allowCapture?.()))
           return
         }
 
-        // 非主框架请求：Hira 未支持，一律拒绝（简化询问 UI，见 L89-93）
-        if (details && details.isMainFrame === false) { callback(false); return }
-
         const origin = originOf(null, wc, details)
         if (!origin) { callback(false); return }
-        watchGrantScope(wc)
-
-        // clipboard-sanitized-write：默认放行，仅「始终阻止」时拒绝
-        if (DEFAULT_ALLOW_PERMISSIONS.has(permType)) {
-          callback(permissionService.getPermission(origin, permType) !== 'block')
-          return
-        }
+        watchRequestScope(wc)
 
         const decision = permissionService.resolveRequest(origin, permType)
         if (decision === 'allow') { callback(true); return }
@@ -435,35 +435,12 @@ export function createPermissionRuntime({
         if (decision === 'block' || decision === 'unsupported') { callback(false); return }
 
         /**
-         * **会话内已授予 → 直接放行**（对齐 Hira permissionManager.js#isPermissionGrantedForOrigin
-         * 在 ask 分支之前的那一段，L160 / L244）。
-         *
-         * 为什么必须有这一条（这是「点了允许、页面也显示已授予，但功能就是不生效」的根因）：
-         * `resolveRequest` 只查**数据库**，而用户点「允许一次」（persist=false）只写会话内授予
-         * （domain-permission#addGrant，按 webContents 记内存），库里**没有行** —— 于是每个
-         * 后续请求都重新落回 'ask'，再走一次「登记 pending 等用户回答」。
-         *
-         * 对通知尤其致命：实测（Electron 43）**每一次 `new Notification()` 都要过一遍
-         * request handler**，handler 不 callback(true) 就不会有 toast ——
-         * 既不是 onshow 也不是 onerror，而是**彻底静默丢弃**。于是表现成：
-         * `Notification.permission === 'granted'`（check 钩子对非 block 恒返回 true）、
-         * 用户点了允许、页面继续显示"已授予"，但**一条通知都不弹**；而且因为
-         * createRequest 对同站点同类型有去重（命中已有 pending 时不 emit），
-         * 第二次以后的请求连询问界面都不会再出现 —— 请求就这么悬着。
-         * 老 Hira 没有这个问题，正是因为它在这一步先认会话内授予。
-         *
-         * 位置：必须在**功能门禁之前** —— 这一支不需要任何界面（规则已由用户给过），
-         * 是「库里已存规则」之外的另一种已决状态，与上面的 allow 分支同性质。
-         */
-        if (permissionService.isGrantedFor(origin, permType, wc && wc.id)) { callback(true); return }
-
-        /**
          * 剩下的只有 'ask' / 无记录 —— 这条路的**前提是"有个界面能问用户"**。
          * 权限引擎被禁用时那个界面不存在（Bell 与浮层都已收起），必须在这里收住。
          *
          * ⚠ 门禁位置是刻意**这么靠后**的，不能提前到 handler 开头：
-         * 前面那些分支（openExternal / fullscreen / 非主框架 / DEFAULT_ALLOW /
-         * 库里已存的 allow·block）都**不需要界面**，提前拦会平白砍掉这些仍然正确的行为
+         * 前面那些分支（openExternal / fullscreen / 库里已存的 allow·block）
+         * 都**不需要界面**，提前拦会平白砍掉这些仍然正确的行为
          * （例如 fullscreen 会被一起拒掉、已存的"允许"规则会失效）。
          * 只有"需要问用户"这一段在引擎缺席时才真的无解。
          *
@@ -488,13 +465,8 @@ export function createPermissionRuntime({
     })
 
     // setPermissionCheckHandler：同步返回 boolean | null（⚠️ 无 callback 参数！）
-    // 语义对齐 Hira pagePermissionCheckHandler（L388-434）：
-    //   · notifications：allow → true；block → false；**ask → true**
-    //     （check 钩子没有 'default'，返回 false 会让 Notification.permission 恒为
-    //      'denied' / window.Notification 被移除 —— 这正是「通知总是拒绝」的根因。
-    //      真正的询问由 request handler 承担，见 Hira L396-408 的注释）
-    //   · clipboard-sanitized-write / fullscreen：true
-    //   · 其余：会话内授予或落库 allow → true；block / ask → false（对齐 Hira L433）
+    // 未落库的权限必须是 false。把 ask 翻译成 true 会让网页直接显示“已授予”，
+    // 并在用户尚未表态时实际取得权限。
     /**
      * `getDisplayMedia` 的**源选择器** —— 这里决定了"渲染层自己抓屏"这条路能不能成立。
      *
@@ -515,7 +487,13 @@ export function createPermissionRuntime({
      */
     if (typeof session.setDisplayMediaRequestHandler === 'function') {
       session.setDisplayMediaRequestHandler(async (request, callback) => {
-        const deny = () => { try { callback({}) } catch (_) {} }
+        let settled = false
+        const respond = (selection: Record<string, unknown>): void => {
+          if (settled) return
+          settled = true
+          try { callback(selection) } catch (_) {}
+        }
+        const deny = (): void => respond({})
         try {
           /**
            * ① 只认**我们自己的界面**（`file://` / `hira://` 加载的 chrome、面板、取景框）。
@@ -526,7 +504,16 @@ export function createPermissionRuntime({
            * 拿它做白名单既写不出来也认不出。
            */
           const reqUrl = (request && request.frame && request.frame.url) ? String(request.frame.url) : ''
-          if (!reqUrl.startsWith('file:') && !reqUrl.startsWith('hira:')) { deny(); return }
+          if (!reqUrl.startsWith('file:') && !reqUrl.startsWith('hira:')) {
+            const selected = await chooseDisplayMediaSource(request as {
+              frame?: unknown
+              audioRequested?: boolean
+              videoRequested?: boolean
+            })
+            if (selected) respond(selected)
+            else deny()
+            return
+          }
           /**
            * ② 等取景框出现（最多 `CAPTURE_WAIT_MS`）。
            *
@@ -545,7 +532,7 @@ export function createPermissionRuntime({
           const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } })
           const source = (sources || []).find((s: DesktopCapturerSource) => String(s.display_id) === String(wanted && wanted.id)) || (sources || [])[0]
           if (!source) { deny(); return }
-          callback({ video: source })
+          respond({ video: source })
         } catch (e) {
           deny()
         }
@@ -564,17 +551,6 @@ export function createPermissionRuntime({
             requestingOrigin && details.embeddingOrigin &&
             requestingOrigin !== details.embeddingOrigin) return false
 
-        if (permType === 'notifications') {
-          // Hira：ask/allow → true（保持 Notification API 可用），仅 block → false
-          const origin = originOf(requestingOrigin, wc, details)
-          return permissionService.getPermission(origin, permType) !== 'block'
-        }
-        // `check` must mirror the request handler: clipboard writes are allowed by
-        // default, but a persisted user "block" is authoritative in both hooks.
-        if (DEFAULT_ALLOW_PERMISSIONS.has(permType)) {
-          const origin = originOf(requestingOrigin, wc, details)
-          return !!origin && permissionService.getPermission(origin, permType) !== 'block'
-        }
         if (ALWAYS_ALLOW_PERMISSIONS.has(permType)) return true
         // 与 request handler 同一判据：只有取景框开着（或刚请求开框的那几毫秒）才有屏幕流
         if (permType === 'display-capture') {
@@ -583,7 +559,7 @@ export function createPermissionRuntime({
 
         const origin = originOf(requestingOrigin, wc, details)
         if (!origin) return false
-        return permissionService.isGrantedFor(origin, permType, wc?.id ?? undefined)
+        return permissionService.resolveRequest(origin, permType) === 'allow'
       } catch (e) {
         console.error('[permission] check handler failed:', errorMessage(e))
         return false
@@ -593,9 +569,14 @@ export function createPermissionRuntime({
   }
 
   try {
+    attachDeviceHandlersOnce(getExtensionSession())
     attachPermissionHandlers(getExtensionSession())
     // 对齐 Hira：defaultSession 也挂同一套处理器（内部页 / 浮层 / 其它 webContents 兜底）
-    try { attachPermissionHandlers(require('electron').session.defaultSession) } catch (_) {}
+    try {
+      const defaultSession = require('electron').session.defaultSession
+      attachDeviceHandlersOnce(defaultSession)
+      attachPermissionHandlers(defaultSession)
+    } catch (_) {}
     console.log('[main] permission request/check handler registered')
     _extPermissionRegistered.add(getActiveProfileId() || 'default')
   } catch (e) {
@@ -606,6 +587,9 @@ export function createPermissionRuntime({
   // 「新开 profile / 新窗口用的 session」不会漏挂权限钩子（漏挂 = 该 session 的所有
   // 权限请求静默走 Chromium 默认拒绝）。
   app.on('session-created', (createdSession) => {
+    try { attachDeviceHandlersOnce(createdSession) } catch (e) {
+      console.error('[main] attach device handlers to new session failed:', errorMessage(e))
+    }
     try { attachPermissionHandlers(createdSession) } catch (e) {
       console.error('[main] attach permission handlers to new session failed:', errorMessage(e))
     }

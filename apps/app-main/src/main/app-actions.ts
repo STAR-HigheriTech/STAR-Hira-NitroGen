@@ -316,7 +316,7 @@ export const CATALOG: readonly ActionDef[] = [
   { name: 'openCookies', group: 'settings', label: '打开 Cookie 页', desc: '在当前标签打开 hira://cookies。' },
   { name: 'openClearData', group: 'settings', label: '打开清除浏览数据页', desc: '在当前标签打开 hira://clear-data。' },
   { name: 'openImportData', group: 'settings', label: '打开导入数据页', desc: '在当前标签打开 hira://import-data。' },
-  { name: 'openCertificates', group: 'settings', label: '打开证书页', desc: '在当前标签打开 hira://certificates。' },
+  { name: 'openCertificates', group: 'settings', label: '打开证书页', desc: '在新标签打开证书页，并检查当前站点的证书链。' },
   { name: 'openCrashReport', group: 'settings', label: '打开崩溃报告页', desc: '在当前标签打开 hira://crash-report。' },
 
   // ── 应用（PWA）────────────────────────────────────────────────────────────

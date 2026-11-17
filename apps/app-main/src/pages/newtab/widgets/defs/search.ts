@@ -56,7 +56,7 @@ defineWidget({
   removable: false,
   unique: true,
   shape: 'capsule',
-  defaultSize: { w: 9, h: 1 },
+  defaultSize: { w: 10, h: 1 },
   minSize: { w: 4, h: 1 },
   // 不再锁死一行高：搜索框和别的卡片一样能改尺寸（宽 / 高都放开）。
   // 改尺寸仍走网格规则——尺寸吸附整格，横向落点归到新宽度下最近的对称锚点（见 widgets/grid.js）。

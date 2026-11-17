@@ -35,7 +35,7 @@ export function createFaviconBadge(
 ): HTMLSpanElement {
   const tabChip = opts.tabChip === true
   const wrap = doc.createElement('span')
-  wrap.style.cssText = `width:${size}px;height:${size}px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;${tabChip ? `border-radius:4px;background-color:var(${TAB_FAVICON_BG_VAR},var(--ng-tab-active-fg,var(--hira-accent,#3b82f6)));` : ''}`
+  wrap.style.cssText = `width:${size}px;height:${size}px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;${tabChip ? `border-radius:4px;background-color:var(${TAB_FAVICON_BG_VAR},#fff);` : ''}`
 
   const fallback = (): void => {
     wrap.replaceChildren()
@@ -45,7 +45,7 @@ export function createFaviconBadge(
       ? 'transparent'
       : 'var(--hira-hover-bg,rgba(0,0,0,0.08))'
     const color = tabChip
-      ? `var(${TAB_FAVICON_FG_VAR},var(--hira-bg-elevated,#fff))`
+      ? `var(${TAB_FAVICON_FG_VAR},#0b0c0e)`
       : 'var(--hira-text-secondary,#6b7280)'
     badge.style.cssText = `width:${size}px;height:${size}px;border-radius:3px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;font-family:${uiFontVar()};font-size:${Math.max(9, Math.round(size * 0.6))}px;font-weight:600;background:${background};color:${color};`
     wrap.appendChild(badge)

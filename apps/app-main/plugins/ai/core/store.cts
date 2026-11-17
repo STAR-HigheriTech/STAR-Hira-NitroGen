@@ -217,7 +217,7 @@ function createStore({ sqlite, secretCrypto }: { sqlite: SqliteDatabase; secretC
   // ── 会话 ────────────────────────────────────────────────────────────
   function listSessions({ limit = 100, archived = false }: { limit?: number; archived?: boolean } = {}) {
     return db().prepare(
-      `SELECT * FROM ai_session WHERE archived = ? ORDER BY updated_at DESC LIMIT ?`
+      `SELECT * FROM ai_session WHERE archived = ? ORDER BY updated_at DESC, id DESC LIMIT ?`
     ).all<SessionRow>(archived ? 1 : 0, Math.min(Number(limit) || 100, 200)).map((row: SessionRow) => mapSession(row))
   }
 

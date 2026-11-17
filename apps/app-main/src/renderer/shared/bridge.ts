@@ -1,3 +1,5 @@
+import { getBrowserPreviewBridge } from '../dev/browser-preview-bridge.js'
+
 export interface RendererProvider {
   invoke<T = JsonRecord>(route: string, payload?: unknown): Promise<T>
   send(route: string, payload?: unknown): void
@@ -21,6 +23,7 @@ export type JsonRecord = Record<string, unknown>
 
 export function getHiraBridge(): RendererBridge {
   const bridge = (globalThis.window as unknown as { hira?: RendererBridge } | undefined)?.hira
+    || getBrowserPreviewBridge()
   if (!bridge?.provider || typeof bridge.provider.invoke !== 'function' || !bridge.on) {
     throw new Error('window.hira.provider is unavailable')
   }

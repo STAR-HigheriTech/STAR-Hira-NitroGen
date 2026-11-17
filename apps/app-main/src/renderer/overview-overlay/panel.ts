@@ -26,6 +26,7 @@
  * ── 数据与 IPC：零新增通道 ─────────────────────────────────────────
  *   打开标签 `tab:list(+:projection)`；最近关闭 `tab:recently-closed(+:restore)`；
  *   空间 `space:list-all` + `space:get-using` / `space:set-using`；
+ *   近期 profile `profile:list-visible` / `profile:set-active`；
  *   会话 `session:named-list` / `:named-save` / `:named-restore` / `:named-remove`
  *   （与会话面板 / 内部页共用同一个 `clients.sessions` 端口，不各写一套）；
  *   「转到某面板」`panel:toggle`。全是既有面。
@@ -122,7 +123,9 @@ export function createOverview(doc: Document, ctx: PanelContext, options: Overvi
     const { events, on, icons } = ctx
 
     // ── 状态（本面板唯一一份）──
+    let allSpaceList: OverviewItem[] = []
     let spaceList: OverviewItem[] = []
+    let profileList: OverviewItem[] = []
     /** 标签的两份口径（与打开标签面板同源）：
      *   · `tabRows` —— **投影**（含标签组行）；浏览态直接摆它，组行的折叠/改名/配色才有；
      *   · `tabFlat` —— **扁平**（组内成员也逐个在场）；搜索态用它，折叠组里的标签也搜得到。 */
@@ -132,6 +135,10 @@ export function createOverview(doc: Document, ctx: PanelContext, options: Overvi
     let sessionList: OverviewItem[] = []
     let activeSpaceId = ''
     let activeProfileId = ''
+    /** Space 块当前正在看的 profile；可先于全局身份切换完成，保证点选项卡即时响应。 */
+    let selectedProfileId = ''
+    let pendingProfileSwitchId = ''
+    let profileSwitchRevision = 0
     let query = ''
     /**
      * 收起期攒下的两样东西（宿主显示时 `flush()` 一次补齐）：
@@ -234,15 +241,21 @@ export function createOverview(doc: Document, ctx: PanelContext, options: Overvi
       pendingRender = false
       // 浏览态摆投影（组行完整），搜索态摆扁平（组内成员可命中）—— 与打开标签面板同口径。
       const searching = String(query == null ? '' : query).trim() !== ''
+      const overview = buildOverview({
+        spaces: spaceList,
+        profiles: profileList,
+        activeProfileId: selectedProfileId || activeProfileId,
+        tabs: searching ? tabFlat : tabRows,
+        recent: recentList,
+        sessions: sessionList,
+        query
+      })
       view.setModel({
-        ...buildOverview({
-          spaces: spaceList,
-          tabs: searching ? tabFlat : tabRows,
-          recent: recentList,
-          sessions: sessionList,
-          query
-        }),
-        active: { spaceId: activeSpaceId, profileId: activeProfileId }
+        ...overview,
+        active: {
+          spaceId: activeSpaceId,
+          profileId: activeProfileId
+        }
       })
     }
 
@@ -293,15 +306,39 @@ export function createOverview(doc: Document, ctx: PanelContext, options: Overvi
         const profileNames = new Map<string, string>(
           (Array.isArray(profiles) ? profiles : []).map((profile) => [profile.id, profile.name || profile.id])
         )
-        // 本面板只列**当前 profile** 的空间（与空间切换菜单同口径；跨 profile 混排会挤掉当前空间）。
-        const profileId = (using && using.profileId) || ''
-        const list = (Array.isArray(all) ? all : [])
-          .filter((s) => !!s && (!profileId || s.profileId === profileId))
+        const records = Array.isArray(profiles) ? profiles : []
+        allSpaceList = (Array.isArray(all) ? all : [])
+          .filter(isOverviewItem)
           .map((s) => ({ ...s, profileName: profileNames.get(s.profileId) || s.profileId }))
-        spaceList = list
-        activeSpaceId = (using && using.id) || (list[0] && list[0].id) || ''
-        activeProfileId = profileId || (list[0] && list[0].profileId) || ''
+        const fallbackProfiles: OverviewItem[] = []
+        const seenProfiles = new Set<string>()
+        for (const space of allSpaceList) {
+          const id = typeof space.profileId === 'string' ? space.profileId : ''
+          if (!id || seenProfiles.has(id)) continue
+          seenProfiles.add(id)
+          fallbackProfiles.push({ id, name: space.profileName || id, color: '' })
+        }
+        profileList = records.length ? records : fallbackProfiles
+
+        const currentProfileId = String(
+          (using && using.profileId) || (allSpaceList[0] && allSpaceList[0].profileId) || ''
+        )
+        const currentProfileVisible = profileList.some((profile) => profile.id === currentProfileId)
+        const defaultProfileId = currentProfileVisible
+          ? currentProfileId
+          : String((profileList[0] && profileList[0].id) || currentProfileId)
+        const selectedExists = profileList.some((profile) => profile.id === selectedProfileId)
+        if (!selectedProfileId || !selectedExists) selectedProfileId = defaultProfileId
+        spaceList = allSpaceList.filter((space) => space.profileId === selectedProfileId)
+
+        const currentSpaceMatches = !!(using && using.profileId === selectedProfileId)
+        activeSpaceId = String(currentSpaceMatches
+          ? ((using && using.id) || (spaceList[0] && spaceList[0].id) || '')
+          : ((spaceList[0] && spaceList[0].id) || ''))
+        activeProfileId = currentProfileId || String((spaceList[0] && spaceList[0].profileId) || '')
       } catch (_) {
+        allSpaceList = []
+        profileList = []
         spaceList = []
         activeSpaceId = ''
         activeProfileId = ''
@@ -422,6 +459,34 @@ export function createOverview(doc: Document, ctx: PanelContext, options: Overvi
         return
       }
 
+      // Space 标题下的近期 profile：先本地切列表（即时跟手），再复用 profile:set-active
+      // 完成全局身份切换；成功 / 失败都以主进程事实校正。浮层保持展开，切换后可继续选空间。
+      if (type === 'profile-switch' && profileId) {
+        if (!profilesApi || typeof profilesApi.setActive !== 'function') return
+        const previousProfileId = selectedProfileId
+        const revision = ++profileSwitchRevision
+        pendingProfileSwitchId = profileId
+        selectedProfileId = profileId
+        spaceList = allSpaceList.filter((space) => space.profileId === profileId)
+        render()
+        void (async () => {
+          try {
+            await profilesApi.setActive(profileId)
+            if (revision !== profileSwitchRevision) return
+            pendingProfileSwitchId = ''
+            await loadSpaces()
+          } catch (_) {
+            if (revision !== profileSwitchRevision) return
+            pendingProfileSwitchId = ''
+            selectedProfileId = previousProfileId
+            spaceList = allSpaceList.filter((space) => space.profileId === selectedProfileId)
+            await loadSpaces().catch(() => {})
+          }
+          if (revision === profileSwitchRevision) render()
+        })()
+        return
+      }
+
       // 区块标题上的动作按钮：动作名由纯层 descriptor 给（`action` / `actionLabel`），
       // 这里只按名字落地 —— 新增区块动作不必再改视图，也不必再写 if。
       if (type === 'section-action') {
@@ -538,7 +603,13 @@ export function createOverview(doc: Document, ctx: PanelContext, options: Overvi
     // profile 直切不经过 space:window-changed；总览里的空间 / 标签 / 命名会话
     // 都按 profile 分区，必须在这里统一补拉，否则收起前的旧数据会残留。
     if (events && events.profileChanged) {
-      on(events.profileChanged, () => {
+      on(events.profileChanged, (rawChange) => {
+        const change = rawChange && typeof rawChange === 'object' ? rawChange as Record<string, unknown> : {}
+        const changedProfileId = typeof change.profileId === 'string' ? change.profileId : ''
+        // 连续点选项卡时以最后一次本地意图为准；没有待处理意图才跟随外部 profile 切换。
+        selectedProfileId = pendingProfileSwitchId || changedProfileId || selectedProfileId
+        spaceList = allSpaceList.filter((space) => space.profileId === selectedProfileId)
+        render()
         scheduleTabsReload()
         scheduleSpacesReload()
         if (isActive()) loadSessions().then(render).catch(() => {})

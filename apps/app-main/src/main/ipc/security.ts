@@ -19,8 +19,12 @@ interface Deps {
   isCrashReporterEnabled?: () => boolean
   getCrashReports?: () => Array<{ date: number | null; type: string | null; id: string | null }>
   getCertificateErrors?: () => unknown[]
+  getSiteCertificates?: () => unknown[]
+  continueSafeBrowsing?: (url: string, event: unknown) => Promise<{ ok: boolean }>
   /** 站点安全探针（main/site-security.ts）的读取口；未装配时路由不注册 */
   getSiteSecurity?: (req: unknown) => Promise<unknown>
+  /** 只有证书页可以显式指定来源标签；其它受信 UI 只能读取当前活动标签 */
+  canReadRequestedTab?: (event: unknown) => boolean
 }
 
 /** 崩溃报告：是否启用了 crashReporter + 已记录的崩溃条目。 */
@@ -44,14 +48,25 @@ export function registerCrashIpc(
 /** 证书错误：本会话内发生过的证书校验失败（含证书详情）。 */
 export function registerCertificateIpc(
   typedMain: IpcTypedMain,
-  { routes, schemas, getCertificateErrors }: Deps
+  { routes, schemas, getCertificateErrors, getSiteCertificates, continueSafeBrowsing }: Deps
 ): void {
-  if (!routes?.certificateList || !schemas?.list || !getCertificateErrors) return
-  typedMain.handle(routes.certificateList, {
-    requestSchema: schemas.list.request,
-    responseSchema: schemas.list.response,
-    handler: async () => ({ certificates: getCertificateErrors() })
-  })
+  if (routes?.certificateList && schemas?.list && getCertificateErrors) {
+    typedMain.handle(routes.certificateList, {
+      requestSchema: schemas.list.request,
+      responseSchema: schemas.list.response,
+      handler: async () => ({
+        certificates: getCertificateErrors(),
+        siteCertificates: getSiteCertificates ? getSiteCertificates() : []
+      })
+    })
+  }
+  if (routes?.safeBrowsingContinue && schemas?.safeContinue && continueSafeBrowsing) {
+    typedMain.handle(routes.safeBrowsingContinue, {
+      requestSchema: schemas.safeContinue.request,
+      responseSchema: schemas.safeContinue.response,
+      handler: async (event, req) => continueSafeBrowsing(req.url, event)
+    })
+  }
 }
 
 /**
@@ -63,13 +78,21 @@ export function registerCertificateIpc(
  */
 export function registerSiteSecurityIpc(
   typedMain: IpcTypedMain,
-  { routes, schemas, getSiteSecurity }: Deps
+  { routes, schemas, getSiteSecurity, canReadRequestedTab }: Deps
 ): void {
   if (!routes?.securitySite || !schemas?.site || !getSiteSecurity) return
   typedMain.handle(routes.securitySite, {
     requestSchema: schemas.site.request,
     responseSchema: schemas.site.response,
-    handler: async (_event, req) => getSiteSecurity(req)
+    handler: async (event, req) => {
+      const target = req && typeof req === 'object'
+        ? String((req as { tabId?: unknown }).tabId || '')
+        : ''
+      if (target && canReadRequestedTab?.(event) !== true) {
+        throw new Error('security:site cannot target an arbitrary tab')
+      }
+      return getSiteSecurity(req)
+    }
   })
 }
 

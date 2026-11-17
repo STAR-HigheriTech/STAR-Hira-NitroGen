@@ -188,6 +188,7 @@ export interface AiSnapshot {
   messages?: AiMessage[]
   lastSeq?: number
   running?: Array<{ sessionId: string; turnId: string }>
+  approvals?: AiApproval[]
   uiState?: AiSharedState
   pendingIntents?: AiIntent[]
 }
@@ -272,7 +273,7 @@ export interface AiCandidatesResult extends AiActionResult {
 }
 
 export interface AiClientPort {
-  state(opts?: { host?: AiHost; sessionId?: string; consumePending?: boolean }): Promise<AiSnapshot>
+  state(opts?: { host?: AiHost; sessionId?: string; consumePending?: boolean; select?: boolean }): Promise<AiSnapshot>
   uiState: {
     set(patch: AiSharedState & Record<string, unknown>): Promise<unknown>
   }

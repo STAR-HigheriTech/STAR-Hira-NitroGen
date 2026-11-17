@@ -13,6 +13,7 @@ const { IPC_EVENTS } = require("@hira-ng/shared-types/src/ipc-channels")
 const { SPLIT_METRICS } = require("@hira-ng/shared-types/src/split-layout")
 
 import type { BrowserWindow, WebContents } from 'electron'
+import { onWebContentsDestroyed } from './webContentsLifecycle'
 
 interface SidebarRect { x: number; y: number; width: number; height: number }
 interface SidebarInsets { left: number; top: number; right: number; bottom: number }
@@ -540,9 +541,9 @@ class WebSidebarController {
           this.host._rememberContentFocus(sbWc, 'sidebar', 'sidebar')
         })
       } catch (_) {}
-      try { sbWc.once('destroyed', () => { this.host.forgetContentFocus(sbWc) }) } catch (_) {}
       try {
-        sbWc.once('destroyed', () => {
+        onWebContentsDestroyed(sbWc, () => {
+          this.host.forgetContentFocus(sbWc)
           this.host._webSidebarActive = false
           // ⚠ 视图被销毁（profile 切换 / 卸载）后，**缓存与两个图层必须一起清** ——
           // 只清 active 不够：`_ensureWebSidebarParts` 开头是

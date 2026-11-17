@@ -6,6 +6,7 @@ import {
 
 interface SlotCallerPort {
   call(name: string, payload: unknown): Promise<unknown>
+  has?(name: string): boolean
 }
 
 export interface PluginTranslationProviderOptions {
@@ -33,10 +34,14 @@ export function createPluginTranslationProvider(
       if (!slots || typeof slots.call !== 'function') {
         throw new TranslationProviderUnavailableError('未安装 translate.provider 插件')
       }
+      if (typeof slots.has === 'function' && !slots.has('translate.provider')) {
+        throw new TranslationProviderUnavailableError('未注册 translate.provider 实现')
+      }
       const result = await slots.call('translate.provider', {
         texts: [...request.texts],
         from: request.from,
-        to: request.to
+        to: request.to,
+        url: request.url
       })
       if (result == null) throw new TranslationProviderUnavailableError('translate.provider 未注册实现')
       if (!Array.isArray(result) || result.length !== request.texts.length) {

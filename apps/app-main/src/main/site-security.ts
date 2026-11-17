@@ -1,5 +1,5 @@
 /**
- * 站点安全探针（主进程）—— 当前活动标签的传输协议与证书链。
+ * 站点安全探针（主进程）—— 活动标签或证书页来源标签的传输协议与证书链。
  *
  * ── 为什么单独成一个服务，而不是塞进 IPC 注册器 ────────────────────────
  * 证书数据的采集方式（CDP debugger + X509 解析）与「谁在问、问哪条路由」无关。
@@ -21,6 +21,9 @@
  */
 
 const { X509Certificate } = require('node:crypto')
+const { fetchCertificateTableViaTls } = require('./certificate-tls-probe') as {
+  fetchCertificateTableViaTls(origin: string): Promise<{ tableNames: string[]; error: string | null }>
+}
 
 interface DebuggerLike {
   isAttached?: () => boolean
@@ -50,15 +53,30 @@ interface SiteSecurityInfo {
   secure: boolean
   protocol: string
   hostname: string | null
+  origin: string | null
   tabId: string | null
   certificate: SiteCertificateInfo | null
+  certificateChain: SiteCertificateInfo[]
   error: string | null
+}
+
+interface ObservedSiteCertificate extends SiteSecurityInfo {
+  origin: string
+  observedAt: number
+}
+
+interface StoredSiteCertificate extends ObservedSiteCertificate {
+  scopeKey: string
 }
 
 interface Deps {
   /** 当前窗口的活动网页（scoped：按 IPC 发送方解析到对应窗口） */
   getActiveWebContents?: () => WebContentsLike | null
   getActiveTabId?: () => string | null
+  /** 按标签 id 取网页（证书页查看来源标签时用；不传则只支持活动标签） */
+  getWebContents?: (tabId: string) => WebContentsLike | null | undefined
+  /** profile + space 隔离键；内存快照绝不跨账号 / 空间复用 */
+  getScopeKey?: () => string
   /** 证书缓存时长（同一 URL 反复开关浮层不重复问 CDP） */
   cacheTtlMs?: number
   now?: () => number
@@ -66,6 +84,9 @@ interface Deps {
 
 const DEFAULT_TTL = 60_000
 const CACHE_MAX = 256
+const OBSERVED_MAX = 64
+const CERTIFICATE_CHAIN_MAX = 16
+const CERTIFICATE_SAN_MAX = 64
 /** 历史页 / 内部页不会带 TLS 证书，先按协议挡掉，省一次 debugger attach。 */
 const CERT_PROTOCOLS = new Set(['https:'])
 
@@ -87,6 +108,15 @@ function hostnameOf(url: string): string | null {
   try {
     const host = new URL(url).hostname
     return host || null
+  } catch (_) {
+    return null
+  }
+}
+
+function originOf(url: string): string | null {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.origin : null
   } catch (_) {
     return null
   }
@@ -128,6 +158,7 @@ function parseSan(raw: string | null | undefined): string[] {
     .split(/,\s*/)
     .map((part) => part.replace(/^DNS:/, '').replace(/^IP Address:/, '').trim())
     .filter(Boolean)
+    .slice(0, CERTIFICATE_SAN_MAX)
 }
 
 function parseCertificate(base64Der: string): SiteCertificateInfo | null {
@@ -149,13 +180,16 @@ function parseCertificate(base64Der: string): SiteCertificateInfo | null {
 }
 
 /**
- * 问 CDP 要证书链，解析叶子证书。
+ * 问 CDP 要证书链，解析全部可读成员。
  * 只在本函数内 attach/detach —— 绝不长期占用 debugger（会挡住 DevTools）。
  */
-async function fetchCertificate(wc: WebContentsLike, origin: string): Promise<{ certificate: SiteCertificateInfo | null; error: string | null }> {
+async function fetchCertificate(
+  wc: WebContentsLike,
+  origin: string
+): Promise<{ certificate: SiteCertificateInfo | null; certificateChain: SiteCertificateInfo[]; error: string | null }> {
   const debuggerApi = wc.debugger
   if (!debuggerApi || typeof debuggerApi.attach !== 'function') {
-    return { certificate: null, error: 'debugger-unavailable' }
+    return { certificate: null, certificateChain: [], error: 'debugger-unavailable' }
   }
 
   let attachedHere = false
@@ -163,26 +197,37 @@ async function fetchCertificate(wc: WebContentsLike, origin: string): Promise<{ 
     const alreadyAttached = typeof debuggerApi.isAttached === 'function' ? debuggerApi.isAttached() : false
     // 已被别人 attach（DevTools / 另一个探针）时不要抢，也不要 detach ——
     // 那是别人的连接，我们只借用不了就降级。
-    if (alreadyAttached) return { certificate: null, error: 'debugger-busy' }
+    if (alreadyAttached) return { certificate: null, certificateChain: [], error: 'debugger-busy' }
 
     debuggerApi.attach('1.3')
     attachedHere = true
 
+    try {
+      // 部分 Chromium 构建只有在 Network 域启用后才初始化证书表。
+      await debuggerApi.sendCommand('Network.enable', {})
+    } catch (_) {}
     const result = await debuggerApi.sendCommand('Network.getCertificate', { origin })
     const table = result !== null && typeof result === 'object' && Array.isArray((result as { tableNames?: unknown }).tableNames)
       ? (result as { tableNames: unknown[] }).tableNames
       : []
-    if (!table.length) return { certificate: null, error: null }
-
-    // 叶子证书在第一位；解析失败就向上找，直到有一张能读出来。
-    for (const der of table) {
-      const parsed = parseCertificate(String(der))
-      if (parsed) return { certificate: parsed, error: null }
+    if (!table.length) {
+      return { certificate: null, certificateChain: [], error: 'certificate-table-empty' }
     }
-    return { certificate: null, error: 'certificate-unparsable' }
+
+    // 叶子证书在第一位。链成员逐张解析，但绝不把中间证书冒充叶证书。
+    const limitedTable = table.slice(0, CERTIFICATE_CHAIN_MAX)
+    const leaf = parseCertificate(String(limitedTable[0]))
+    const certificateChain: SiteCertificateInfo[] = leaf ? [leaf] : []
+    for (const der of limitedTable.slice(1)) {
+      const parsed = parseCertificate(String(der))
+      if (parsed) certificateChain.push(parsed)
+    }
+    if (!leaf) return { certificate: null, certificateChain, error: 'leaf-certificate-unparsable' }
+    return { certificate: leaf, certificateChain, error: null }
   } catch (error) {
     return {
       certificate: null,
+      certificateChain: [],
       error: error instanceof Error && error.message ? error.message : 'certificate-query-failed'
     }
   } finally {
@@ -196,6 +241,39 @@ async function fetchCertificate(wc: WebContentsLike, origin: string): Promise<{ 
   }
 }
 
+function shouldUseTlsFallback(error: string | null): boolean {
+  return error !== 'leaf-certificate-unparsable' && error !== 'certificate-unparsable'
+}
+
+async function fetchCertificateWithFallback(
+  wc: WebContentsLike,
+  origin: string
+): Promise<{ certificate: SiteCertificateInfo | null; certificateChain: SiteCertificateInfo[]; error: string | null }> {
+  const primary = await fetchCertificate(wc, origin)
+  if (primary.certificate || !shouldUseTlsFallback(primary.error)) return primary
+
+  const fallback = await fetchCertificateTableViaTls(origin)
+  if (!fallback.tableNames.length) {
+    return {
+      certificate: null,
+      certificateChain: [],
+      error: fallback.error || primary.error
+    }
+  }
+
+  const leaf = parseCertificate(fallback.tableNames[0])
+  const certificateChain: SiteCertificateInfo[] = leaf ? [leaf] : []
+  for (const der of fallback.tableNames.slice(1)) {
+    const parsed = parseCertificate(der)
+    if (parsed) certificateChain.push(parsed)
+  }
+  return {
+    certificate: leaf,
+    certificateChain,
+    error: leaf ? null : 'leaf-certificate-unparsable'
+  }
+}
+
 /**
  * 创建站点安全探针。
  *
@@ -204,8 +282,18 @@ async function fetchCertificate(wc: WebContentsLike, origin: string): Promise<{ 
  */
 function createSiteSecurity(deps: Deps = {}) {
   const cache = new Map<number, CacheEntry>()
+  const inFlight = new Map<string, Promise<SiteSecurityInfo>>()
+  const observed = new Map<string, StoredSiteCertificate>()
   const ttl = Number.isFinite(deps.cacheTtlMs) ? Number(deps.cacheTtlMs) : DEFAULT_TTL
   const now = typeof deps.now === 'function' ? deps.now : () => Date.now()
+
+  function currentScopeKey(): string {
+    try {
+      return typeof deps.getScopeKey === 'function' ? deps.getScopeKey() : 'default'
+    } catch (_) {
+      return 'default'
+    }
+  }
 
   function cacheResult(key: number, value: CacheEntry): void {
     cache.delete(key)
@@ -217,9 +305,30 @@ function createSiteSecurity(deps: Deps = {}) {
     }
   }
 
-  function activeInfo(): { value: SiteSecurityInfo; wc: WebContentsLike | null } {
-    const wc = typeof deps.getActiveWebContents === 'function' ? deps.getActiveWebContents() : null
-    const tabId = typeof deps.getActiveTabId === 'function' ? deps.getActiveTabId() : null
+  function remember(value: SiteSecurityInfo, origin: string): void {
+    if (!value.certificate || !value.hostname) return
+    const scopeKey = currentScopeKey()
+    const key = `${scopeKey}\n${value.tabId || ''}\n${value.hostname}\n${value.certificate.fingerprint || ''}`
+    observed.delete(key)
+    observed.set(key, {
+      ...value,
+      origin,
+      observedAt: now(),
+      scopeKey
+    })
+    while (observed.size > OBSERVED_MAX) {
+      const oldest = observed.keys().next()
+      if (oldest.done) break
+      observed.delete(oldest.value)
+    }
+  }
+
+  function targetInfo(requestedTabId: string | null): { value: SiteSecurityInfo; wc: WebContentsLike | null } {
+    const wc = (requestedTabId
+      ? (typeof deps.getWebContents === 'function' ? deps.getWebContents(requestedTabId) : null)
+      : (typeof deps.getActiveWebContents === 'function' ? deps.getActiveWebContents() : null)) || null
+    const tabId = requestedTabId ||
+      (typeof deps.getActiveTabId === 'function' ? deps.getActiveTabId() : null)
     const url = wc && typeof wc.getURL === 'function' ? wc.getURL() : ''
     return {
       wc,
@@ -227,18 +336,21 @@ function createSiteSecurity(deps: Deps = {}) {
         secure: false,
         protocol: protocolOf(url),
         hostname: hostnameOf(url),
+        origin: originOf(url),
         tabId: tabId ? String(tabId) : null,
         certificate: null,
+        certificateChain: [],
         error: null
       }
     }
   }
 
-  async function read(_req?: { tabId?: string }): Promise<SiteSecurityInfo> {
-    const { wc, value } = activeInfo()
+  async function read(req?: { tabId?: string }): Promise<SiteSecurityInfo> {
+    const requestedTabId = req && req.tabId ? String(req.tabId) : null
+    const { wc, value } = targetInfo(requestedTabId)
 
     if (!wc || (typeof wc.isDestroyed === 'function' && wc.isDestroyed())) {
-      return { ...value, error: 'no-active-tab' }
+      return { ...value, error: requestedTabId ? 'tab-not-found' : 'no-active-tab' }
     }
 
     const url = typeof wc.getURL === 'function' ? wc.getURL() : ''
@@ -268,13 +380,47 @@ function createSiteSecurity(deps: Deps = {}) {
       return { ...base, error: 'invalid-origin' }
     }
 
-    const { certificate, error } = await fetchCertificate(wc, origin)
-    const result: SiteSecurityInfo = { ...base, certificate, error }
+    const flightKey = `${key}\n${url}`
+    const running = inFlight.get(flightKey)
+    if (running) return running
 
-    // 只缓存"确定的事实"（成功解析或协议层已确认无证书的页面），
-    // 失败不入缓存：下次打开浮层时重试，避免一次 DevTools 占用把结果钉死一分钟。
-    if (certificate) cacheResult(key, { url, at: now(), value: result })
-    return result
+    // 同一标签同一 URL 的并发读取共用一次 CDP attach，避免双击 / 重开浮层时互相抢连接。
+    const task = fetchCertificateWithFallback(wc, origin).then(({ certificate, certificateChain, error }) => {
+      const result: SiteSecurityInfo = { ...base, certificate, certificateChain, error }
+
+      // 只缓存"确定的事实"（成功解析或协议层已确认无证书的页面），
+      // 失败不入缓存：下次打开浮层时重试，避免一次 DevTools 占用把结果钉死一分钟。
+      if (certificate) {
+        cacheResult(key, { url, at: now(), value: result })
+        remember(result, origin)
+      }
+      return result
+    })
+    inFlight.set(flightKey, task)
+    try {
+      return await task
+    } finally {
+      if (inFlight.get(flightKey) === task) inFlight.delete(flightKey)
+    }
+  }
+
+  /** 本次进程内实际读取成功的站点证书快照；按读取时间倒序、同标签同证书去重。 */
+  function list(): ObservedSiteCertificate[] {
+    const scopeKey = currentScopeKey()
+    return Array.from(observed.values())
+      .filter((item) => item.scopeKey === scopeKey)
+      .sort((a, b) => b.observedAt - a.observedAt)
+      .map((item) => ({
+        secure: item.secure,
+        protocol: item.protocol,
+        hostname: item.hostname,
+        origin: item.origin,
+        tabId: item.tabId,
+        certificate: item.certificate,
+        certificateChain: item.certificateChain,
+        error: item.error,
+        observedAt: item.observedAt
+      }))
   }
 
   /** 标签关闭 / 导航时清掉对应缓存，避免 id 复用后命中旧页面。 */
@@ -283,7 +429,7 @@ function createSiteSecurity(deps: Deps = {}) {
     else cache.clear()
   }
 
-  return { read, forget }
+  return { read, list, forget }
 }
 
 module.exports = { createSiteSecurity, parseCertificate }

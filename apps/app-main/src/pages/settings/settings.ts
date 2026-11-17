@@ -1913,7 +1913,8 @@ function wireSidebarMore() {
       }
     } else {
       const inp = document.createElement('input')
-      inp.type = field.type === 'number' ? 'number' : 'text'
+      inp.type = field.type === 'number' ? 'number' : field.type === 'password' ? 'password' : 'text'
+      if (field.type === 'password') inp.autocomplete = 'off'
       inp.value = toDisplay(field)
       if (field.min !== undefined) inp.min = String(field.min)
       if (field.placeholder) inp.placeholder = field.placeholder

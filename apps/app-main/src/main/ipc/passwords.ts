@@ -10,6 +10,7 @@
 import { BrowserWindow, dialog, type WebContents } from 'electron'
 import { createHash } from 'node:crypto'
 import { writeFile } from 'node:fs/promises'
+import { ipcSchemas } from '@hira-ng/infra-ipc'
 import { createProviderInvoker } from './provider-bridge'
 import type { ProviderRegistryPort } from './provider-bridge'
 import type { IpcRoutes, IpcSchemas, IpcTypedMain } from './types'
@@ -286,6 +287,8 @@ export function registerPasswordIpc(
   // 当前正在展示的保存提示卡对应凭据，展示期间重复上报直接忽略，
   // 避免“点一下别的输入框/按钮就反复弹”。
   let activeSaveKey = ''
+  let lastMenuShowPayload: Record<string, unknown> | null = null
+  let lastSaveShowPayload: Record<string, unknown> | null = null
   const credentialKey = (hostname: unknown, username: unknown, password: unknown): string =>
     createHash('sha256')
       .update(JSON.stringify([stripWww(hostname), String(username || ''), String(password || '')]))
@@ -308,6 +311,52 @@ export function registerPasswordIpc(
   }
 
   const sendPasswordOverlayEvent = (route: string, payload: unknown): void => sendPasswordOverlayEventTo(layoutCoordinator, route, payload)
+
+  /** 需要确认「renderer 确实收到」的展示路径用这一个；失败时由调用方复位状态。 */
+  const deliverPasswordOverlayEvent = async (route: string, payload: unknown): Promise<boolean> => {
+    if (!layoutCoordinator) return false
+    if (typeof layoutCoordinator.sendToPasswordOverlay === 'function') {
+      try {
+        return (await layoutCoordinator.sendToPasswordOverlay(`ngipc:event:${route}`, payload || {})) !== false
+      } catch {
+        return false
+      }
+    }
+    const wc = typeof layoutCoordinator.getPasswordOverlayWebContents === 'function'
+      ? layoutCoordinator.getPasswordOverlayWebContents() as WebContents | null
+      : null
+    if (!wc || wc.isDestroyed()) return false
+    try {
+      wc.send(`ngipc:event:${route}`, payload || {})
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  let lastUnlockShowPayload: Record<string, unknown> | null = null
+  const sendUnlockOverlayEvent = async (
+    route: string,
+    payload?: Record<string, unknown>
+  ): Promise<boolean> => {
+    if (route === events.overlayShowPasswordUnlock) {
+      lastUnlockShowPayload = payload || {}
+    } else if (route === events.overlayHidePasswordUnlock) {
+      lastUnlockShowPayload = null
+    }
+    const delivered = await deliverPasswordOverlayEvent(route, payload || {})
+    if (route === events.overlayShowPasswordUnlock && !delivered) {
+      lastUnlockShowPayload = null
+    }
+    if (route === events.overlayShowPasswordUnlock && delivered) {
+      // 解锁卡已经真正显示后，其它待展示卡不能再留在恢复状态里。
+      pendingAutofillMenuSender = null
+      lastMenuShowPayload = null
+      activeSaveKey = ''
+      lastSaveShowPayload = null
+    }
+    return delivered
+  }
 
   const stripWww = (hostname: unknown): string => { try { return String(hostname || '').replace(/^www\./, '') } catch (_) { return String(hostname || '') } }
 
@@ -354,7 +403,7 @@ export function registerPasswordIpc(
     passwordService,
     // 事件名从契约表取，浮层协议只有一份真源（ipc-channels.mjs）。
     events,
-    sendOverlayEvent: sendPasswordOverlayEvent,
+    sendOverlayEvent: sendUnlockOverlayEvent,
     getWindowSize: () => {
       const win = (layoutCoordinator && layoutCoordinator.getWindow ? layoutCoordinator.getWindow() : null) as BrowserWindow | null
       if (!win || win.isDestroyed()) return [0, 0]
@@ -404,6 +453,7 @@ export function registerPasswordIpc(
     // 通知发起页要在清空 sender 之前取：清空后就找不到"谁在展示"了。
     const s = senderForOverlayHidden(rt)
     pendingAutofillMenuSender = null
+    lastMenuShowPayload = null
     // 挂起的「解锁 / 登录」必须一起取消，否则那条 getSuggestions 的 Promise
     // 会永久 pending（页面侧表现为钥匙按钮再也不响应）。
     unlockFlow.cancelPending({ hide: false })
@@ -490,7 +540,7 @@ export function registerPasswordIpc(
         if (ww0) mx = Math.max(8, Math.min(mx, ww0 - MENU_W - 28))
         if (wh0) my = Math.max(8, Math.min(my, wh0 - MENU_H - 28))
       }
-      sendPasswordOverlayEvent(events.overlayShowPasswordMenu, {
+      const showPayload = {
         hostname: req.hostname,
         credentials: req.credentials || [],
         x: mx,
@@ -498,7 +548,18 @@ export function registerPasswordIpc(
         windowWidth: winW,
         windowHeight: winH,
         viewport
-      })
+      }
+      const delivered = await deliverPasswordOverlayEvent(events.overlayShowPasswordMenu, showPayload)
+      if (!delivered) {
+        pendingAutofillMenuSender = null
+        return { ok: false }
+      }
+      // 菜单真正显示后再释放其它待展示卡，避免发送失败时把原卡状态一并清掉。
+      unlockFlow.cancelPending({ hide: false })
+      lastUnlockShowPayload = null
+      activeSaveKey = ''
+      lastSaveShowPayload = null
+      lastMenuShowPayload = showPayload
       return { ok: true }
     }
   })
@@ -581,7 +642,7 @@ export function registerPasswordIpc(
         const active = Array.isArray(list) ? list.find((item) => item && item.active) : null
         readOnlyBackend = Boolean(active && active.writable === false)
       } catch (_) {}
-      sendPasswordOverlayEvent(events.overlayShowPasswordSave, {
+      const showPayload = {
         hostname,
         username: req.username,
         password: req.password,
@@ -589,12 +650,24 @@ export function registerPasswordIpc(
         windowWidth: viewport ? viewport.width : 800,
         windowHeight: viewport ? viewport.height : 600,
         viewport
-      })
+      }
+      const delivered = await deliverPasswordOverlayEvent(events.overlayShowPasswordSave, showPayload)
+      if (!delivered) {
+        activeSaveKey = ''
+        return { ok: false }
+      }
+      // 保存卡真正显示后再解除菜单 / 解锁状态，避免重复检查或发送失败误伤原卡。
+      pendingAutofillMenuSender = null
+      lastMenuShowPayload = null
+      unlockFlow.cancelPending({ hide: false })
+      lastUnlockShowPayload = null
+      lastSaveShowPayload = showPayload
       if (!duplicateOutcome.done) {
         void duplicateCheck.then((late: DuplicateCheckResult) => {
           if (!late.done || activeSaveKey !== key || !hasExactCredential(late.rows)) return
           decidedCredentialKeys.add(key)
           activeSaveKey = ''
+          lastSaveShowPayload = null
           sendPasswordOverlayEvent(events.overlayHidePasswordSave, {})
         })
       }
@@ -624,11 +697,13 @@ export function registerPasswordIpc(
           })
         }
         pendingAutofillMenuSender = null
+        lastMenuShowPayload = null
         sendPasswordOverlayEvent(events.overlayHidePasswordMenu, {})
         return { ok: true }
       }
       if (req.kind === 'menu-cancel') {
         pendingAutofillMenuSender = null
+        lastMenuShowPayload = null
         sendPasswordOverlayEvent(events.overlayHidePasswordMenu, {})
         return { ok: true }
       }
@@ -640,6 +715,7 @@ export function registerPasswordIpc(
         // 若用户在卡片里改过用户名/密码，把展示前上报的原始凭据也一并标记
         if (activeSaveKey) decidedCredentialKeys.add(activeSaveKey)
         activeSaveKey = ''
+        lastSaveShowPayload = null
         if (action === 'save') {
           await invoke('password.saveCredential', () => passwordService.saveCredential({
             hostname: req.hostname,
@@ -664,6 +740,7 @@ export function registerPasswordIpc(
         decidedCredentialKeys.add(credentialKey(req.hostname, req.username, req.password))
         if (activeSaveKey) decidedCredentialKeys.add(activeSaveKey)
         activeSaveKey = ''
+        lastSaveShowPayload = null
         sendPasswordOverlayEvent(events.overlayHidePasswordSave, {})
         return { ok: true }
       }
@@ -696,6 +773,22 @@ export function registerPasswordIpc(
     requestSchema: schemas.generate.request,
     responseSchema: schemas.generate.response,
     handler: async (_e, req) => ({ ok: generatePassword(null, req) })
+  })
+
+  // renderer 崩溃 / 热重载后恢复当前卡片。密码状态住在本模块，布局层不应假装知道。
+  typedMain.handle(routes.passwordOverlayReady, {
+    requestSchema: ipcSchemas.layout.floatReady.request,
+    responseSchema: ipcSchemas.layout.floatReady.response,
+    handler: async () => {
+      if (pendingAutofillMenuSender && lastMenuShowPayload) {
+        await deliverPasswordOverlayEvent(events.overlayShowPasswordMenu, lastMenuShowPayload)
+      } else if (unlockFlow.isPending() && lastUnlockShowPayload) {
+        await sendUnlockOverlayEvent(events.overlayShowPasswordUnlock, lastUnlockShowPayload)
+      } else if (activeSaveKey && lastSaveShowPayload) {
+        await deliverPasswordOverlayEvent(events.overlayShowPasswordSave, lastSaveShowPayload)
+      }
+      return { ok: true }
+    }
   })
 }
 

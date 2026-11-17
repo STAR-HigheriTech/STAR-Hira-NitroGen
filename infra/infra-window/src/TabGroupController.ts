@@ -532,7 +532,12 @@ class TabGroupController {
   setSplitActive(opts: TabGroupOptions = {}) {
     const res = tabLayout.setSplitActive(this.host, opts)
     if (!res) return null
-    if (this.host._tabs.has(String(res.tabId))) this.host._showTab(String(res.tabId))
+    const tabId = String(res.tabId)
+    if (this.host._tabs.has(tabId)) {
+      // 走用户切标签的同一条完整链路：可见性、原生焦点、激活打点和一次立即投影都在
+      // switchTo 里完成。只调 _showTab 会改布局，却漏掉标签条高亮所需的立即广播。
+      this.host.switchTo(tabId)
+    }
     return res
   }
 
@@ -747,17 +752,29 @@ class TabGroupController {
     // ── 非速览：清掉可能残留的速览态，走原分屏逻辑。
     if (typeof this.host._layout.setActiveGlance === 'function') this.host._layout.setActiveGlance(null)
     const splitId = tab && tab.splitId != null ? String(tab.splitId) : null
-    const split = splitId ? this.host._splits.get(splitId) : null
+    if (!splitId) {
+      return this.host._layout.setActiveSplit(null)
+    }
+    let split = this.host._splits.get(splitId)
     if (!split || !Array.isArray(split.members) || split.members.length < 2) {
       return this.host._layout.setActiveSplit(null)
     }
-    for (const memberId of split.members) {
+    // 网页格获得焦点和标签条单击都会走 switchTo/_showTab，最终到这里。活动格必须在这里
+    // 同步回分屏真源：布局层自己有 activeTabId，但分屏组不能靠它隐式更新，否则下一次
+    // 读组、持久化会话或工具条动作仍会看到旧格，出现高亮与数据不一致。
+    if (String(split.activeTabId || '') !== id) {
+      const focused = tabLayout.setSplitActive(this.host, { splitId: split.splitId, tabId: id })
+      if (focused) split = this.host._splits.get(splitId) || split
+    }
+    const members = Array.isArray(split.members) ? split.members : []
+    if (members.length < 2) return this.host._layout.setActiveSplit(null)
+    for (const memberId of members) {
       if (memberId === id) continue
       if (this.host._wcm.isTabSleeping(memberId)) this.host._wakeInternal(memberId)
     }
     return this.host._layout.setActiveSplit({
       splitId: split.splitId,
-      members: split.members.slice(),
+      members: members.slice(),
       layout: split.layout,
       ratios: Array.isArray(split.ratios) ? split.ratios.slice() : [],
       activeTabId: id

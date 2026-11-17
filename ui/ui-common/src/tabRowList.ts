@@ -976,7 +976,7 @@ export function createTabRowList(
   }
 
   // ── hover 预览 ─────────────────────────────────────────────────────────────
-  // 「什么时候显、什么时候收」由**横竖共用**的状态机负责（六条规则见 hoverPreview.ts
+  // 「什么时候显、什么时候收」由**横竖共用**的状态机负责（七条规则见 hoverPreview.ts
   // 文件头：列表级计时 / 已可见立即换锚 / 320ms 重挂 / 项以外延迟收 与 离开列表即收 /
   // 按下别处即收 / 锚点消失即收并锁到指针动过）。本列表因此只交出三件事实 ——
   //「鼠标进了哪一行」与「鼠标是不是还在本列表里」与宿主 document ——不再自己维护一套计时器
@@ -1018,7 +1018,7 @@ export function createTabRowList(
    * 清掉窗口后，松手后的 hover 必须重新计满延迟才出预览（正常的 hover 语义）。
    */
   function endDragPreview() {
-    hover.hide({ forgetRound: true })
+    hover.resume()
   }
 
   function present(row: HTMLElement, tab: TabRowItem): void {
@@ -1246,6 +1246,8 @@ export function createTabRowList(
     if (!transfer) { e.preventDefault(); return }
     const tabId = row.getAttribute('data-tab-id') || ''
     if (!tabId) { e.preventDefault(); return }
+    // 在任何切换 / 重排之前冻结预览：dragstart 之后的补发 mouseover 不能重新起表。
+    hover.suspend()
     // 先切到被拖的标签、再开始重排 —— 与 Edge / Chrome 同口径（纵向列表与 tabbar 一个行为）。
     // 判据读行上的类：它就是渲染期由投影的 active 写下的，不必再查一份数据。
     const wasActive = row.classList.contains('tabrow-row--active')
@@ -1266,7 +1268,6 @@ export function createTabRowList(
     externalDragGeometryActive = false
     resetRowDropGeometry()
     ensureRowDropGeometry()
-    hidePreview()
     // 中和窗口拖拽区：指针一旦越出列表落进 app-region 区，连 dragover 都不会派发，
     // 那时候再想补救已经收不到任何信号了 —— 必须**拖拽开始那一刻**就中和（见 dragRegion.ts）。
     dragRegion.arm()
@@ -1576,6 +1577,10 @@ export function createTabRowList(
     const row = eventElement(e)?.closest<HTMLElement>('[data-row]')
     if (!row) return
     e.preventDefault()
+    // 右键菜单是明确的非 hover 交互：收起当前预览，并锁到真实 pointermove。
+    // 仅 hide() 会留下同轮补显窗口，菜单关闭后的合成 mouseover 仍可能把预览弹回来。
+    hover.suspend()
+    hover.resume()
     // 标签组行 → 标签组菜单（重命名 / 拆分 / 合并 / 颜色），与 tabbar 芯片逐项对齐
     const stackId = row.getAttribute('data-stack-id') || ''
     if (stackId) {

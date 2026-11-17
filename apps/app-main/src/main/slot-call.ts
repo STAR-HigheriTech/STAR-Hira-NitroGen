@@ -23,11 +23,13 @@ import { errorMessage } from './ipc/types'
 interface SlotRegistryPort {
   callSync?(id: string, payload: unknown, meta?: unknown): unknown
   call?(id: string, payload: unknown, meta?: unknown): unknown
+  countImplementations?(id: string): number
 }
 
 interface SlotCallerOptions { label?: string }
 
 export interface SlotCaller {
+  has(id: string): boolean
   callSync(id: string, payload: unknown, meta?: unknown): unknown | null
   call(id: string, payload: unknown, meta?: unknown): Promise<unknown | null>
   reduce(id: string, payload: unknown, meta?: unknown): unknown
@@ -42,6 +44,16 @@ export interface SlotCaller {
  */
 export function createSlotCaller(extensionPoints: SlotRegistryPort | null | undefined, options: SlotCallerOptions = {}): SlotCaller {
   const label = options.label || 'slot'
+
+  function has(id: string): boolean {
+    if (!extensionPoints || typeof extensionPoints.countImplementations !== 'function') return false
+    try {
+      return extensionPoints.countImplementations(id) > 0
+    } catch (e) {
+      console.warn(`[${label}] 插槽 ${id} 状态读取失败（按未实现处理）:`, errorMessage(e))
+      return false
+    }
+  }
 
   /**
    * 同步执行（REDUCE / SINGLE / MULTI 在"必须同步"的宿主里也用它）。
@@ -104,6 +116,6 @@ export function createSlotCaller(extensionPoints: SlotRegistryPort | null | unde
     await call(id, payload, meta)
   }
 
-  return { callSync, call, reduce, reduceAsync, multi, emit }
+  return { has, callSync, call, reduce, reduceAsync, multi, emit }
 }
 

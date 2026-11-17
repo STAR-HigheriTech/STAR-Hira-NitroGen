@@ -21,8 +21,9 @@
  */
 
 const { net } = require('electron')
-const { assertSafeUrl } = require('./net-guard.cjs') as {
+const { assertSafeUrl, isBlockedAddress } = require('./net-guard.cjs') as {
   assertSafeUrl(url: string): Promise<{ ok: true; url: string } | { ok: false; reason: string }>
+  isBlockedAddress(address: unknown): boolean
 }
 
 interface FetchHtmlSuccess { ok: true; html: string; mime: string }
@@ -117,6 +118,14 @@ function requestOnce(url: string, timeoutMs: number): Promise<RequestResult> {
     }, timeoutMs)
 
     req.on('response', (res: Electron.IncomingMessage) => {
+      const remoteAddress = String(((res as unknown as { socket?: { remoteAddress?: unknown } }).socket?.remoteAddress) || '')
+      if (remoteAddress && isBlockedAddress(remoteAddress)) {
+        clearTimeout(timer)
+        try { req.abort() } catch (_) {}
+        try { resumeResponse(res) } catch (_) {}
+        finish({ ok: false, reason: 'blocked-host' })
+        return
+      }
       const status = Number(res.statusCode) || 0
       if (status >= 300 && status < 400) {
         clearTimeout(timer)

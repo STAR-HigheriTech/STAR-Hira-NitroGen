@@ -160,8 +160,8 @@ export function injectPinGridStyles(doc: Document): void {
       border: 0; border-radius: var(--hira-radius-lg, 14px); cursor: pointer;
       background: transparent; box-sizing: border-box; overflow: hidden;
       color: var(--hira-text-secondary, #4b5563);
-      ${TAB_FAVICON_BG_VAR}: var(--ng-tab-active-fg, var(--hira-accent, #3b82f6));
-      ${TAB_FAVICON_FG_VAR}: var(--hira-bg-elevated, #fff);
+      ${TAB_FAVICON_BG_VAR}: #fff;
+      ${TAB_FAVICON_FG_VAR}: #0b0c0e;
       contain: layout style; -webkit-user-select: none; user-select: none;
       transition: background var(--hira-dur-fast, 120ms) var(--hira-ease-standard, ease),
                   box-shadow var(--hira-dur-fast, 120ms) var(--hira-ease-standard, ease);
@@ -302,7 +302,7 @@ export function createPinGrid(doc: Document, opts: PinGridOptions = {}): PinGrid
 
   /**
    * hover 预览状态机 —— 与纵向 / 横向列表**共用一份**（延迟 / 换锚 / 收起 / 按下即收 /
-   * 锚点消失即收并锁到指针动过的规则一致，见 hoverPreview.ts 文件头六条）。`document`
+   * 锚点消失即收并锁到指针动过的规则一致，见 hoverPreview.ts 文件头七条）。`document`
    * 注入给它 → 规则 ⑤⑥ 自动生效，网格不必再自己写一遍。
    * 载荷走 `tabPreviewFacts`，外侧边界取滚动容器（与列表同一条理由，见该文件头）。
    */
@@ -418,7 +418,8 @@ export function createPinGrid(doc: Document, opts: PinGridOptions = {}): PinGrid
     if (onContextMenu) {
       card.addEventListener('contextmenu', (e) => {
         e.preventDefault()
-        hover.hide()
+        hover.suspend()
+        hover.resume()
         onContextMenu(tab, e, nextItemOf(tab.tabId))
       })
     }
@@ -431,7 +432,7 @@ export function createPinGrid(doc: Document, opts: PinGridOptions = {}): PinGrid
     card.addEventListener('dragstart', (e) => {
       dragId = String(tab.tabId)
       card.classList.add('pingrid-card--dragging')
-      hover.hide()
+      hover.suspend()
       try {
         if (e.dataTransfer) {
           e.dataTransfer.effectAllowed = 'move'
@@ -443,6 +444,7 @@ export function createPinGrid(doc: Document, opts: PinGridOptions = {}): PinGrid
       dragId = ''
       card.classList.remove('pingrid-card--dragging')
       clearDropHint()
+      hover.resume()
     })
     card.addEventListener('dragover', (e) => {
       if (!dragId || dragId === String(tab.tabId)) return
@@ -535,7 +537,8 @@ export function createPinGrid(doc: Document, opts: PinGridOptions = {}): PinGrid
     if (onFolderMenu) {
       head.addEventListener('contextmenu', (e) => {
         e.preventDefault()
-        hover.hide()
+        hover.suspend()
+        hover.resume()
         onFolderMenu(entry.stackId, e, { beginRename: () => startFolderRename(head, label, entry) })
       })
     }

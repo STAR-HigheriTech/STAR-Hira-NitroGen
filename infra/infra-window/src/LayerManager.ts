@@ -19,6 +19,7 @@
 const { focusPriorityFor, createModalTo } = require('./LayerStack')
 
 import type { WebContents, WebContentsView } from 'electron'
+import { onWebContentsDestroyed } from './webContentsLifecycle'
 
 interface ViewPort {
   isFake?: boolean
@@ -249,10 +250,10 @@ export class LayerManager implements LayerHost {
     if (!layer || !layer.isWebContentsView()) return
     if (this._destroyListeners.has(layer)) return
     const wc = layer.webContents
-    if (!wc || typeof wc.once !== 'function') return
+    if (!wc) return
     this._destroyListeners.add(layer)
     try {
-      wc.once('destroyed', () => this._removeDestroyedLayer(layer))
+      onWebContentsDestroyed(wc, () => this._removeDestroyedLayer(layer))
     } catch (_) {}
   }
 

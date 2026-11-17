@@ -5,7 +5,7 @@
  * 三类技能，一套解析
  * ══════════════════════════════════════════════════════════════════════
  *   prompt —— 模板插入输入框；`{{page}}` 之类占位符由**上下文 chip** 承载
- *   script —— 在页面的**只读快照**上跑一段脚本，结果回填成 text chip
+ *   script —— 在页面的隔离沙箱快照上跑一段脚本，结果回填成 text chip
  *   agent  —— 与 prompt 同一套模板，但采集完直接发送
  *
  * 本文件不认识 Electron / 数据库 / IPC：只做「模板 → { 文本, 需要什么, 还要填什么 }」、
@@ -221,17 +221,12 @@ function parseImportFile(text: string): SkillRecord[] {
 }
 
 /**
- * 脚本源码 → 可注入隔离世界的代码。
+ * 脚本源码 → 沙箱页面里的执行包装。
  *
- * 隔离世界**共享同一棵 DOM**，所以在里面直接跑脚本是能改到真实页面的。
- * 为了守住"源页面零改动"，这里把脚本绑到一个**脱离文档的快照**上：
- *   1. 用 `createHTMLDocument` 造一个不挂载的 document；
- *   2. 把当前页面的 `documentElement.innerHTML` 拷进去（脚本标签不会执行）；
- *   3. 用户源码以 `document` 形参接收这份快照 —— 删订阅栏 / 改属性都只发生在副本里。
- * 代价是拿不到布局与计算样式（`innerText` / `getComputedStyle` 不可用），
- * 这也是内置脚本统一用 `textContent` 的原因。
+ * 真正的页面隔离由 `main/skills.cts` 的隐藏 BrowserWindow 提供：源页面只导出
+ * HTML 快照，用户脚本在独立 renderer、无 Node、无网络、无持久存储的上下文里运行。
+ * 这里只负责参数序列化与 `return` 包装，不再把隔离世界里的 DOM 副本当安全边界。
  *
- * 用户源码里可以直接 `return`（被函数包住），所以「最后一行表达式」也能当结果。
  * `\u2028/\u2029` 必须转义：它们在 JS 里是换行符，原样塞进字符串字面量会断行。
  * @param {string} source
  * @param {any} [args]
@@ -243,15 +238,9 @@ function buildScriptCode(source: string, args?: unknown) {
   return [
     '(() => {',
     `  const args = ${json};`,
-    '  const snapshot = (() => {',
-    '    const live = document;',
-    '    const doc = live.implementation.createHTMLDocument("hira-snapshot");',
-    '    if (live.documentElement) doc.documentElement.innerHTML = live.documentElement.innerHTML;',
-    '    return doc;',
-    '  })();',
     '  return (function (document) {',
     String(source == null ? '' : source),
-    '  })(snapshot);',
+    '\n  })(document);',
     '})()'
   ].join('\n')
 }

@@ -1,4 +1,5 @@
 import { showWebContentMenu, closeWebContentMenu, type ContextMenuSnapshot } from './context-menu'
+import { onWebContentsDestroyed } from './webContentsLifecycle'
 import { isNonWebUrl } from './url-schemes'
 import { resolvePdfTarget } from './tabUrl'
 import type {
@@ -61,6 +62,7 @@ export interface TabEventsHost {
     getWindow?(): BrowserWindow | undefined
     getActiveSplit?(): { id?: string; members?: string[] } | null
     getActiveGlance?(): { id?: string; members?: string[] } | null
+    setTabFullscreen?(fullscreen: boolean): boolean
   }
   _hooks: TabEventHooks
   _wcToTabId: Map<WebContents, string>
@@ -96,6 +98,20 @@ export interface TabEventsHost {
  * 关心过它的宿主里摘掉 —— 监听器数量与「迁移/唤醒次数」彻底解耦。
  */
 const ownersByWc = new WeakMap()
+const htmlFullscreenExits = new WeakMap<WebContents, () => void>()
+
+export function exitWebContentsHtmlFullscreen(webContents: WebContents | null | undefined): boolean {
+  if (!webContents || webContents.isDestroyed()) return false
+  const exit = htmlFullscreenExits.get(webContents)
+  if (!exit) return false
+  exit()
+  try {
+    void webContents.executeJavaScript(
+      'document.fullscreenElement && document.exitFullscreen().catch(() => {})'
+    ).catch(() => {})
+  } catch {}
+  return true
+}
 
 /**
  * 把「webContents 事件 → 标签状态 / 领域回调」的全部接线从 TabManager 抽离。
@@ -132,6 +148,7 @@ export function bindTabEvents(host: TabEventsHost, tabId: string): void {
   // 「本标签当前地址」在这里统一补一次（判据见 TabManager#syncTabCanvas）。
   if (typeof host.syncTabCanvas === 'function') host.syncTabCanvas(id)
   const wc = view.webContents
+  exitWebContentsHtmlFullscreen(wc)
 
   // 同一个 (宿主, webContents) 只绑一次。
   // 为什么需要：标签可能被搬到别的窗口**又搬回来**，此时本宿主的 `_boundTabIds`
@@ -152,7 +169,7 @@ export function bindTabEvents(host: TabEventsHost, tabId: string): void {
   if (!owners) {
     owners = new Set()
     ownersByWc.set(wc, owners)
-    wc.on('destroyed', () => {
+    onWebContentsDestroyed(wc, () => {
       const set = ownersByWc.get(wc)
       if (!set) return
       for (const owner of set) {
@@ -275,6 +292,34 @@ export function bindTabEvents(host: TabEventsHost, tabId: string): void {
     }
   })
 
+  let htmlFullscreen = false
+  const setHtmlFullscreen = (active: boolean): void => {
+    const next = Boolean(active)
+    if (next === htmlFullscreen) return
+    htmlFullscreen = next
+    if (!next) htmlFullscreenExits.delete(wc)
+    const win = typeof host._layout.getWindow === 'function' ? host._layout.getWindow() : null
+    if (win && !win.isDestroyed()) {
+      try { win.setFullScreen(next) } catch {}
+    }
+    try { host._layout.setTabFullscreen?.(next) } catch {}
+    host._scheduleEmitChanged({ layout: true })
+  }
+
+  wc.on('enter-html-full-screen', () => {
+    if (!host._isCurrentWc(id, wc)) return
+    htmlFullscreenExits.set(wc, () => setHtmlFullscreen(false))
+    setHtmlFullscreen(true)
+  })
+  wc.on('leave-html-full-screen', () => {
+    if (!host._isCurrentWc(id, wc)) return
+    setHtmlFullscreen(false)
+  })
+  onWebContentsDestroyed(wc, () => {
+    htmlFullscreenExits.delete(wc)
+    if (host._isCurrentWc(id, wc) && htmlFullscreen) setHtmlFullscreen(false)
+  })
+
   // ── 网页右键菜单 — 直接弹出原生 Electron Menu ──
   wc.on('context-menu', (_e, params) => {
     if (!host._isCurrentWc(id, wc)) return
@@ -355,7 +400,7 @@ export function bindTabEvents(host: TabEventsHost, tabId: string): void {
         : []
     })
   })
-  wc.once('destroyed', () => closeWebContentMenu(wc))
+  onWebContentsDestroyed(wc, () => closeWebContentMenu(wc))
 
   // ── AudioManager — 媒体播放指示器 ──
   //

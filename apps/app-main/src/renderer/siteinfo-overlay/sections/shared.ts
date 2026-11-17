@@ -154,6 +154,7 @@ export function certificateErrorText(error: unknown): string {
     case 'debugger-unavailable':
       return '当前运行时无法读取证书'
     case 'certificate-unparsable':
+    case 'leaf-certificate-unparsable':
       return '证书格式无法解析'
     case 'no-active-tab':
       return '没有活动页面'

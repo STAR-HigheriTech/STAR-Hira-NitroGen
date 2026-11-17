@@ -1,35 +1,25 @@
-/**
- * 页面侧翻译引擎：收集可见文本、按字符批量请求、原位回填并保留原文。
- *
- * 网络调度属于主进程；这里只负责 DOM 与交互。每批都有独立上限，顶层还有总时限，
- * 因此上游断网、令牌失效或某个来源限流时，页面会明确结束并给出可重试状态。
- */
+/** 页面翻译 UI 与 IPC 宿主；DOM 扫描、可见性和动态内容由 dom-session 独立管理。 */
 
 import { ipcRenderer } from 'electron'
 import {
-  batchByChars,
   LANGUAGES,
-  normalizeLanguageTag,
-  shouldSkipText,
-  TRANSLATE_LIMITS
+  normalizeLanguageTag
 } from '@hira-ng/shared-types/src/translate'
 import { PRELOAD_EVENTS, PRELOAD_ROUTES } from '@hira-ng/shared-types/src/ipc-channels-preload'
+import type { TranslatePageContext } from '@hira-ng/shared-types/src/translate-plugin'
 import { uiFontVar } from '@hira-ng/shared-types/src/font-stack'
 import { applyAccentVars, subscribeAccent } from '../theme-accent.js'
+import { createDomTranslationSession, type DomTranslationSession } from './dom-session.js'
 
 const ROUTE = PRELOAD_ROUTES.translateText
+const PAGE_CONTEXT_ROUTE = PRELOAD_ROUTES.translatePageContext
 const TARGET_ROUTE = PRELOAD_ROUTES.translateTarget
 const EVENT_CHANNEL = `ngipc:event:${PRELOAD_EVENTS.translatePage}`
-const BATCH_TIMEOUT_MS = 13_000
-const TOTAL_TIMEOUT_MS = 45_000
+const BATCH_TIMEOUT_MS = 22_000
+const PAGE_CONTEXT_TIMEOUT_MS = 1_200
+const PAGE_CONTEXT_CACHE_MS = 30_000
 const TARGET_TIMEOUT_MS = 3_000
-const MAX_PARALLEL_BATCHES = 1
-const DOM_WRITE_CHUNK = 24
-const SKIP_SELECTOR = [
-  'script', 'style', 'noscript', 'textarea', 'input', 'select', 'option',
-  'code', 'pre', 'kbd', 'samp', 'svg', 'canvas', 'iframe', 'video', 'audio', 'math',
-  '[data-hira-ui="translate"]', '[aria-hidden="true"]', '[contenteditable="true"]', '[contenteditable=""]'
-].join(',')
+const SAMPLE_SKIP_SELECTOR = 'script,style,noscript,template,svg,canvas,code,pre'
 
 interface TranslateBar {
   host: HTMLDivElement
@@ -51,7 +41,6 @@ interface TranslationResponse {
   }
 }
 
-const originals = new Map<Text, string>()
 let bar: TranslateBar | null = null
 let statusEl: HTMLSpanElement | null = null
 let actionBtn: HTMLButtonElement | null = null
@@ -62,6 +51,14 @@ let lastTarget = 'zh'
 let actionMode: 'toggle' | 'retry' = 'toggle'
 let generation = 0
 let dismissTimer: ReturnType<typeof setTimeout> | null = null
+let session: DomTranslationSession | null = null
+let sessionTarget = ''
+let providerLabel = ''
+let pageContextCache: {
+  key: string
+  at: number
+  task: Promise<TranslatePageContext | null>
+} | null = null
 
 function isTopFrame(): boolean {
   try { return window.top === window } catch (_) { return false }
@@ -79,6 +76,27 @@ function detectSourceLanguage(): string {
   }
 }
 
+function pageTextSample(limit = 4_000): string {
+  const root = document.body
+  if (!root) return ''
+  const parts: string[] = []
+  let length = 0
+  let visited = 0
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  let node = walker.nextNode()
+  while (node && length < limit && visited < 6_000) {
+    visited += 1
+    const parent = node.parentElement
+    const value = (node.nodeValue || '').replace(/\s+/g, ' ').trim()
+    if (value && !parent?.closest(SAMPLE_SKIP_SELECTOR)) {
+      parts.push(value)
+      length += value.length + 1
+    }
+    node = walker.nextNode()
+  }
+  return parts.join(' ').slice(0, limit)
+}
+
 function withTimeout<T>(task: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(message)), timeoutMs)
@@ -94,7 +112,7 @@ function ensureBar(): TranslateBar {
   const host = document.createElement('div')
   host.id = 'hira-translate-bar'
   host.setAttribute('data-hira-ui', 'translate')
-  host.style.cssText = 'all:initial;position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:2147483647;'
+  host.style.cssText = 'all:initial;position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:2147483647;'
 
   const shadow = host.attachShadow({ mode: 'closed' })
   const style = document.createElement('style')
@@ -102,22 +120,25 @@ function ensureBar(): TranslateBar {
     .hira-translate-bar {
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 8px 10px 8px 16px;
+      width: min(520px, calc(100vw - 24px));
+      box-sizing: border-box;
+      gap: 7px;
+      padding: 5px 6px 5px 9px;
       border-radius: var(--hira-theme-radius, 12px);
-      font: 14px/1.5 ${uiFontVar()};
+      font: 13px/1.45 ${uiFontVar()};
       color: var(--hira-text-primary, #1a1a1a);
       background: var(--hira-bg-surface, rgba(255, 255, 255, 0.98));
-      box-shadow: 0 9px 28px rgba(0, 0, 0, 0.22);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
       border: 1px solid var(--hira-border-subtle, rgba(0, 0, 0, 0.12));
       -webkit-font-smoothing: antialiased;
     }
     .hira-translate-bar__status {
-      max-width: min(60vw, 600px);
+      flex: 1;
+      min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      min-height: 38px;
+      min-height: 32px;
       display: flex;
       align-items: center;
     }
@@ -131,8 +152,9 @@ function ensureBar(): TranslateBar {
       transition: background 120ms ease, border-color 120ms ease, opacity 120ms ease;
     }
     .hira-translate-bar__action {
-      min-height: 38px;
-      padding: 0 16px;
+      min-width: 82px;
+      min-height: 32px;
+      padding: 0 11px;
       border: 1px solid var(--hira-accent-soft-strong, rgba(0, 0, 0, 0.16));
       background: var(--hira-accent-soft, transparent);
       color: var(--hira-accent, inherit);
@@ -144,14 +166,14 @@ function ensureBar(): TranslateBar {
     }
     .hira-translate-bar__action:disabled { cursor: default; opacity: 0.55; }
     .hira-translate-bar__language {
-      height: 38px;
-      min-width: 138px;
-      max-width: 166px;
-      padding: 0 32px 0 12px;
+      height: 32px;
+      width: 118px;
+      flex: 0 0 118px;
+      padding: 0 28px 0 9px;
       border: 1px solid var(--hira-border-subtle, rgba(0, 0, 0, 0.14));
       background:
-        linear-gradient(45deg, transparent 50%, var(--hira-text-secondary, #667085) 50%) calc(100% - 15px) 16px / 6px 6px no-repeat,
-        linear-gradient(135deg, var(--hira-text-secondary, #667085) 50%, transparent 50%) calc(100% - 10px) 16px / 6px 6px no-repeat,
+        linear-gradient(45deg, transparent 50%, var(--hira-text-secondary, #667085) 50%) calc(100% - 13px) 12px / 5px 5px no-repeat,
+        linear-gradient(135deg, var(--hira-text-secondary, #667085) 50%, transparent 50%) calc(100% - 8px) 12px / 5px 5px no-repeat,
         var(--hira-bg-surface, rgba(255, 255, 255, 0.8));
       color: var(--hira-text-primary, inherit);
       appearance: none;
@@ -160,12 +182,12 @@ function ensureBar(): TranslateBar {
     }
     .hira-translate-bar__language:disabled { cursor: default; opacity: 0.55; }
     .hira-translate-bar__close {
-      width: 38px;
-      height: 38px;
+      width: 32px;
+      height: 32px;
       border: 0;
       background: transparent;
       color: var(--hira-text-secondary, inherit);
-      font-size: 21px;
+      font-size: 18px;
       line-height: 1;
     }
     .hira-translate-bar__close:hover {
@@ -183,8 +205,8 @@ function ensureBar(): TranslateBar {
         flex-wrap: wrap;
         justify-content: center;
         gap: 8px;
-        width: calc(100vw - 24px);
-        padding: 10px;
+        width: min(520px, calc(100vw - 24px));
+        padding: 7px;
       }
       .hira-translate-bar__status {
         order: 1;
@@ -192,8 +214,8 @@ function ensureBar(): TranslateBar {
         max-width: none;
         justify-content: center;
       }
-      .hira-translate-bar__language { order: 2; flex: 1; max-width: 210px; }
-      .hira-translate-bar__action { order: 3; flex: 1; max-width: 160px; padding: 0 12px; }
+      .hira-translate-bar__language { order: 2; width: 128px; flex: 0 0 128px; }
+      .hira-translate-bar__action { order: 3; flex: 1; max-width: 150px; padding: 0 10px; }
       .hira-translate-bar__close { order: 4; }
     }
   `
@@ -229,7 +251,7 @@ function ensureBar(): TranslateBar {
   actionBtn.textContent = '显示原文'
   actionBtn.onclick = () => {
     if (actionMode === 'retry') {
-      void translatePage(lastTarget).catch((error) => {
+      void translatePage(lastTarget, true).catch((error) => {
         console.warn('[translate] retry failed:', error)
       })
     } else if (translated) {
@@ -243,10 +265,10 @@ function ensureBar(): TranslateBar {
   close.setAttribute('aria-label', '关闭翻译工具栏')
   close.textContent = '×'
   close.onclick = () => {
-    generation += 1
+    session?.pause()
     running = false
-    if (translated) restore()
-    else removeBar()
+    translated = (session?.translatedCount() || 0) > 0
+    removeBar()
   }
 
   wrap.append(statusEl, languageSelect, actionBtn, close)
@@ -305,110 +327,6 @@ function setAction(mode: 'toggle' | 'retry', label: string, disabled = false): v
   actionBtn.style.opacity = disabled ? '0.55' : '1'
 }
 
-interface TextEntry {
-  node: Text
-  score: number
-}
-
-function visibleTextEntry(node: Text): TextEntry | null {
-  const parent = node.parentElement
-  if (!parent) return null
-  if (parent.closest(SKIP_SELECTOR)) return null
-  if (parent.isContentEditable) return null
-
-  const checkVisibility = (parent as HTMLElement & {
-    checkVisibility?: (options?: {
-      checkOpacity?: boolean
-      checkVisibilityCSS?: boolean
-      contentVisibilityAuto?: boolean
-      opacityProperty?: boolean
-      visibilityProperty?: boolean
-    }) => boolean
-  }).checkVisibility
-  if (typeof checkVisibility === 'function') {
-    try {
-      if (!checkVisibility({
-        contentVisibilityAuto: true,
-        opacityProperty: false,
-        visibilityProperty: true
-      })) return null
-    } catch (_) {}
-  } else if (parent.getClientRects().length === 0) {
-    return null
-  }
-
-  const rect = parent.getBoundingClientRect()
-  if (rect.width === 0 && rect.height === 0) return null
-  const score = rect.bottom < 0
-    ? rect.bottom
-    : rect.top <= window.innerHeight
-      ? rect.top
-      : window.innerHeight + rect.top
-  return { node, score }
-}
-
-function collectTextNodes(targetLang: string, sourceLang: string): Text[] {
-  const root = document.body
-  if (!root) return []
-  const entries: TextEntry[] = []
-  const visitedRoots = new Set<Node>()
-
-  function visitTree(scope: Node, depth: number): void {
-    if (entries.length >= TRANSLATE_LIMITS.maxTexts || depth > 8 || visitedRoots.has(scope)) return
-    visitedRoots.add(scope)
-    const walker = document.createTreeWalker(scope, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT)
-    let node = walker.nextNode()
-    while (node && entries.length < TRANSLATE_LIMITS.maxTexts) {
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        const shadow = (node as Element).shadowRoot
-        if (shadow) visitTree(shadow, depth + 1)
-      } else if (node.nodeType === Node.TEXT_NODE) {
-        const text = node.nodeValue || ''
-        if (!shouldSkipText(text, targetLang, sourceLang)) {
-          const entry = visibleTextEntry(node as Text)
-          if (entry) entries.push(entry)
-        }
-      }
-      node = walker.nextNode()
-    }
-  }
-
-  visitTree(root, 0)
-  // 每个节点只读取一次布局，避免排序比较器重复触发布局抖动。
-  entries.sort((left, right) => left.score - right.score)
-  return entries.map((entry) => entry.node)
-}
-
-function preserveOuterWhitespace(original: string, translated: string): string {
-  const leading = original.match(/^\s*/)?.[0] || ''
-  const trailing = original.match(/\s*$/)?.[0] || ''
-  const core = translated.trim()
-  if (!core) return original
-  return `${leading}${core}${trailing}`
-}
-
-async function applyBatch(nodes: Text[], indices: number[], translations: string[]): Promise<number> {
-  let changed = 0
-  for (let offset = 0; offset < indices.length; offset += 1) {
-    const nodeIndex = indices[offset]
-    const node = nodes[nodeIndex]
-    const translatedText = translations[offset]
-    if (node?.isConnected && typeof translatedText === 'string' && translatedText) {
-      const current = node.nodeValue || ''
-      const next = preserveOuterWhitespace(current, translatedText)
-      if (next && next !== current) {
-        if (!originals.has(node)) originals.set(node, current)
-        try {
-          node.nodeValue = next
-          changed += 1
-        } catch (_) {}
-      }
-    }
-    if ((offset + 1) % DOM_WRITE_CHUNK === 0) await yieldToPage()
-  }
-  return changed
-}
-
 function responseError(response: TranslationResponse): string {
   const message = String(response.error?.message || '翻译服务不可用')
   const failed = response.error?.failures
@@ -416,16 +334,6 @@ function responseError(response: TranslationResponse): string {
     .filter(Boolean)
     .slice(0, 2)
   return failed?.length ? `${message}（${failed.join('；')}）` : message
-}
-
-function yieldToPage(): Promise<void> {
-  const scheduler = (globalThis as typeof globalThis & {
-    scheduler?: { yield?: () => Promise<void> }
-  }).scheduler
-  if (scheduler && typeof scheduler.yield === 'function') return scheduler.yield()
-  return new Promise((resolve) => {
-    setTimeout(resolve, 0)
-  })
 }
 
 function nextPaint(): Promise<void> {
@@ -459,9 +367,9 @@ async function switchTarget(to: string): Promise<void> {
     const saved = String(response?.to || to)
     generation += 1
     running = false
-    if (originals.size > 0) restore()
+    if (session) restore()
     lastTarget = saved
-    await translatePage(saved)
+    await translatePage(saved, true)
   } catch (error) {
     lastTarget = previous
     if (languageSelect?.isConnected) languageSelect.value = previous
@@ -472,9 +380,82 @@ async function switchTarget(to: string): Promise<void> {
   }
 }
 
-async function translatePage(to: string): Promise<void> {
-  if (running) return
-  if (translated) restore()
+async function requestBatch(
+  texts: string[],
+  source: string,
+  target: string,
+  runToken: number,
+  probeProviders: boolean
+): Promise<{ texts: string[]; providerLabel: string }> {
+  if (runToken !== generation) throw new DOMException('翻译已取消', 'AbortError')
+  const response = await withTimeout(
+    ipcRenderer.invoke(`ngipc:invoke:${ROUTE}`, {
+      texts,
+      from: source,
+      to: target,
+      url: location.href,
+      ...(probeProviders ? { force: true } : {})
+    }) as Promise<TranslationResponse>,
+    BATCH_TIMEOUT_MS,
+    '本批翻译超时'
+  )
+  if (runToken !== generation) throw new DOMException('翻译已取消', 'AbortError')
+  if (!Array.isArray(response?.texts) || response.texts.length !== texts.length) {
+    throw new Error('翻译结果数量不一致')
+  }
+  if (response.error) throw new Error(responseError(response))
+  return {
+    texts: response.texts.map((text) => String(text ?? '')),
+    providerLabel: String(response.providerLabel || '')
+  }
+}
+
+async function requestPageContext(runToken: number): Promise<TranslatePageContext | null> {
+  if (runToken !== generation) return null
+  const key = `${location.href}\u0000${document.title}\u0000${document.documentElement.lang || ''}`
+  const cached = pageContextCache
+  let task: Promise<TranslatePageContext | null>
+  if (cached && cached.key === key && Date.now() - cached.at < PAGE_CONTEXT_CACHE_MS) {
+    task = cached.task
+  } else {
+    const nextTask = withTimeout(
+      ipcRenderer.invoke(`ngipc:invoke:${PAGE_CONTEXT_ROUTE}`, {
+        url: location.href,
+        title: document.title,
+        documentLanguage: document.documentElement.lang || undefined,
+        textSample: pageTextSample()
+      }) as Promise<TranslatePageContext>,
+      PAGE_CONTEXT_TIMEOUT_MS,
+      '读取翻译插件配置超时'
+    ).then((response) => response && typeof response === 'object' ? response : null)
+      .catch((error) => {
+        if (pageContextCache?.task === nextTask) pageContextCache = null
+        throw error
+      })
+    task = nextTask
+    pageContextCache = { key, at: Date.now(), task: nextTask }
+  }
+  const response = await task
+  if (runToken !== generation) return null
+  return response
+}
+
+async function translatePage(to: string, probeProviders = false): Promise<void> {
+  const target = to || 'zh'
+  if (session && sessionTarget === target) {
+    if (probeProviders) {
+      session.restore()
+      session = null
+    } else {
+      session.resume()
+      ensureBar()
+      setStatus(translated ? `已翻译为${LANGUAGES.find((language) => language.id === target)?.label || target}` : '正在继续翻译可见内容…')
+      if (translated) setAction('toggle', '显示原文')
+      return
+    }
+  }
+  if (session) session.restore()
+  session = null
   if (dismissTimer) {
     clearTimeout(dismissTimer)
     dismissTimer = null
@@ -483,105 +464,75 @@ async function translatePage(to: string): Promise<void> {
   const runToken = ++generation
   running = true
   translated = false
-  lastTarget = to || 'zh'
+  providerLabel = ''
+  lastTarget = target
+  sessionTarget = target
   ensureBar()
-  if (languageSelect && languageSelect.value !== lastTarget) languageSelect.value = lastTarget
+  if (languageSelect && languageSelect.value !== target) languageSelect.value = target
   setAction('toggle', '显示原文', true)
-  setStatus('正在识别页面文本…')
-  const startedAt = Date.now()
-  const deadlineAt = Date.now() + TOTAL_TIMEOUT_MS
+  setStatus('正在识别页面语言…')
 
+  let pageContext: TranslatePageContext | null = null
   try {
-    await nextPaint()
-    if (runToken !== generation) return
-    const source = detectSourceLanguage()
-    const nodes = collectTextNodes(lastTarget, source)
-    if (nodes.length === 0) {
-      setStatus('没有需要翻译的文本')
-      setAction('retry', '重试')
-      running = false
-      scheduleBarDismiss(1_400)
-      return
-    }
+    pageContext = await requestPageContext(runToken)
+  } catch (_) {}
+  if (runToken !== generation) return
 
-    const texts = nodes.map((node) => node.nodeValue || '')
-    const batches = batchByChars(texts)
-    let done = 0
-    let changed = 0
-    let providerLabel = ''
-    let batchCursor = 0
-    let fatalError: Error | null = null
+  let idleHandled = false
+  const source = normalizeLanguageTag(pageContext?.sourceLanguage || '') ||
+    detectSourceLanguage()
+  const policy = pageContext?.policy || {}
+  setStatus('正在识别并翻译可见内容…')
+  let probeRemaining = probeProviders
 
-    const translateWorker = async (): Promise<void> => {
-      while (!fatalError && batchCursor < batches.length) {
-        if (runToken !== generation) return
-        if (Date.now() >= deadlineAt) throw new Error('翻译超过总时限，已停止等待')
-        const batchIndex = batchCursor++
-        const indices = batches[batchIndex]
-        const payload = {
-          texts: indices.map((index) => texts[index]),
-          from: source,
-          to: lastTarget,
-          force: true
-        }
-        try {
-          const response = await withTimeout(
-            ipcRenderer.invoke(`ngipc:invoke:${ROUTE}`, payload) as Promise<TranslationResponse>,
-            Math.min(BATCH_TIMEOUT_MS, Math.max(1_000, deadlineAt - Date.now())),
-            '本批翻译超时'
-          )
-          if (runToken !== generation) return
-          const translations = Array.isArray(response?.texts)
-            ? response.texts.map((text) => String(text ?? ''))
-            : []
-          if (translations.length !== indices.length) throw new Error('翻译结果数量不一致')
-          if (response?.error) throw new Error(responseError(response))
-
-          changed += await applyBatch(nodes, indices, translations)
-          if (response?.providerLabel) providerLabel = String(response.providerLabel)
-          done += indices.length
-          setStatus(`正在翻译 ${done} / ${texts.length}`)
-        } catch (error) {
-          fatalError = error instanceof Error ? error : new Error(String(error))
-          return
-        }
+  const currentSession = createDomTranslationSession({
+    from: source,
+    to: target,
+    policy,
+    translateBatch: (texts) => {
+      const probe = probeRemaining
+      probeRemaining = false
+      return requestBatch(texts, source, target, runToken, probe)
+    },
+    onProgress: (progress) => {
+      if (runToken !== generation) return
+      running = progress.scanning || progress.pendingCount > 0
+      translated = progress.translatedCount > 0
+      if (progress.providerLabel) providerLabel = progress.providerLabel
+      if (translated) {
+        setAction('toggle', '显示原文')
+        setStatus(running
+          ? `已翻译 ${progress.translatedCount} 段 · 正在继续翻译…`
+          : `已翻译 ${progress.translatedCount} 段${providerLabel ? ` · ${providerLabel}` : ''} · 滚动自动翻译`)
+      } else if (running) {
+        setStatus('正在识别并翻译可见内容…')
+      } else if (!idleHandled) {
+        idleHandled = true
+        setStatus('页面内容已经是目标语言')
+        setAction('retry', '重试')
+        scheduleBarDismiss(1_600)
       }
+    },
+    onError: (error) => {
+      if (runToken !== generation) return
+      setStatus(`翻译暂时失败，正在重试：${error.message}`)
+      setAction(translated ? 'toggle' : 'retry', translated ? '显示原文' : '重试')
     }
-
-    const workerCount = Math.min(MAX_PARALLEL_BATCHES, batches.length)
-    await Promise.all(Array.from({ length: workerCount }, () => translateWorker()))
-    if (runToken !== generation) return
-    if (fatalError) throw fatalError
-
-    translated = originals.size > 0
-    if (translated) {
-      const elapsed = ((Date.now() - startedAt) / 1_000).toFixed(1)
-      setStatus(`已翻译 ${changed} 段${providerLabel ? ` · ${providerLabel}` : ''} · ${elapsed}s`)
-      setAction('toggle', '显示原文')
-    } else {
-      setStatus('页面内容已经是目标语言')
-      setAction('retry', '重试')
-      scheduleBarDismiss(1_600)
-    }
-  } catch (error) {
-    if (runToken !== generation) return
-    translated = originals.size > 0
-    const message = error instanceof Error ? error.message : '未知错误'
-    setStatus(translated ? `翻译未完成：${message}` : `翻译失败：${message}`)
-    setAction(translated ? 'toggle' : 'retry', translated ? '显示原文' : '重试')
-  } finally {
-    if (runToken === generation) running = false
-  }
+  })
+  session = currentSession
+  void nextPaint().then(() => {
+    if (runToken === generation) currentSession.start()
+  })
 }
 
 function restore(): void {
-  for (const [node, text] of originals) {
-    try {
-      if (node.isConnected) node.nodeValue = text
-    } catch (_) {}
-  }
-  originals.clear()
+  generation += 1
+  session?.restore()
+  session = null
+  sessionTarget = ''
   translated = false
+  running = false
+  providerLabel = ''
   removeBar()
 }
 
@@ -591,10 +542,20 @@ try {
       const record = payload && typeof payload === 'object' ? payload as { to?: unknown } : null
       const to = String(record?.to || 'zh')
       if (translated) {
-        restore()
+        if (to !== lastTarget) {
+          restore()
+          void translatePage(to, true).catch((error) => {
+            console.warn('[translate] page translation failed:', error)
+          })
+          return
+        }
+        ensureBar()
+        session?.resume()
+        setStatus(`已翻译为${LANGUAGES.find((language) => language.id === lastTarget)?.label || lastTarget}`)
+        setAction('toggle', '显示原文')
         return
       }
-      void translatePage(to).catch((error) => {
+      void translatePage(to, true).catch((error) => {
         console.warn('[translate] page translation failed:', error)
       })
     })

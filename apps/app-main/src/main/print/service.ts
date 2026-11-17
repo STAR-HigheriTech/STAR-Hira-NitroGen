@@ -22,6 +22,7 @@
  */
 
 const fs = require('fs/promises')
+import { onWebContentsDestroyed } from '@hira-ng/infra-window'
 const { dialog } = require('electron')
 import type {
   BrowserWindow as BrowserWindowType,
@@ -62,7 +63,7 @@ export interface PrintJobMeta {
 
 interface PrintJob extends PrintJobMeta {
   webContents: WebContents | null
-  targetDestroyed: (() => void) | null
+  offDestroyed: (() => void) | null
   dropped: boolean
   pdf: Buffer | null
   /** 缓存 PDF 对应的选项键（选项变了就必须重渲染） */
@@ -205,10 +206,8 @@ function createPrintService(): PrintService {
     job.pdf = null
     job.pdfKey = null
     job.rendering = null
-    if (job.webContents && job.targetDestroyed) {
-      try { job.webContents.removeListener('destroyed', job.targetDestroyed) } catch (_) {}
-    }
-    job.targetDestroyed = null
+    if (job.offDestroyed) job.offDestroyed()
+    job.offDestroyed = null
     // 只放引用，不销毁：源 WebContents 归标签页管，打印服务无权销毁它。
     job.webContents = null
     if (jobs.size === 0) stopSweeper()
@@ -238,17 +237,14 @@ function createPrintService(): PrintService {
       createdAt: Date.now(),
       rev: 0,
       webContents: src?.webContents || null,
-      targetDestroyed: null,
+      offDestroyed: null,
       dropped: false,
       pdf: null,
       pdfKey: null,
       rendering: null
     }
     jobs.set(id, job)
-    if (job.webContents && typeof job.webContents.once === 'function') {
-      job.targetDestroyed = () => drop(id)
-      job.webContents.once('destroyed', job.targetDestroyed)
-    }
+    if (job.webContents) job.offDestroyed = onWebContentsDestroyed(job.webContents, () => drop(id))
     startSweeper()
     evictIfNeeded()
     return toMeta(job)

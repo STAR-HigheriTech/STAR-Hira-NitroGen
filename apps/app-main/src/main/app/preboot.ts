@@ -20,8 +20,9 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { crashReporter, type App, type CrashReport, type IpcMain } from 'electron'
+import { crashReporter, type App, type CrashReport, type IpcMain, type WebContents } from 'electron'
 import type { EventCatalogPort } from '@hira-ng/infra-ipc'
+import { createTlsTrustController, type CertificateErrorRecord } from './tls-trust'
 
 const { createListenerRegistry, createBroadcaster, ipcSchemas } =
   require('@hira-ng/infra-ipc') as typeof import('@hira-ng/infra-ipc')
@@ -65,18 +66,6 @@ const { ownerWindowOf } = require('../window-runtime-registry') as {
 }
 
 interface PrebootOptions { app: App; ipcMain: IpcMain }
-
-interface CertificateErrorRecord {
-  url: string
-  error: string
-  at: number
-  subjectName: string | null
-  issuerName: string | null
-  serialNumber: string | null
-  validStart: number | null
-  validExpiry: number | null
-  fingerprint: string | null
-}
 
 interface CrashReportItem {
   date: number | null
@@ -228,25 +217,18 @@ export function createPreboot({ app, ipcMain }: PrebootOptions) {
   // Electron 只在回调里把 Certificate 交给你一次，回调后只剩 Chromium 错误页，
   // 而 Chromium 没有「列出证书」的 API —— 想看证书信息只能在这里留下来。
   const certificateErrors: CertificateErrorRecord[] = []
-  app.on('certificate-error', (_event, _wc, url, error, certificate, callback) => {
-    try {
-      certificateErrors.unshift({
-        url: String(url || ''),
-        error: String(error || ''),
-        at: Date.now(),
-        subjectName: certificate && certificate.subjectName ? String(certificate.subjectName) : null,
-        issuerName: certificate && certificate.issuerName ? String(certificate.issuerName) : null,
-        serialNumber: certificate && certificate.serialNumber ? String(certificate.serialNumber) : null,
-        validStart: certificate && certificate.validStart ? new Date(certificate.validStart).getTime() : null,
-        validExpiry: certificate && certificate.validExpiry ? new Date(certificate.validExpiry).getTime() : null,
-        fingerprint: certificate && certificate.fingerprint ? String(certificate.fingerprint) : null
-      })
+  let certificateScopeResolver: ((webContents: WebContents) => string) | null = null
+  const tlsTrust = createTlsTrustController({
+    onCertificateError(record, webContents) {
+      let scopeKey = 'default'
+      try {
+        scopeKey = certificateScopeResolver?.(webContents) || 'default'
+      } catch {}
+      certificateErrors.unshift({ ...record, scopeKey })
       if (certificateErrors.length > CERTIFICATE_ERROR_LIMIT) certificateErrors.length = CERTIFICATE_ERROR_LIMIT
-    } catch (_) {}
-    // 明确「不信任」：与 Electron 默认行为一致（拒绝 + 错误页），
-    // 绝不因为要「记录一笔」就把无效证书静默放行。
-    callback(false)
+    }
   })
+  tlsTrust.attach(app)
 
   // ── 7. 全局异常兜底：阻止 Electron 默认的 "A JavaScript error occurred" 弹窗 ──
   process.on('uncaughtException', (err) => {
@@ -284,8 +266,12 @@ export function createPreboot({ app, ipcMain }: PrebootOptions) {
     listenerRegistry,
     broadcaster,
     httpAuthManager,
+    tlsTrust,
     isCrashReporterEnabled: () => crashReporterEnabled,
     getCertificateErrors: () => certificateErrors.slice(),
+    setCertificateScopeResolver: (resolver: ((webContents: WebContents) => string) | null) => {
+      certificateScopeResolver = typeof resolver === 'function' ? resolver : null
+    },
     getCrashReports: () => {
       try {
         const items: CrashReportItem[] = []

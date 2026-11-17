@@ -70,6 +70,7 @@ export interface SiteInfoCertificate {
   issuerName?: string
   validStart?: string | number | null
   validExpiry?: string | number | null
+  serialNumber?: string
   fingerprint?: string
   san?: string[]
 }
@@ -91,6 +92,7 @@ export interface SiteInfoState {
     secure: boolean
     protocol: string
     certificate: SiteInfoCertificate | null
+    certificateChain: SiteInfoCertificate[]
     error: string | null
   }
   cookies: { loading: boolean; count: number }
@@ -120,6 +122,7 @@ interface SiteInfoSecurityResponse {
   secure?: boolean
   protocol?: string
   certificate?: SiteInfoCertificate | null
+  certificateChain?: SiteInfoCertificate[]
   error?: string | null
 }
 
@@ -151,6 +154,7 @@ function emptyState(): SiteInfoState {
       secure: false,
       protocol: '',
       certificate: null,
+      certificateChain: [],
       error: null
     },
     cookies: { loading: false, count: 0 },
@@ -300,13 +304,18 @@ export function createSiteInfoModel(deps: {
     const site = state.context.site
     const tab = state.context.tab
     if (!site) {
-      state.certificate = { ...state.certificate, loading: false, certificate: null, error: null }
+      state.certificate = {
+        ...state.certificate,
+        loading: false,
+        certificate: null,
+        certificateChain: [],
+        error: null
+      }
       notify()
       return
     }
     try {
-      const request = tab && tab.id ? { tabId: String(tab.id) } : {}
-      const info = await invoke<SiteInfoSecurityResponse>(IPC_ROUTES.securitySite, request)
+      const info = await invoke<SiteInfoSecurityResponse>(IPC_ROUTES.securitySite, {})
       if (gen !== generation) return
       // 主进程回的 tabId 与当前标签不一致 = 切标签后迟到的旧结果。
       if (info?.tabId && tab?.id && String(info.tabId) !== String(tab.id)) return
@@ -315,6 +324,7 @@ export function createSiteInfoModel(deps: {
         secure: !!info?.secure,
         protocol: info?.protocol || '',
         certificate: info?.certificate || null,
+        certificateChain: Array.isArray(info?.certificateChain) ? info.certificateChain : [],
         error: info?.error || null
       }
     } catch (error) {
@@ -323,6 +333,7 @@ export function createSiteInfoModel(deps: {
         ...state.certificate,
         loading: false,
         certificate: null,
+        certificateChain: [],
         error: error instanceof Error ? error.message : 'unknown'
       }
     }
@@ -551,6 +562,7 @@ export function createSiteInfoModel(deps: {
       secure: !!(site && site.secure),
       protocol: '',
       certificate: null,
+      certificateChain: [],
       error: null
     }
     state.cookies = { loading: !!site, count: 0 }

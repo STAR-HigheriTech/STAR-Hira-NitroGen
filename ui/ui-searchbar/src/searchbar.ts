@@ -130,6 +130,7 @@ export function createSearchBar(input: HTMLInputElement, opts: SearchBarOptions)
     anchorCache = resolveSuggestionAnchor({
       rect,
       viewportWidth: window.innerWidth || 0,
+      viewportHeight: window.innerHeight || 0,
       maxWidth: readPx('--ng-omnibox-max-width', 720),
       sideWidth: readPx('--ng-omnibox-side-dropdown-width', 600),
       sideHostRect
@@ -357,6 +358,8 @@ export function createSearchBar(input: HTMLInputElement, opts: SearchBarOptions)
   function hide(options?: HideSearchbarOptions): void {
     requestSeq += 1
     overlayShown = false
+    // 导航栏可以在同一会话里换位；下次聚焦必须重新量锚点，不能复用旧模式的缓存。
+    invalidateAnchor()
     phaseGate.cancel()
     restoreArrowPreview()
     try {

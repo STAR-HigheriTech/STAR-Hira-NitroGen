@@ -30,7 +30,7 @@
 import '@hira-ng/shared-ui-tokens/tokens-base.css'
 import '@hira-ng/shared-ui-tokens/tokens-light.css'
 import '@hira-ng/shared-ui-tokens/tokens-dark.css'
-import { IPC_EVENTS } from '@hira-ng/shared-types/src/ipc-channels.mjs'
+import { IPC_EVENTS, IPC_ROUTES } from '@hira-ng/shared-types/src/ipc-channels.mjs'
 import { createDropZonePreview, injectDropZoneStyles } from '@hira-ng/ui-drop-zone'
 import { createThemeController } from '../shared/theme-controller.js'
 import { getHiraBridge } from '../shared/bridge.js'
@@ -55,6 +55,17 @@ bridge.on.subscribe(IPC_EVENTS.dropzoneUpdate, (payload) => {
   // 先套形态再显示：反过来的话会出现一帧"上一个方向的块"（拖动换边时肉眼可见）。
   preview.set(payload || {})
   preview.setShown(true)
+  const previewId = payload && typeof payload === 'object'
+    ? String((payload as Record<string, unknown>).previewId || '')
+    : ''
+  if (!previewId) return
+  // 连续两帧再确认：首个 rAF 只保证 class 已套上，第二个 rAF 才跨过上一帧的绘制。
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (!preview.isShown()) return
+      try { provider.send(IPC_ROUTES.tabDragDropShown, { previewId }) } catch (_) {}
+    })
+  })
 })
 
 // 收起：主进程收起时用的就是这条通道名（与 FLOAT_NAMES 循环转发的 `:hide` 同一条）。

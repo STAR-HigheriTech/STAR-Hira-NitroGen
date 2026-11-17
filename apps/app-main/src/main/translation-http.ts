@@ -22,6 +22,7 @@ const TRUSTED_TRANSLATION_HOSTS = Object.freeze([
 interface ResponseLike {
   ok?: boolean
   status: number
+  url?: string
   headers?: { get(name: string): string | null }
   body?: {
     getReader(): {
@@ -112,8 +113,15 @@ export function createTranslationHttp(options: TranslationHttpOptions = {}): Tra
           headers: init.headers,
           body: method === 'GET' || method === 'HEAD' ? undefined : body,
           signal: controller.signal,
-          redirect: 'manual'
+          redirect: init.followRedirects ? 'follow' : 'manual'
         })
+        if (init.followRedirects && response.url) {
+          const finalHost = new URL(response.url).hostname.toLowerCase()
+          if (!TRUSTED_TRANSLATION_HOSTS.some((host) => host === finalHost)) {
+            await response.body?.getReader().cancel().catch(() => undefined)
+            throw new Error('翻译重定向到了未受信任的主机')
+          }
+        }
         if ([301, 302, 303, 307, 308].includes(response.status)) {
           const location = response.headers?.get('location')
           await response.body?.getReader().cancel().catch(() => undefined)

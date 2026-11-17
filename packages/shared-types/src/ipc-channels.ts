@@ -181,6 +181,10 @@ const ROUTES_OWN = {
   // 采样表与「侧栏唤出保持」永远留着：分屏黏住、侧栏收不回去。
   // 落地：`ui-common/src/tabRowList.ts` 的 dragend 一律收尾（有落点走 commit，没有走这条）。
   tabDragDropCancel: 'tab:drag-drop-cancel',
+  // 落位预览 renderer 已把最新一帧真正应用到 DOM（renderer → main，单向）。
+  // `previewId` 逐帧回传，主进程据此区分“事件已投递”和“只改了原生 bounds 但内容没画出来”；
+  // 未确认的帧会做低频重推，避免首次冷启动 / 拖拽期合成器重建造成概率性透明空层。
+  tabDragDropShown: 'tab:drag-drop-shown',
   // 分屏工具条 → 主进程的一条**命令**通道（裸 ipcMain.on，单向）。
   // 为什么合一条而不是每按钮一条：工具条上的动作会增删，而"命令"的形态是固定的
   //（`{ type: 'action'|'drag-begin'|'drag-end', ... }`）—— 每加一个按钮就多一条 IPC 通道
@@ -763,6 +767,7 @@ const ROUTES_OWN = {
   // Domain: AppInfo（关于页 / 更新页）—— 版本、运行时、平台与用户数据目录。
   // 渲染进程只能从 UA 字符串反推版本，反推不出**应用自身版本**，故由主进程提供。
   appInfo: 'app:info',
+  safeBrowsingContinue: 'security:continue',
   // Domain: Update（软件更新）—— 打开更新页时取一次快照，之后靠 update:changed 事件。
   // 四条刻意分开：检查 / 下载 / 安装是三个不同的用户动作，合并会变成"不知道点了什么"。
   // 状态真源只有 main/update/service.js 一处；渲染层不得自行推导"有没有新版本"。
@@ -817,7 +822,7 @@ const ROUTES_OWN = {
   // 两者渲染层都拿不到，只能由主进程采集后透传。
   crashList: 'crash:list',
   certificateList: 'certificate:list',
-  // 当前活动标签的传输安全与证书链（站点信息聚合浮层的数据源之一）。
+  // 当前活动标签（或证书页来源标签）的传输安全与完整证书链。
   // 请求 `{ tabId? }` → `{ secure, protocol, certificate, error? }`：
   // 证书来自 CDP `Network.getCertificate`，主进程用 X509Certificate 解析成扁平字段；
   // 拿不到时依然返回 `{ secure, protocol }`，`certificate` 为 null，浮层据此降级展示。

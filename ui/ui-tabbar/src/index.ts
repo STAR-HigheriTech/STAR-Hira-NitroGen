@@ -224,11 +224,14 @@ export function createTabbar(doc: Document, options: TabbarOptions = {}): Tabbar
   })
   inner.appendChild(splitClips.element)
 
+  const preview = createTabPreview(doc, overlay)
+
   /** 拖拽落点控制器：指示线挂在拖拽区（#tabs）上，命中判定在滚动容器（#tabs-inner）内。 */
   const drop = createDropController(doc, tabs, inner, {
     getItems: () => (refs.renderer ? refs.renderer.getItems() : []),
     onDragEnd,
     onDragHintChange,
+    onSessionEnd: () => preview.resume(),
     claimDrop,
     onExternalDrop
   })
@@ -258,7 +261,6 @@ export function createTabbar(doc: Document, options: TabbarOptions = {}): Tabbar
     dragHint.style.right = `${Math.round(Math.max(8, window.innerWidth - rect.right + 10))}px`
   }
 
-  const preview = createTabPreview(doc, overlay)
   /**
    * 指针离开**整条标签条** → 立即收起预览。
    *

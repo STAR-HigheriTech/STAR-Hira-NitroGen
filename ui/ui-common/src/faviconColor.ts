@@ -320,18 +320,8 @@ export function paintFaviconColor(
   active: boolean
 ): void {
   if (!row) return
-  const titles = (): NodeListOf<HTMLElement> =>
-    row.querySelectorAll<HTMLElement>('[data-tab-title], .title, .tabrow-label')
   if (!colors) {
-    // 无 favicon / 取色失败 → 完全复位，回到主题色（选中态仍是主题的强调色边框+抬升底）
-    row.classList.remove('has-favicon-color')
-    row.style.removeProperty('--favicon-tab-color')
-    row.style.removeProperty(TAB_FAVICON_BG_VAR)
-    row.style.removeProperty(TAB_FAVICON_FG_VAR)
-    row.style.background = ''
-    row.style.color = ''
-    row.style.borderColor = ''
-    for (const el of titles()) el.style.color = ''
+    clearFaviconPaint(row)
     return
   }
   row.classList.add('has-favicon-color')
@@ -350,7 +340,23 @@ export function paintFaviconColor(
     row.style.borderColor = ''
   }
   // 面板里的标题是独立 button（自身有 color 规则），必须显式给；tabbar 的 .title 继承即可，写了也无害
-  for (const el of titles()) el.style.color = active ? colors.fg : ''
+  for (const el of tabTitleNodes(row)) el.style.color = active ? colors.fg : ''
+}
+
+function tabTitleNodes(row: HTMLElement): NodeListOf<HTMLElement> {
+  return row.querySelectorAll<HTMLElement>('[data-tab-title], .title, .tabrow-label')
+}
+
+/** 回到“尚未取色”的白色底板，同时清掉上一站点残留的行级颜色。 */
+function clearFaviconPaint(row: HTMLElement): void {
+  row.classList.remove('has-favicon-color')
+  row.style.removeProperty('--favicon-tab-color')
+  row.style.removeProperty(TAB_FAVICON_BG_VAR)
+  row.style.removeProperty(TAB_FAVICON_FG_VAR)
+  row.style.background = ''
+  row.style.color = ''
+  row.style.borderColor = ''
+  for (const el of tabTitleNodes(row)) el.style.color = ''
 }
 
 /**
@@ -373,11 +379,17 @@ export function applyFaviconColor(
     pendingColorPaints.delete(row)
     visibleColorRows.delete(row)
     try { visibilityObserver?.unobserve(row) } catch (_) {}
-    paintFaviconColor(row, null, active)
+    row.dataset.faviconColorUrl = ''
+    clearFaviconPaint(row)
     return
   }
+  const url = String(faviconUrl)
+  if (row.dataset.faviconColorUrl !== url) {
+    row.dataset.faviconColorUrl = url
+    clearFaviconPaint(row)
+  }
   const request: PendingColorPaint = {
-    url: String(faviconUrl),
+    url,
     active: !!active,
     isCurrent: typeof isCurrent === 'function' ? isCurrent : () => true
   }

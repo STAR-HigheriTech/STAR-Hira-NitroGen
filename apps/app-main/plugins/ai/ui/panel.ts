@@ -350,7 +350,7 @@ export async function createAiPanel(doc: Document, ctx: AiPanelContext): Promise
     safeUpdate('sessions', () => sessions.update(state))
     safeUpdate('context', () => applyContextBar(state))
 
-    const title = (state.session && state.session.title) || '新会话'
+    const title = (state.session && state.session.title) || (state.sessionId ? '加载中…' : '新会话')
     if (title !== lastTitle) {
       lastTitle = title
       sessionTitle.textContent = title

@@ -31,7 +31,7 @@ export const spaceClient = {
   list(profileId: string): Promise<SpaceRecord[]> {
     return invoke<SpaceRecord[]>(IPC_ROUTES.spaceList, { profileId })
   },
-  /** 全量空间（跨 profile，internal profile 的空间已被主进程过滤） */
+  /** 全量空间（跨 profile；各 profile 内按持久化 order 排序，切换不改列表位置） */
   listAll(): Promise<SpaceRecord[]> {
     return invoke<SpaceRecord[]>(IPC_ROUTES.spaceListAll)
   },

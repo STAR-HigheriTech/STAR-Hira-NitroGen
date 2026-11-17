@@ -707,7 +707,19 @@ export function registerLayoutIpc(
       typedMain.handle(readyRoute, {
         requestSchema: schemas.floatReady.request,
         responseSchema: schemas.floatReady.response,
-        handler: async () => ({ ok: true })
+        handler: async () => {
+          // renderer 冷启动 / 崩溃重载后，原 show 载荷已经不在新文档里。
+          // 权限浮层的开合真源在外壳：通知它按当前 pending 列表重新推一次。
+          if (name === 'permission-overlay') {
+            const shell = asWebContents(layoutCoordinator.getUiShellWebContents())
+            if (shell && !shell.isDestroyed()) {
+              try {
+                shell.send(evtCh(routes.overlayAction), { kind: 'permission-overlay-ready' })
+              } catch (_) {}
+            }
+          }
+          return { ok: true }
+        }
       })
     }
   }
@@ -888,12 +900,6 @@ export function registerLayoutIpc(
       }
       return { ok: true }
     }
-  })
-
-  typedMain.handle(routes.passwordOverlayReady, {
-    requestSchema: schemas.floatReady.request,
-    responseSchema: schemas.floatReady.response,
-    handler: async () => ({ ok: true })
   })
 
 }

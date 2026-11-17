@@ -16,6 +16,15 @@ const { createTypedIpcMain, ipcSchemas } = require('@hira-ng/infra-ipc')
 const { ipcRoutePolicy } = require('./ipc-route-policy')
 const { isWebPreloadIpcSender } = require('./ipc-sender-trust')
 const { PRIVACY_SETTING_KEYS } = require('@hira-ng/shared-types/src/privacy-settings.mjs')
+const { consumeSafeBrowsingWarning } = require('./safe-browsing') as {
+  consumeSafeBrowsingWarning(token: unknown, url: unknown): boolean
+}
+const { isSecurityWarningUrl, targetUrlOfSecurityWarning, tokenOfSecurityWarning } =
+  require('@hira-ng/shared-types/src/security-warning.mjs') as {
+    isSecurityWarningUrl(value: unknown): boolean
+    targetUrlOfSecurityWarning(value: unknown): string
+    tokenOfSecurityWarning(value: unknown): string
+  }
 // 窄端口适配器：会话域只认识 list / getActiveTabId / newTab / switchTo 等动词，
 // 由这里把「按窗口解析的 TabManager」适配过去（见 ipc/session.js 的说明）。
 const { createSessionTabPort } = require('@hira-ng/infra-window')
@@ -123,14 +132,36 @@ const { registerSlotsIpc } = require('./ipc/slots')
 
 import type { IpcHandlerDefinition, TypedIpcMain } from '@hira-ng/infra-ipc'
 import type { WindowRuntimeRegistry } from './window-runtime-registry'
-import type { IpcMain } from 'electron'
+import type { IpcMain, WebContents } from 'electron'
 
 type EventEmit = (route: string, payload: unknown, options?: { windowId: number }) => unknown
 interface TabManagerIpcPort {
   newTab(options: { url: string }): Promise<unknown>
+  navigate(options: { url: string; tabId?: string }): Promise<unknown>
   getActiveWebContents(): unknown
+  getWebContents(tabId: string): unknown
   getActiveTabId(): string | null
+  getTabIdByWebContents(webContents: WebContents): string | null | undefined
 }
+interface WebSidebarIpcPort {
+  owns(webContents: WebContents | null): boolean
+  open(url: string): { open: boolean; url: string }
+}
+
+function isCertificatePageSender(event: unknown): boolean {
+  const frame = event && typeof event === 'object'
+    ? (event as { senderFrame?: { url?: unknown; detached?: unknown } | null }).senderFrame
+    : null
+  if (!frame || frame.detached === true) return false
+  try {
+    const url = new URL(String(frame.url || ''))
+    return (url.protocol === 'hira:' && url.hostname.toLowerCase() === 'certificates') ||
+      /\/pages\/certificates(?:\/|$)/i.test(url.pathname)
+  } catch {
+    return false
+  }
+}
+
 interface SettingsReadPort { get(key: string): unknown }
 interface ExternalGamesPort { catalog?: unknown }
 
@@ -417,7 +448,7 @@ async function registerCoreIpc(options: Record<string, unknown> = {}) {
   const jsDialogManagerForIpc = scoped ? scoped('jsDialogManager') : null
   // 独立侧栏：它是**按窗口**的（每窗口一个侧栏视图 + 自己的导航状态），
   // 所以打开 / 收起 / 命令都必须落到「发命令那个窗口」那一份上。
-  const webSidebarForIpc = scoped ? scoped('webSidebar') : null
+  const webSidebarForIpc = (scoped ? scoped('webSidebar') : null) as WebSidebarIpcPort | null
 
   registerLayoutIpc(typedMain, {
     routes: IPC_ROUTES,
@@ -751,17 +782,76 @@ async function registerCoreIpc(options: Record<string, unknown> = {}) {
     registerOpenExternalIpc(typedMain, { routes: IPC_ROUTES, schemas: schemas.openExternal, openExternalPermissions })
   }
   registerCrashIpc(typedMain, { routes: IPC_ROUTES, schemas: schemas.crash, isCrashReporterEnabled, getCrashReports })
-  registerCertificateIpc(typedMain, { routes: IPC_ROUTES, schemas: schemas.certificate, getCertificateErrors })
-  // 当前站点安全状态：按 IPC 发送方解析到对应窗口的活动标签（scoped 代理），
-  // 因此窗口 B 打开浮层拿到的证书不会串到窗口 A。
+  const currentScopeKey = () =>
+    `${registry?.currentProfileId() || 'default'}\n${registry?.currentSpaceId() || ''}`
   const siteSecurity = createSiteSecurity({
     getActiveWebContents: () => tabManagerForIpc?.getActiveWebContents(),
-    getActiveTabId: () => tabManagerForIpc?.getActiveTabId() || null
+    getActiveTabId: () => tabManagerForIpc?.getActiveTabId() || null,
+    getWebContents: (tabId: string) => tabManagerForIpc?.getWebContents(tabId),
+    getScopeKey: currentScopeKey
   })
+  registerCertificateIpc(typedMain, {
+    routes: IPC_ROUTES,
+    schemas: schemas.certificate,
+    getCertificateErrors: () => {
+      const scopeKey = currentScopeKey()
+      const records = typeof getCertificateErrors === 'function' ? getCertificateErrors() : []
+      return (records as Array<{ scopeKey?: unknown }>)
+        .filter((record) => String(record.scopeKey || '') === scopeKey)
+    },
+    getSiteCertificates: () => siteSecurity.list(),
+    continueSafeBrowsing: async (url: string, rawEvent: unknown) => {
+      const event = rawEvent as {
+        sender?: WebContents | null
+        senderFrame?: { url?: unknown; detached?: unknown } | null
+      }
+      const sender = event && event.sender
+      const frameUrl = event && event.senderFrame && event.senderFrame.detached !== true
+        ? String(event.senderFrame.url || '')
+        : ''
+      if (!sender || sender.isDestroyed() || !isSecurityWarningUrl(frameUrl)) return { ok: false }
+      const warningTarget = targetUrlOfSecurityWarning(frameUrl)
+      let requestedUrl = ''
+      try { requestedUrl = new URL(url).href } catch { return { ok: false } }
+      if (requestedUrl !== warningTarget) return { ok: false }
+
+      let tabId = ''
+      try {
+        const resolveTabId = tabManagerForIpc && typeof tabManagerForIpc.getTabIdByWebContents === 'function'
+          ? tabManagerForIpc.getTabIdByWebContents
+          : null
+        tabId = String(resolveTabId ? resolveTabId(sender) || '' : '')
+      } catch {}
+      if (tabId) {
+        if (!consumeSafeBrowsingWarning(tokenOfSecurityWarning(frameUrl), requestedUrl)) return { ok: false }
+        try {
+          await tabManagerForIpc?.navigate({ tabId, url: requestedUrl })
+          return { ok: true }
+        } catch {
+          return { ok: false }
+        }
+      }
+      const sidebar = webSidebarForIpc
+      let ownsSidebar = false
+      try {
+        ownsSidebar = Boolean(sidebar && typeof sidebar.owns === 'function' && sidebar.owns(sender))
+      } catch {}
+      if (sidebar && ownsSidebar) {
+        if (!consumeSafeBrowsingWarning(tokenOfSecurityWarning(frameUrl), requestedUrl)) return { ok: false }
+        try { return { ok: sidebar.open(requestedUrl).open === true } } catch {
+          return { ok: false }
+        }
+      }
+      return { ok: false }
+    }
+  })
+  // 当前站点安全状态：按 IPC 发送方解析到对应窗口的活动标签（scoped 代理），
+  // 也允许证书页显式指定来源标签，因此窗口 B 打开浮层拿到的证书不会串到窗口 A。
   registerSiteSecurityIpc(typedMain, {
     routes: IPC_ROUTES,
     schemas: schemas.certificate,
-    getSiteSecurity: (req: unknown) => siteSecurity.read(req)
+    getSiteSecurity: (req: unknown) => siteSecurity.read(req),
+    canReadRequestedTab: isCertificatePageSender
   })
   registerHttpAuthIpc(typedMain, { routes: IPC_ROUTES, schemas: schemas.httpAuth, httpAuth })
   // Harness 插件中心（part of PART7 §7.9）：只读清单 + 启停。

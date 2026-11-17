@@ -3,7 +3,7 @@
  *
  * 「什么时候该显、什么时候收起」**不在这里**：那套状态机（700ms 延迟 / 320ms 重挂窗口 /
  * 项间缝隙的延迟收起 / 按下别处即收 / 锚点消失即收并锁到指针动过）是横竖两种模式**共用**的，住在
- * `@hira-ng/ui-common#hoverPreview`（六条规则写在那个文件头）。本文件只回答两件事：
+ * `@hira-ng/ui-common#hoverPreview`（七条规则写在那个文件头）。本文件只回答两件事：
  *   1. 锚点是谁 —— 标签节点（`show(anchorEl, tab)`）；
  *   2. 显示什么 —— 把锚点矩形 + 标签数据交给浮层通道（摆放由落位真源算，见
  *      `@hira-ng/shared-types/src/preview-placement.mjs`）。
@@ -63,9 +63,11 @@ function createTabPreview(doc: Document, overlay?: TabPreviewOverlayPort): TabPr
   }
 
   return {
-    /** 鼠标进入某条标签（锚点元素 + 标签数据）。行为见 hoverPreview 的六条规则。 */
+    /** 鼠标进入某条标签（锚点元素 + 标签数据）。行为见 hoverPreview 的七条规则。 */
     show: (anchor: HTMLElement, tab: TabViewState) => hover.enter(anchor, tab),
     hide: () => hover.hide(),
+    suspend: () => hover.suspend(),
+    resume: () => hover.resume(),
     /**
      * 该标签**已从列表里消失**（关闭 / 移动到别的窗口）→ 走状态机的规则 ⑥。
      *

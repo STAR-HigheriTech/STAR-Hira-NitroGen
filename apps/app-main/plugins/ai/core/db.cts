@@ -192,14 +192,15 @@ CREATE TABLE IF NOT EXISTS ai_ui_state (
  *
  * 为什么单独一张表而不是塞进 `ai_ui_state`：授权是**安全事实**，不是界面偏好 ——
  * 它有独立的生命周期（可逐条撤销、能审计），也不该跟着"切换宿主"一起广播。
- * 键只有工具名：站点维度对大量工具（下载控制 / 插件启停）没有意义，按活动标签页
- * 取 origin 只会让同一条授权随窗口切换而失效 —— 用户点了"始终允许"就是不想再被问。
+ * 键是「工具 + 站点」：写页面 / Cookie / 权限的授权只能作用于用户当时看见的站点，
+ * 不能被另一个已打开页面继承。没有页面上下文的工具统一使用 `local` 作用域。
  */
 const DDL_APPROVAL_GRANT = `
 CREATE TABLE IF NOT EXISTS ai_approval_grant (
-  tool_name TEXT PRIMARY KEY,
-  site TEXT,
-  created_at INTEGER NOT NULL
+  tool_name TEXT NOT NULL,
+  site TEXT NOT NULL DEFAULT 'local',
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (tool_name, site)
 );
 `
 
@@ -215,7 +216,10 @@ CREATE TABLE IF NOT EXISTS ai_workspace (
 
 interface AiMigrationDatabase {
   exec(sql: string): unknown
-  prepare(sql: string): { run(...params: unknown[]): unknown }
+  prepare(sql: string): {
+    run(...params: unknown[]): unknown
+    all?<T = unknown>(): T[]
+  }
 }
 
 /**
@@ -263,6 +267,30 @@ const AI_MIGRATIONS = Object.freeze([
     up(sqlite: AiMigrationDatabase) {
       sqlite.exec(DDL_WORKSPACE)
       try { sqlite.exec('ALTER TABLE ai_session ADD COLUMN workspace_id TEXT') } catch (_) {}
+    }
+  }),
+  Object.freeze({
+    id: 'ai/007-grant-scope',
+    up(sqlite: AiMigrationDatabase) {
+      const columns = sqlite.prepare('PRAGMA table_info(ai_approval_grant)')
+        .all?.<{ name?: string; pk?: number }>() || []
+      const primary = new Set(columns.filter((column) => Number(column.pk) > 0).map((column) => String(column.name || '')))
+      if (primary.has('tool_name') && primary.has('site')) return
+
+      sqlite.exec(`
+        DROP TABLE IF EXISTS ai_approval_grant_scoped;
+        CREATE TABLE ai_approval_grant_scoped (
+          tool_name TEXT NOT NULL,
+          site TEXT NOT NULL DEFAULT 'local',
+          created_at INTEGER NOT NULL,
+          PRIMARY KEY (tool_name, site)
+        );
+        INSERT OR REPLACE INTO ai_approval_grant_scoped (tool_name, site, created_at)
+        SELECT tool_name, COALESCE(NULLIF(TRIM(site), ''), 'local'), created_at
+        FROM ai_approval_grant;
+        DROP TABLE ai_approval_grant;
+        ALTER TABLE ai_approval_grant_scoped RENAME TO ai_approval_grant;
+      `)
     }
   })
 ])

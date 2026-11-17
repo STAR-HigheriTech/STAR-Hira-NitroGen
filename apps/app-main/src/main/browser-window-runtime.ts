@@ -143,6 +143,7 @@ interface BrowserWindowRuntimeDeps {
   translatePage?: (webContents: WebContents) => unknown
   runAsProfile?<T>(profileId: string, task: () => T): T
   guardWindowOpen?(payload: Record<string, unknown>): boolean
+  getSafeBrowsingWarning?(url: string): string
   getMenuAccelerator?(command: string): string
   onTabClosed?(tabId: string): void
   getUserScriptsForUrl?(url: string): unknown
@@ -584,6 +585,10 @@ export function createBrowserWindowRuntime(deps: BrowserWindowRuntimeDeps): Brow
        * 返回空串 = 不改（infra 侧原样加载 hira://newtab）。
        */
       onResolveTabUrl: ({ url, incognito, containerProfileId, profileId }: { url: string; incognito?: boolean; containerProfileId?: string | null; profileId?: string }) => {
+        const warning = typeof deps.getSafeBrowsingWarning === 'function'
+          ? deps.getSafeBrowsingWarning(url)
+          : ''
+        if (warning) return warning
         if (incognito || containerProfileId) return ''
         if (!isHiraNewTabUrl(url)) return ''
         try {
@@ -815,6 +820,10 @@ export function createBrowserWindowRuntime(deps: BrowserWindowRuntimeDeps): Brow
 
       /** REDUCE，可改写 / 可取消。**必须同步** —— preventDefault 只在原生回调栈内有效。 */
       onWillNavigate: (payload: PayloadPort) => {
+        const warning = typeof deps.getSafeBrowsingWarning === 'function' && payload
+          ? deps.getSafeBrowsingWarning(String(payload.url || ''))
+          : ''
+        if (warning) return { ...payload, url: warning }
         const lifecycle = typeof getSlotLifecycle === 'function' ? getSlotLifecycle() : null
         if (!lifecycle) return payload
         try { return lifecycle.willNavigate(payload) } catch (_) { return payload }
@@ -1153,6 +1162,8 @@ export function createBrowserWindowRuntime(deps: BrowserWindowRuntimeDeps): Brow
    *   · describeSplitDrop      → tabManager（"谁是另一格 / 那组满没满"只有标签世界知道）。
    * 于是"预览"与"提交"读的是**同一个答案**（见 TabManager#describeSplitDrop 的说明）。
    */
+  /** 预览 show/update 的代际：冷启动中的旧载荷不得在 hide 或新一次显示之后补刀。 */
+  let dropzoneShowSeq = 0
   tabDropZone = createTabDropZone({
     getCursorPoint: () => {
       try { return require('electron').screen.getCursorScreenPoint() } catch (_) { return null }
@@ -1202,6 +1213,17 @@ export function createBrowserWindowRuntime(deps: BrowserWindowRuntimeDeps): Brow
       try { return tabManager.describeSplitDrop({ tabId: dragId, baseTabId: baseId }) } catch (_) { return null }
     },
     /**
+     * dragstart 是"预览马上要用"的强意图。在 250ms 停留门禁期间预载独立渲染进程，
+     * 首轮拖动就不必把冷启动压在门禁到点的那一刻。
+     */
+    prepareOverlay: () => {
+      try {
+        if (typeof layoutCoordinator.warmFloatView === 'function') {
+          layoutCoordinator.warmFloatView('dropzone-overlay')
+        }
+      } catch (_) {}
+    },
+    /**
      * 拖动开始 / 结束 → **冻结侧栏唤出**（`LayoutCoordinator#setSideRevealHold`）。
      *
      * 这是"在侧栏浮层里拖标签不误触分屏、拖完不黏住"的前提：拖动中指针必然离开侧栏保持圈，
@@ -1216,6 +1238,11 @@ export function createBrowserWindowRuntime(deps: BrowserWindowRuntimeDeps): Brow
      * （复制出一个新标签）。带上源视图 id，协调器就能把「误展开」按撤回处理。
      */
     onSessionChange: (active: boolean, info: PayloadPort) => {
+      // tabpreview 是拖拽前最后一次 hover 的遗留层。开始拖标签后它既不属于当前
+      // 交互，又会以更高 z-index 盖住落位预览 —— 必须在整场拖动入口强制收起。
+      if (active) {
+        try { hideFloat('tabpreview-overlay') } catch (_) {}
+      }
       try {
         layoutCoordinator.setSideRevealHold(active === true, {
           sourceWebContentsId: typeof info.sourceWcId === 'number' ? info.sourceWcId : null
@@ -1270,16 +1297,38 @@ export function createBrowserWindowRuntime(deps: BrowserWindowRuntimeDeps): Brow
      */
     showOverlay: (rect: { x: number; y: number; width: number; height: number }, payload: PayloadPort) => {
       try {
-        if (typeof layoutCoordinator.attachFloatView === 'function') layoutCoordinator.attachFloatView('dropzone-overlay')
+        // 落位预览出现的那一拍再兜一次：旧版 hover 浮层或异步 show 都可能晚于
+        // dragstart 才落屏，而它的 z-index 更高，会直接把预览盖成“完全不显示”。
+        try { hideFloat('tabpreview-overlay') } catch (_) {}
+        const view = typeof layoutCoordinator.attachFloatView === 'function'
+          ? layoutCoordinator.attachFloatView('dropzone-overlay')
+          : null
+        if (!view) return false
         if (!layoutCoordinator.isFloatVisible('dropzone-overlay')) layoutCoordinator.noteFloatShow('dropzone-overlay')
         layoutCoordinator.setFloatBounds('dropzone-overlay', rect)
         layoutCoordinator.setFloatInteractive('dropzone-overlay', false)
-        layoutCoordinator.sendToFloat('dropzone-overlay', `ngipc:event:${DROPZONE_UPDATE}`, payload).catch(() => {})
-      } catch (_) {}
+        const seq = ++dropzoneShowSeq
+        layoutCoordinator.sendToFloat(
+          'dropzone-overlay',
+          `ngipc:event:${DROPZONE_UPDATE}`,
+          payload,
+          () => seq === dropzoneShowSeq && layoutCoordinator.isFloatVisible('dropzone-overlay')
+        ).catch(() => {})
+        return true
+      } catch (_) { return false }
     },
+    isOverlayVisible: () => {
+      try {
+        return typeof layoutCoordinator.isFloatShown === 'function'
+          ? layoutCoordinator.isFloatShown('dropzone-overlay') === true
+          : layoutCoordinator.isFloatVisible('dropzone-overlay') === true
+      } catch (_) { return false }
+    },
+    expectsAcknowledgement: true,
     // 收起：先通知渲染页复位 DOM（hideFloat 只收 bounds，不发通知 —— 见 ipc/layout.js 的 hide 通道），
     // 再收 bounds。顺序反过来会出现"DOM 还亮着、视图已经缩成 0"的一帧残影。
     hideOverlay: () => {
+      dropzoneShowSeq++
       try {
         const wc = layoutCoordinator.getFloatWebContents('dropzone-overlay')
         if (wc && !wc.isDestroyed()) wc.send(`ngipc:event:${DROPZONE_HIDE}`, {})

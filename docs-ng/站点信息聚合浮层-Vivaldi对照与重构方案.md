@@ -147,7 +147,7 @@
 │  颁发给  example.com                       │
 │  颁发者  R11 · Let's Encrypt               │
 │  有效期  2026-01-01 → 2026-04-01           │
-│  指纹    A1:B2:...            查看证书 →   │
+│  指纹    A1:B2:...            查看详情 →   │
 ├────────────────────────────────────────────┤
 │ 本站权限                          2 项     │
 │  📷 摄像头            允许 ▾               │
@@ -178,7 +178,7 @@
 | Section | 数据来源 | 动作 |
 | --- | --- | --- |
 | 身份头 | `siteInfoOfUrl(active.url)` + 当前 tab 的 title/favicon | 无（纯展示） |
-| 证书 | **新增** `security:site` | `查看证书` → `hira://certificates` |
+| 证书 | `security:site`（CDP + X509） | `查看详情` → 新标签 `hira://certificates?tabId=<来源>` |
 | 本站权限 | `permission:get-site`（`{origin}`） | 三态切换：`permission:set` / `permission:remove` |
 | 待处理请求 | `permission:pending-list`（按 origin 过滤） | `permission:respond`（4 档：仅本次/始终 × 允许/阻止） |
 | Cookie 与站点数据 | `cookie:list({domain})`；存储估算走现有站点数据能力 | `browsing-data:clear({ types:['cookies','siteData'], origin })`；`管理 Cookie` → `hira://cookies` |
@@ -312,14 +312,17 @@
 
 ### 7.5 证书能力：`security:site`
 
-**请求**：`{ url: string }`（活动标签的当前 URL，主进程按 URL 找到对应 tab 的 webContents）。
+**请求**：`{ tabId?: string }`。浮层省略参数，读取当前活动标签；证书页显式传入来源标签。
 
 **响应**：
 
 ```ts
 {
   secure: boolean,
-  protocol: 'h2' | 'http/1.1' | 'unknown',
+  protocol: string,
+  hostname: string | null,
+  origin: string | null,
+  tabId: string | null,
   certificate: null | {
     subjectName: string,
     issuerName: string,
@@ -329,23 +332,24 @@
     fingerprint: string,       // SHA-256，冒号分隔
     san: string[]
   },
-  error?: 'not-https' | 'unavailable' | 'parse-failed'
+  certificateChain: SiteCertificate[], // 叶子证书在前
+  error: string | null
 }
 ```
 
 **实现**：
 
-1. 主进程拿到活动标签 webContents。
-2. 若 URL 非 `https:` → 直接返回 `{ secure: false, error: 'not-https' }`。
-3. `webContents.debugger.attach('1.3')`（已 attach 则复用），`Network.enable`，
-   `Network.getCertificate({ origin })` 取 DER 证书。
-4. Node `crypto.X509Certificate` 解析 subject / issuer / 有效期 / 序列号 / SAN / SHA-256 指纹。
-5. 任何一步失败 → 降级为 `{ secure: url.startsWith('https:'), certificate: null, error: 'unavailable' }`。
-6. 结果按 `tabId + url` 做短 TTL 缓存（导航完成即失效），避免每次打开浮层都 attach/解析。
-7. `debugger.detach()` 只在由本服务 attach 时执行；别人已 attach 则不动。
+1. 浮层按 IPC 发送方解析到所属窗口，再读取该窗口的活动标签；证书页可在同一窗口内显式指定来源标签。
+2. 若 URL 非 `https:` → 直接返回 `secure: false` 与空证书，不 attach debugger。
+3. `webContents.debugger.attach('1.3')`，启用 `Network` 域后调用 `Network.getCertificate({ origin })` 取整条 DER 证书链。
+4. 定制 Chromium 返回空表或 debugger 被占用时，`certificate-tls-probe` 对同源做一次**不发送 HTTP 数据**的 TLS 握手，读取服务器证书链作为兜底。
+5. Node `crypto.X509Certificate` 解析每条链成员的 subject / issuer / 有效期 / 序列号 / SAN / SHA-256 指纹。
+6. 任一步失败 → 只降级证书详情，URL 得出的协议与安全状态仍正常返回。
+7. 结果按 `webContents.id + url` 做短 TTL 缓存；成功结果另存一份按 profile + space 隔离的本会话站点证书快照（只保留 origin，不保存路径 / 查询串），供证书页在来源标签已关闭时降级。
+8. `debugger.detach()` 只在由本服务 attach 时执行；DevTools 已占用连接则返回可读错误，不抢连接。
 
-> 安全边界：`security:site` 只接受 URL，不接受任意 origin 查询；主进程必须校验该 URL 属于当前活动标签，
-> 防止渲染层拿它当“任意站点证书探测”接口。
+> 安全边界：`tabId` 只能在发送方所属窗口内解析，且显式目标标签只允许由 `hira://certificates`
+> 页面请求。浮层与其它受信 UI 省略 `tabId`，始终读取活动标签，避免变成任意站点证书探测接口。
 
 ---
 
@@ -485,4 +489,8 @@
 | 2026-10-19 | 权限下拉的档位顺序与文案（A1） | `sections/permissions.js`：`SETTING_ORDER = ['allow','block','ask']`（阻止提到询问上方）、`SETTING_LABELS = { allow:'允许', block:'阻止', ask:'清除' }`（「询问」改名「清除」）。value 仍是 `ask`、落库仍走 `permission:remove` | 下拉的第三档真实语义是**把规则删掉**（无规则 = 每次询问），与权限面板 / 权限页的「清除」是同一件事。叫「询问」会让人以为它是"每次都问"的一种设置，从而找不到"撤销我之前的决定"这条路。排序把「允许 / 阻止」两条相反的决定相邻，第三档单独作为"撤销"，扫读成本最低。 |
 | 2026-10-19 | 权限表态后主动对齐聚合按钮的两个指示器（A2） | `app-shell/main.js` 的 `overlay:commit{kind:'permission'}` 分支：`respond` 成功（或失败/异常）后**主动** `permissionState.refresh()`，成功时再 `refreshSiteRules()` —— 不再只依赖主进程推来的 `permission:cleared` 事件。`badge`（待处理数）与 `dot`（规则圆点）因此与主进程同步 | `dot` 的唯一刷新触发点是「换站」与 `siteinfo-action#rules-changed`，**权限浮层的表态路径从不触发它** → 用户明明已经对权限表态，按钮右下的圆点却"没完了"地亮着；`badge` 虽由 `permission:cleared` 驱动，但该事件一旦丢失（或归属窗口解析不到）就留下"按钮还挂着通知"的形态。事件是广播、不是回执：表态者自己主动拉一次全量真值，才是与主进程一致的最短路径。 |
 | 2026-10-19 | 站点信息浮层的落位与阴影（A3） | ① `SITEINFO_METRICS` 由 `pad:12` 改为**按边留白** `{ padX:16, padTop:0, padBottom:26 }` + `gap:10`（下移一点）；② `.si-card` 阴影由共享的 `0 8px 24px` 覆盖为**只向下投**的 `0 10px 16px -2px rgba(0,0,0,0.22)`（去掉上方那一截）；③ `LayoutCoordinator#anchorFloatBelow` 的 `pad` **向后兼容扩展**为可传 `{top,right,bottom,left}`（一个数 = 四边同宽，searchbar 下拉行为逐字不变），view bounds 与卡片尺寸按边回展 | 共享卡片的 `0 8px 24px` 在上方漏出约 4px、下方 20px、左右 12px；而浮层上报的 outer 尺寸只按一个 pad（12）给四边留白，**下方的阴影必然被原生视图边界裁掉**（用户看到的"阴影缺一块"）。解法必须两侧一起改：renderer 按边上报真实阴影留白（上 0 / 左右 16 / 下 26），主进程按边回展成 view bounds；卡片本身把阴影改成一维向下，则上方那一圈留白既不需要、也不再贴着 navbar。 |
+| 2026-11-16 | 证书详情页不再只是“校验失败列表” | `security:site` 允许在**当前窗口**内按来源 `tabId` 读取；`site-security` 增加本会话站点证书快照（进程内上限 64、同标签同证书去重）；`certificate:list` 同时返回快照与校验失败；证书页改为「来源站点 / 本会话已读取 / 校验失败」三段，并从浮层入口新标签打开，不覆盖原网页 | Chromium 没有“列出本机全部证书”的稳定接口，直接把侧栏项做成根证书库只能是假数据。站点证书页真正常用的上下文是“我刚看的那一页”，因此来源标签必须由浮层/菜单显式传入；后台标签可能已被冻结、DevTools 也可能占着调试连接，故再保留一层本会话快照作为降级，侧栏直达时同样有可读内容。 |
+| 2026-11-16 | 证书链补齐与 IPC 边界收口 | `Network.getCertificate` 返回的所有 DER 成员都经 `X509Certificate` 解析为 `certificateChain`（叶证书在前）；浮层显示链长度，证书页用原生 `details` 展开成员；`security:site` 的显式 `tabId` 仅允许 `hira://certificates` 发送，浮层改为省略参数读取活动标签 | 原实现只保留第一张证书，内部页无法回答“中间证书是谁签的”；同时若所有受信 UI 都能传 `tabId`，会被当成同窗口任意标签的证书探测口。链数据与专用入口分别补齐后，能力完整且权限边界仍保持最小。 |
+| 2026-11-16 | 证书会话数据的 profile / space 隔离 | 站点证书快照和证书校验失败记录都写入内部 `scopeKey`（profile + space），证书页只读取当前作用域；`scopeKey` 不进入 IPC 响应 schema | 证书页开始展示会话快照后，若不分区就会把账号 A / 空间 A 的站点身份泄漏到账号 B / 空间 B。隔离键只在主进程内部用于过滤，不给渲染层提供新的追踪维度。 |
+| 2026-11-17 | CDP 证书表为空时的可用性兜底 | `Network.getCertificate` 前显式启用 Network 域；空表、debugger 占用或命令失败时，新增 `certificate-tls-probe` 做 5 秒超时的独立 TLS 握手读取证书链。实测 `example.com` 返回 4 张证书，主进程服务可在 CDP 不可用时返回叶证书与完整链 | 定制 Electron/Chromium 或特定代理链路中 CDP 命令成功 resolve 但 `tableNames` 为空，原实现把它误判成“页面没有证书”。兜底只读取 TLS 握手证书，不发送 HTTP 请求、不改变网页连接的安全策略，也不接触页面数据。 |
 

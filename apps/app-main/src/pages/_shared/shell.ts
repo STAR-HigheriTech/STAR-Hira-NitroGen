@@ -81,6 +81,21 @@ function isPageVisible (page: ShellPage): boolean {
   return !feature || isFeatureAvailable(feature)
 }
 
+/** 选中项不在视野内时，只滚动侧栏本身，并把它带回中间位置。 */
+function revealCurrentPage (nav: HTMLElement): void {
+  const current = nav.querySelector<HTMLElement>('.hira-shell-item.active')
+  if (!current) return
+
+  const inset = 8
+  const navRect = nav.getBoundingClientRect()
+  const itemRect = current.getBoundingClientRect()
+  const visible = itemRect.top >= navRect.top + inset &&
+    itemRect.bottom <= navRect.bottom - inset
+  if (visible) return
+
+  nav.scrollTop += itemRect.top - navRect.top - (nav.clientHeight - itemRect.height) / 2
+}
+
 /**
  * 按最新可用性重画整条导航（幂等：可重复调用）。
  * @param {HTMLElement} nav
@@ -89,6 +104,7 @@ function isPageVisible (page: ShellPage): boolean {
  */
 function renderNav (nav: HTMLElement, currentHost: string): number {
   const doc = nav.ownerDocument
+  const scrollTop = nav.scrollTop
   nav.textContent = ''
 
   const title = doc.createElement('div')
@@ -114,6 +130,7 @@ function renderNav (nav: HTMLElement, currentHost: string): number {
     nav.appendChild(group)
     count += pages.length
   }
+  nav.scrollTop = scrollTop
   return count
 }
 
@@ -136,6 +153,7 @@ export function mountShell (): HTMLElement | null {
     // 先按 fail-open 画一遍并**立刻可见**：答案到达后在 apply 里幂等重画。
     renderNav(nav, host)
     ;(document.body || document.documentElement).prepend(nav)
+    revealCurrentPage(nav)
 
     const apply = (): void => {
       const count = renderNav(nav, host)

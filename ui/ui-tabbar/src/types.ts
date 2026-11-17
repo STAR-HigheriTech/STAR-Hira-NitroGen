@@ -115,6 +115,8 @@ export interface TabPreviewController {
   show: (anchor: HTMLElement, tab: TabViewState) => void
   hide: () => void
   hideIfTab: (tabId: string) => void
+  suspend: () => void
+  resume: () => void
   destroy: () => void
 }
 

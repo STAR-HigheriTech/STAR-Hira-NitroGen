@@ -81,13 +81,29 @@ export const OFFICIAL_EXTENSION_POINTS = Object.freeze([
   // ── 快捷键 / 主题 / 本地化 ────────────────────────────────────────
   { id: 'shortcut.binding', mode: 'MULTI', description: '快捷键注册', owner: 'shortcut-engine' },
   /*
-   * 网页翻译引擎（C3）：`(payload) => Promise<string[]>`。
-   *   payload = { texts: string[], to: string }
+   * 网页翻译扩展面（C3）：四类实现各自独立，页面与调度器只消费标准数据。
+   *
+   * provider（SINGLE）：`(payload) => Promise<string[]>`
+   *   payload = { texts: string[], from: string, to: string }
    * 返回与 texts **等长、同序**的译文。没有插件实现时，宿主用内置的在线引擎兜底
    * （见 apps/app-main/src/main/translate.ts）——「离线模型」（如 bergamot）正是一条
    * 插件实现：装上它，页面内容就不出本机。
+   *
+   * language-detector（SINGLE）：
+   *   payload = { url, title, documentLanguage?, textSample? }
+   *   return { language, confidence?, id?, label? }
+   *
+   * dom-policy（SINGLE）：
+   *   payload 同上；return { includeSelectors?, excludeSelectors?, attributes?, id?, label? }
+   *   选择器只在网页 preload 内执行，不能跨域取得 DOM。
+   *
+   * postprocessor（REDUCE）：每个实现收到上一步状态，返回下一份状态。
+   *   state = { texts, sourceTexts, from, to, url? }；下一份 state.texts 必须等长。
    */
   { id: 'translate.provider', mode: 'SINGLE', description: '网页翻译引擎提供者', owner: 'translate' },
+  { id: 'translate.language-detector', mode: 'SINGLE', description: '网页源语言检测器', owner: 'translate' },
+  { id: 'translate.dom-policy', mode: 'SINGLE', description: '网页翻译 DOM 范围与属性策略', owner: 'translate' },
+  { id: 'translate.postprocessor', mode: 'REDUCE', description: '译文后处理管线（术语表 / 格式清理）', owner: 'translate' },
   // 主题变量提供者：流水线初值必须是空串（而不是 payload），
   // 每个实现返回「要追加的一段 CSS」—— 所以这里显式声明 initialValue。
   { id: 'theme.token-provider', mode: 'REDUCE', description: '主题 CSS 变量提供者', owner: 'infra-theme', initialValue: '' },

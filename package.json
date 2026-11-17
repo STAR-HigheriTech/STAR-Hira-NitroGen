@@ -16,6 +16,7 @@
   ],
   "scripts": {
     "dev": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON ./scripts/dev-pipeline.ts dev",
+    "dev:web": "vite --config vite.browser.config.ts",
     "build": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON ./scripts/dev-pipeline.ts build && electron-vite build",
     "workspace:build": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON ./scripts/dev-pipeline.ts build",
     "workspace:prepare": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON ./scripts/dev-pipeline.ts prepare",

@@ -135,7 +135,10 @@ function makeBridge(provider: BridgeProvider, subscribe: BridgeSubscribe) {
 
     let nativeOk = false
     invoke(PRELOAD_ROUTES.passwordAutofillMenu, { hostname, credentials, x, y })
-      .then(() => { nativeOk = true })
+      .then((result: unknown) => {
+        nativeOk = !!result && typeof result === 'object' &&
+          (result as { ok?: unknown }).ok !== false
+      })
       .catch(() => {})
       .then(() => {
         if (!nativeOk && typeof menuProvider === 'function') {

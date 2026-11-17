@@ -27,24 +27,28 @@ export const certificateSection: import('./registry.js').SiteInfoSection = {
     const shell = createSection(doc, {
       id: 'certificate',
       title: '证书',
-      action: { label: '查看证书', onActivate: () => emit('open-certificates') }
+      action: { label: '查看详情', onActivate: () => emit('open-certificates') }
     })
 
     const subject = kvRow(doc, '颁发给')
     const issuer = kvRow(doc, '颁发者')
     const validity = kvRow(doc, '有效期')
+    const serial = kvRow(doc, '序列号')
     const fingerprint = kvRow(doc, '指纹')
     const san = kvRow(doc, '覆盖域名')
+    const chain = kvRow(doc, '证书链')
     const note = el(doc, 'div', 'si-note')
 
     shell.body.appendChild(subject.row)
     shell.body.appendChild(issuer.row)
     shell.body.appendChild(validity.row)
+    shell.body.appendChild(serial.row)
     shell.body.appendChild(fingerprint.row)
     shell.body.appendChild(san.row)
+    shell.body.appendChild(chain.row)
     shell.body.appendChild(note)
 
-    const allRows = [subject, issuer, validity, fingerprint, san]
+    const allRows = [subject, issuer, validity, serial, fingerprint, san, chain]
 
     function showRows(visible: boolean) {
       for (const item of allRows) item.row.hidden = !visible
@@ -98,7 +102,8 @@ export const certificateSection: import('./registry.js').SiteInfoSection = {
           } else {
             note.textContent = '此页面没有可展示的证书。'
           }
-          shell.setActionVisible(false)
+          // HTTPS 读取失败时仍允许进入证书页：那里能看到会话快照与失败记录。
+          shell.setActionVisible(true)
           return
         }
 
@@ -115,6 +120,15 @@ export const certificateSection: import('./registry.js').SiteInfoSection = {
         validity.value.classList.remove('is-warning')
         if (certificate.validExpiry && Number(certificate.validExpiry) < Date.now()) {
           validity.value.classList.add('is-warning')
+        }
+
+        const serialNumber = certificate.serialNumber || ''
+        if (serialNumber) {
+          serial.row.hidden = false
+          serial.value.textContent = serialNumber.length > 29 ? `${serialNumber.slice(0, 29)}…` : serialNumber
+          serial.value.title = serialNumber
+        } else {
+          serial.row.hidden = true
         }
 
         const print = certificate.fingerprint || ''
@@ -134,6 +148,17 @@ export const certificateSection: import('./registry.js').SiteInfoSection = {
           san.value.title = names.join('\n')
         } else {
           san.row.hidden = true
+        }
+
+        const certificateChain = Array.isArray(cert.certificateChain) ? cert.certificateChain : []
+        if (certificateChain.length > 1) {
+          chain.row.hidden = false
+          chain.value.textContent = `${certificateChain.length} 张`
+          chain.value.title = certificateChain
+            .map((item, index) => `${index === 0 ? '叶证书' : `证书 ${index + 1}`}：${item.subjectName || '—'}`)
+            .join('\n')
+        } else {
+          chain.row.hidden = true
         }
       }
     }

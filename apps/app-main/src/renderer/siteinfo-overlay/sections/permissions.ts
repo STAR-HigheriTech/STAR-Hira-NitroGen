@@ -100,6 +100,8 @@ export const permissionsSection: import('./registry.js').SiteInfoSection = {
         button.addEventListener('mousedown', (event) => {
           event.preventDefault()
           event.stopPropagation()
+        })
+        button.addEventListener('click', () => {
           if (button.disabled) return
           emit('permission-respond', { id: request.id, allow: choice.allow, persist: choice.persist })
         })

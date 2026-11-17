@@ -3,7 +3,7 @@
  *
  * 两边的规则本来就该一模一样，此前却各写一份（`ui-tabbar/components/TabPreview.js` 与
  * `tabRowList` 内部），连 700 / 320 / 120 三个常量都各抄一遍 —— 于是"改一处、另一处不动"
- * 是迟早的事。规则本身只有六条：
+ * 是迟早的事。规则本身只有七条：
  *   ① 预览是**列表级**的：计时起点是「进入列表」，跨项只换内容、不重新计时
  *      （项与项之间有缝，鼠标巡视必然跨项；每次清零就永远弹不出来）；
  *   ② 预览已可见时换项**立即**生效（不重播入场、不重新计时）—— 否则横扫会变成一串"弹一下、弹一下"；
@@ -22,6 +22,9 @@
  *      既收起、又拒绝"没动就补显"的 enter。
  *      另外它带一条**存活巡检**：预览在台上时每 200ms 看一眼锚点还在不在文档里 ——
  *      宿主忘了报、或行被别的路径整批换掉时，预览也不会永久挂着。
+ *   ⑦ **右键菜单 / 拖拽暂停**：这两种交互里操作焦点已经不在 hover 项上，补发的
+ *      mouseover 不能重新起表。`suspend()` 立即收起并拒绝 enter，`resume()` 后还要求
+ *      指针真实移动过才恢复，避免菜单关闭 / 拖拽收尾时被合成事件拉回来。
  *
  * 本模块只管「状态 + 计时」，不认识标签、不认识 DOM：「显示什么、锚点在哪」由调用方给
  * （`onShow(target, payload)` / `onHide()`）—— 于是"两种模式行为一致"由**一个文件**负责，
@@ -59,6 +62,8 @@ export interface HoverPreviewController<T> {
   leave: () => void
   hide: (options?: { forgetRound?: boolean }) => void
   invalidate: () => void
+  suspend: () => void
+  resume: () => void
   isVisible: () => boolean
   current: () => HTMLElement | null
   currentPayload: () => T | null
@@ -126,6 +131,8 @@ export function createHoverPreview<T>(ctx: HoverPreviewContext<T>): HoverPreview
   let lockedUntilMove = false
   /** ⑥ 锁的安全阀（见 lockUntilMove）。 */
   let lockTimer: ReturnType<typeof setTimeout> | null = null
+  /** 右键菜单 / 拖拽等非 hover 交互期间暂停预览，避免补发事件重新计时。 */
+  let suspended = false
 
   function cancelDelay() {
     if (delayTimer) { clearTimeout(delayTimer); delayTimer = null }
@@ -154,7 +161,7 @@ export function createHoverPreview<T>(ctx: HoverPreviewContext<T>): HoverPreview
 
   /** 真正把预览放上台（三处入口共用：换锚 ② / 补显 ③ / 延迟到点 ①）。 */
   function showNow(): void {
-    if (!current) return
+    if (suspended || !current) return
     visible = true
     startLiveness()
     ctx.onShow(current, payload as T)
@@ -246,6 +253,9 @@ export function createHoverPreview<T>(ctx: HoverPreviewContext<T>): HoverPreview
   return {
     /** 指针进入某一项（见 ①②③）。同一项重复进入直接忽略（项内子元素间移动不该重置计时）。 */
     enter(target: HTMLElement, nextPayload: T): void {
+      // 右键菜单 / 拖拽期间，鼠标仍可能落在同一条标签上；此时焦点不在 hover 项，
+      // 不能把补发的 mouseover 当成新的停留意图。
+      if (suspended) return
       // ⑥ 锁：指针没动过的那次 enter（项被移除后相邻项滑到指针底下时 Chromium 补发的）
       // 一律不接 —— 否则规则 ②③ 会让预览在"用户什么都没做"的情况下重新弹出。
       if (lockedUntilMove) return
@@ -299,6 +309,17 @@ export function createHoverPreview<T>(ctx: HoverPreviewContext<T>): HoverPreview
     hide,
     /** 锚点项已消失（见 ⑥）：立即收起，并锁到指针真的动过为止。 */
     invalidate,
+    /** 进入菜单 / 拖拽等交互：立即收起并拒绝新的 hover，直到 resume()。 */
+    suspend() {
+      suspended = true
+      hide({ forgetRound: true })
+    },
+    /** 交互结束：恢复 hover；第一次补发事件仍按“指针真实移动过”才放行。 */
+    resume() {
+      if (!suspended) return
+      suspended = false
+      lockUntilMove()
+    },
     isVisible: () => visible,
     /** 当前 hover 的项（调用方拿它做"这一项还在不在 DOM 里"之类的判断）。 */
     current: () => current,
@@ -312,6 +333,7 @@ export function createHoverPreview<T>(ctx: HoverPreviewContext<T>): HoverPreview
       if (lockTimer) { clearTimeout(lockTimer); lockTimer = null }
       if (lockedUntilMove && doc) doc.removeEventListener('pointermove', onDocPointerMove, true)
       lockedUntilMove = false
+      suspended = false
       current = null
       payload = null
       visible = false

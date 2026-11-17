@@ -49,6 +49,7 @@
  */
 
 import type { BrowserWindow, IpcMain, IpcMainEvent, WebContents } from 'electron'
+import { onWebContentsDestroyed } from '@hira-ng/infra-window'
 import { createOverlay, type DialogOverlayController } from './dialog-overlay'
 import { createDialogQueue } from './dialog-queue'
 import { registerInjection, type JsDialogType } from './dialog-inject'
@@ -399,23 +400,21 @@ export function createJsDialogManager (opts: JsDialogManagerOptions = {}): JsDia
     try {
       _activeOverlay = createOverlay({
         parentWindow: parentWindow,
-        // 应用级确认框（appResolve 存在）：出现即接管焦点，键盘（Enter / Esc）立刻可用。
-        // 网页弹窗保持 showInactive —— 不把焦点从网页输入框上夺走。
-        focusOnReveal: typeof requestData.appResolve === 'function'
+        // 对话框是模态子窗：父页面已被禁用，网页侧脚本也正等这里的结果。
+        // 必须让对话框接管焦点，否则用户看不到键盘焦点且 Enter / Esc 暂时无效。
+        focusOnReveal: true
       })
       overlayWc = _activeOverlay.show()
+      // WindowFactory 失败时 show() 会用 null 表示“没有真正建出窗口”。
+      // 这时不能留下一个 30 秒不可见的 activeOverlay，否则队列和 confirm 都会被卡住。
+      if (!overlayWc || overlayWc.isDestroyed()) {
+        destroyOverlay()
+        return
+      }
     } catch (e) {
-      // 浮层创建失败：如果是 confirm/prompt，必须设置 cancel 结果避免永久阻塞
-      if (_confirmSender && !_confirmSender.isDestroyed()) {
-        _asyncResult = { action: 'cancel', value: null }
-      }
-      _confirmSender = null
-      // 应用级确认框同样不能悬着：按「取消」结算
-      if (_appResolve) {
-        const resolve = _appResolve
-        _appResolve = null
-        try { resolve(false) } catch (_) {}
-      }
+      // 统一走销毁收尾：当前 confirm / app confirm 按取消结算，队列继续前进。
+      console.error('[jsDialog] overlay creation failed:', e)
+      destroyOverlay()
       return
     }
 
@@ -725,7 +724,7 @@ export function createJsDialogManager (opts: JsDialogManagerOptions = {}): JsDia
     })
 
     // webContents 销毁时关闭浮层 + 清除"阻止更多弹窗"记录
-    webContents.once('destroyed', function () {
+    onWebContentsDestroyed(webContents, function () {
       if (_activeOverlay && String(_currentTabId) === String(tabId)) {
         destroyOverlay()
       }

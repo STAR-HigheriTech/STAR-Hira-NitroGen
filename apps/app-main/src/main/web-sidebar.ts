@@ -30,6 +30,7 @@ import {
   isNonWebUrl,
   isPdfUrl,
   navigateWebHistory,
+  onWebContentsDestroyed,
   readWebNavigationState,
   reloadOrRetry,
   resolvePdfTarget,
@@ -49,6 +50,7 @@ import {
   type WebSidebarViewMode
 } from '@hira-ng/shared-types/src/web-sidebar.mjs'
 import { webErrorUrl, isWebErrorUrl } from '@hira-ng/shared-types/src/web-error.mjs'
+import { isSecurityWarningUrl } from '@hira-ng/shared-types/src/security-warning.mjs'
 import { defaultSearchUrl, defaultSearchLabel } from '@hira-ng/shared-types/src/search-engines.mjs'
 
 /**
@@ -115,6 +117,7 @@ export interface WebSidebarDependencies {
   persistPosition?: (position: string) => unknown
   persistViewMode?: (mode: WebSidebarViewMode) => unknown
   initialViewMode?: unknown | (() => unknown)
+  getSafeBrowsingWarning?: (url: string) => string
 }
 
 export interface WebSidebarState {
@@ -175,6 +178,9 @@ export function createWebSidebar(deps: WebSidebarDependencies = {}): WebSidebarC
   const persistWidth = typeof deps.persistWidth === 'function' ? deps.persistWidth : null
   const persistPosition = typeof deps.persistPosition === 'function' ? deps.persistPosition : null
   const persistViewMode = typeof deps.persistViewMode === 'function' ? deps.persistViewMode : null
+  const getSafeBrowsingWarning = typeof deps.getSafeBrowsingWarning === 'function'
+    ? deps.getSafeBrowsingWarning
+    : () => ''
   /** 宽度落库的防抖定时器（拖拽期间不写盘，停手 300ms 才写一次）。 */
   let widthTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -283,7 +289,7 @@ export function createWebSidebar(deps: WebSidebarDependencies = {}): WebSidebarC
     let current = ''
     try { current = String(wc.getURL() || '') } catch (_) { current = '' }
     // 错误页不覆盖原 URL（保持"失败的到底是哪个网址"这个事实）—— 与标签页同一条口径。
-    if (current && !isWebErrorUrl(current)) state.url = current
+    if (current && !isWebErrorUrl(current) && !isSecurityWarningUrl(current)) state.url = current
     else if (!state.url) state.url = current
     try { state.title = String(wc.getTitle() || state.title || '') } catch (_) {}
     const nav = readNav(wc)
@@ -507,6 +513,12 @@ export function createWebSidebar(deps: WebSidebarDependencies = {}): WebSidebarC
       const target = String(url || '')
       if (!target || isWebErrorUrl(target) || isNonWebUrl(target)) return
       if (isPdfUrl(target)) {
+        const warning = getSafeBrowsingWarning(target)
+        if (warning) {
+          e.preventDefault()
+          loadUrl(target, warning)
+          return
+        }
         // 内置查看器：与标签页同一条判据、同一个函数（infra-window/tabUrl#resolvePdfTarget）。
         // 关闭查看器时**原样导航**（落到下载链路）且**不**继续走下面的"站外开新标签" ——
         // 与标签页那条口径一致：PDF 分流是内核行为，不是链接路由。
@@ -518,9 +530,16 @@ export function createWebSidebar(deps: WebSidebarDependencies = {}): WebSidebarC
         return
       }
       // 站外链接 → **主浏览区新标签**（侧栏原地不动，用户能一边看侧栏一边看新页）
-      if (!isSameSidebarSite(state.url || safeUrl(wc), target)) {
+      const sameSite = isSameSidebarSite(state.url || safeUrl(wc), target)
+      if (!sameSite) {
         e.preventDefault()
         routeLink(target)
+        return
+      }
+      const warning = getSafeBrowsingWarning(target)
+      if (warning) {
+        e.preventDefault()
+        loadUrl(target, warning)
       }
     }
     wc.on('will-navigate', (e, url) => handleNavigationIntent(e, url))
@@ -551,7 +570,20 @@ export function createWebSidebar(deps: WebSidebarDependencies = {}): WebSidebarC
       state.title = state.title || sidebarTitleForUrl(state.url)
       publish()
     })
-    wc.on('destroyed', () => {
+    let htmlFullscreen = false
+    const setHtmlFullscreen = (active: boolean): void => {
+      const next = Boolean(active)
+      if (next === htmlFullscreen) return
+      htmlFullscreen = next
+      const win = getOwnerWindow()
+      if (win && !win.isDestroyed()) {
+        try { win.setFullScreen(next) } catch {}
+      }
+    }
+    wc.on('enter-html-full-screen', () => setHtmlFullscreen(true))
+    wc.on('leave-html-full-screen', () => setHtmlFullscreen(false))
+    onWebContentsDestroyed(wc, () => {
+      if (htmlFullscreen) setHtmlFullscreen(false)
       if (boundWc === wc) boundWc = null
     })
 
@@ -587,8 +619,10 @@ export function createWebSidebar(deps: WebSidebarDependencies = {}): WebSidebarC
     return { content, header, headerHeight: header ? WEB_SIDEBAR_HEADER_HEIGHT : 0 }
   }
 
-  function loadUrl(url: string): void {
-    state.url = url
+  function loadUrl(url: string, preparedWarning = ''): void {
+    const target = String(url || '')
+    if (!target) return
+    state.url = target
     state.title = ''
     state.canGoBack = false
     state.canGoForward = false
@@ -598,7 +632,8 @@ export function createWebSidebar(deps: WebSidebarDependencies = {}): WebSidebarC
     // 用户看到的就是"刷新按钮自己在那儿转"。
     if (!wc) { state.loading = false; return }
     state.loading = true
-    try { wc.loadURL(url).catch(() => {}) } catch (_) {}
+    const warning = preparedWarning || getSafeBrowsingWarning(target)
+    try { wc.loadURL(warning || target).catch(() => {}) } catch (_) {}
     publish()
   }
 

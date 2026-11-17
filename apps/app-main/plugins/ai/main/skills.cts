@@ -7,18 +7,17 @@
  *   1. **存**：清单 = 插件贡献（只读，随插件装卸自动增减）+ 用户自建（可改可删），
  *      另有 `ai_skill_state` 记录"哪条被关掉"；
  *   2. **搬**：导入导出 `.hira-ai-skill.json`（带 id 冲突重命名，绝不覆盖插件技能）；
- *   3. **跑**：按 kind 分派 —— 模板解析 / 隔离世界脚本 / 外部 kind（`ai.skill.kind`）。
+ *   3. **跑**：按 kind 分派 —— 模板解析 / 沙箱脚本 / 外部 kind（`ai.skill.kind`）。
  *
  * 三条边界：
- *   · **源页面零改动**：隔离世界共享同一棵 DOM，所以在里面直接跑脚本是能改到页面的。
- *     执行器把 `document` 绑到"当前页面的脱离文档快照"上（见 core/skills.cjs），
- *     脚本删元素 / 改样式都只发生在副本里 —— 代价是拿不到布局与计算样式。
+ *   · **源页面零改动、脚本进程隔离**：脚本只拿到页面 HTML 快照，在隐藏的
+ *     sandbox BrowserWindow 里执行；无 Node、无真实页面、无网络、无持久存储。
  *   · **结果必须可裁剪**：脚本返回值形状未知，统一走 `formatScriptResult` 文本化 + 截断。
  *   · **外部 kind 不进 IPC**：`run` 是函数，结构化克隆会失败 —— `kinds()` 只回展示字段。
  */
 
 const fs = require('fs/promises')
-const { dialog } = require('electron')
+const { BrowserWindow, dialog, session } = require('electron')
 
 const {
   normalizeKinds,
@@ -66,6 +65,12 @@ interface SkillTabManager {
 interface SkillWebContents {
   isDestroyed?(): boolean
   executeJavaScriptInIsolatedWorld(worldId: number, scripts: Array<{ code: string }>): Promise<unknown>
+  executeJavaScript?(code: string): Promise<unknown>
+}
+interface PageSnapshot {
+  html: string
+  url: string
+  title: string
 }
 interface ExternalSkillImpl extends SkillKind { run?: (ctx: UnknownRecord) => unknown | Promise<unknown> }
 interface PluginRegistryPort {
@@ -83,6 +88,23 @@ function errorMessage(error: unknown): string {
 
 /** 脚本技能的执行上限：脚本是同步遍历 DOM，超过这个时间就是写坏了。 */
 const SCRIPT_TIMEOUT = 3000
+const SANDBOX_PARTITION = 'ai-skill-sandbox'
+const SNAPSHOT_MAX_CHARS = 8 * 1024 * 1024
+const SANDBOX_CSP = [
+  "default-src 'none'",
+  "script-src 'unsafe-inline'",
+  "style-src 'unsafe-inline'",
+  'img-src data: blob:',
+  'font-src data:',
+  'media-src data: blob:',
+  "connect-src 'none'",
+  "frame-src 'none'",
+  "worker-src 'none'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'"
+].join('; ')
+const SANDBOX_DOCUMENT = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${SANDBOX_CSP}"></head><body></body></html>`
 
 function fail(code: string, message?: string): SkillError {
   const err = new Error(message || code) as SkillError
@@ -311,39 +333,164 @@ function createSkillService({ store, extensionPoints, contributions, getPluginRe
     return tabId && typeof tm.getWebContents === 'function' ? tm.getWebContents(tabId) : null
   }
 
+  let sandboxBusy = false
+  let sandboxConfigured = false
+
+  function prepareSandboxSession() {
+    const sandboxSession = session.fromPartition(SANDBOX_PARTITION)
+    if (!sandboxConfigured) {
+      sandboxSession.webRequest.onBeforeRequest(
+        { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*', 'file://*/*', 'ftp://*/*'] },
+        (_details: unknown, callback: (response: { cancel: boolean }) => void) => callback({ cancel: true })
+      )
+      sandboxSession.setPermissionRequestHandler((
+        _webContents: unknown,
+        _permission: string,
+        callback: (allowed: boolean) => void
+      ) => callback(false))
+      sandboxSession.setPermissionCheckHandler(() => false)
+      sandboxConfigured = true
+    }
+    return sandboxSession
+  }
+
+  async function pageSnapshot(wc: SkillWebContents): Promise<PageSnapshot> {
+    const raw = await withTimeout(
+      wc.executeJavaScriptInIsolatedWorld(PAGE_WORLD_ID, [{
+        code: `(() => {
+          const root = document.documentElement;
+          return {
+            html: root ? "<!doctype html>\\n" + root.outerHTML : "",
+            url: location.href,
+            title: document.title
+          };
+        })()`
+      }]),
+      SCRIPT_TIMEOUT,
+      'AI_SKILL_TIMEOUT'
+    )
+    const record = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {}
+    const html = String(record.html || '')
+    if (!html) throw fail('AI_SKILL_EMPTY_PAGE', '当前页面没有可读取的 DOM')
+    if (html.length > SNAPSHOT_MAX_CHARS) {
+      throw fail('AI_SKILL_PAGE_TOO_LARGE', `页面快照超过 ${Math.round(SNAPSHOT_MAX_CHARS / 1024 / 1024)}MB，脚本技能已拒绝执行`)
+    }
+    return {
+      html,
+      url: String(record.url || ''),
+      title: String(record.title || '')
+    }
+  }
+
   /**
-   * 在页面隔离世界跑一段只读脚本。
-   * 用 `executeJavaScriptInIsolatedWorld` 而不是 `executeJavaScript`：
-   * 页面自己的 JS 看不到我们的执行上下文（`Array.prototype` 被打补丁也不影响结果）。
-   * 再加一层脱离文档快照（见 `buildScriptCode`）：脚本即使写了 `remove()`，
-   * 也只作用在副本上，源页面 DOM 纹丝不动。
+   * 在独立、隐藏、无网络的 sandbox renderer 里执行脚本技能。
+   *
+   * 源页面只负责导出 HTML；即使脚本拿到 `window`、`fetch` 或死循环，影响的也只是
+   * 一个短暂存在的沙箱页面。超时会直接销毁 renderer，而不是留下一个卡死的标签页。
    */
   async function runScript(skill: SkillEntry, args: Record<string, unknown>) {
     const wc = activeWebContents()
     if (!wc || (typeof wc.isDestroyed === 'function' && wc.isDestroyed())) {
       throw fail('AI_SKILL_NO_TAB', '当前没有可执行的页面')
     }
+    if (sandboxBusy) throw fail('AI_SKILL_BUSY', '另一个脚本技能正在执行，请稍后重试')
+    sandboxBusy = true
 
-    let value
+    let sandbox: Electron.BrowserWindow | null = null
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const sandboxSession = prepareSandboxSession()
     try {
-      value = await withTimeout(
-        wc.executeJavaScriptInIsolatedWorld(PAGE_WORLD_ID, [{ code: buildScriptCode(skill.prompt, args) }]),
-        SCRIPT_TIMEOUT,
-        'AI_SKILL_TIMEOUT'
-      )
+      const snapshot = await pageSnapshot(wc)
+      await sandboxSession.clearStorageData()
+      await sandboxSession.clearCache()
+
+      const activeSandbox = new BrowserWindow({
+        show: false,
+        width: 800,
+        height: 600,
+        frame: false,
+        focusable: false,
+        skipTaskbar: true,
+        hasShadow: false,
+        webPreferences: {
+          partition: SANDBOX_PARTITION,
+          sandbox: true,
+          nodeIntegration: false,
+          contextIsolation: true,
+          webSecurity: true,
+          allowRunningInsecureContent: false,
+          devTools: false,
+          spellcheck: false,
+          backgroundThrottling: false,
+          webviewTag: false,
+          disableDialogs: true
+        }
+      })
+      sandbox = activeSandbox
+      const work = (async () => {
+        const contents = activeSandbox.webContents
+        contents.setWindowOpenHandler(() => ({ action: 'deny' }))
+        contents.on('will-navigate', (event: { preventDefault(): void }) => event.preventDefault())
+        contents.on('will-redirect', (event: { preventDefault(): void }) => event.preventDefault())
+        contents.on('will-attach-webview', (event: { preventDefault(): void }) => event.preventDefault())
+
+        await activeSandbox.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(SANDBOX_DOCUMENT)}`)
+        const html = JSON.stringify(snapshot.html)
+        const policy = JSON.stringify(SANDBOX_CSP)
+        await contents.executeJavaScript(`(() => {
+          for (const name of [
+            "fetch", "XMLHttpRequest", "WebSocket", "WebTransport", "EventSource",
+            "Worker", "SharedWorker", "RTCPeerConnection", "webkitRTCPeerConnection"
+          ]) {
+            try {
+              Object.defineProperty(window, name, { value: undefined, writable: false, configurable: false })
+            } catch (_) {}
+          }
+          try {
+            Object.defineProperty(Navigator.prototype, "sendBeacon", {
+              value: undefined,
+              writable: false,
+              configurable: false
+            })
+          } catch (_) {}
+          const parsed = new DOMParser().parseFromString(${html}, "text/html")
+          parsed.querySelectorAll('script,meta[http-equiv="refresh" i],meta[http-equiv="content-security-policy" i],link[rel="preload" i],link[rel="prefetch" i]').forEach((node) => node.remove())
+          const root = parsed.documentElement
+          if (!root) throw new Error("页面快照缺少 documentElement")
+          document.replaceChild(document.importNode(root, true), document.documentElement)
+          const meta = document.createElement("meta")
+          meta.httpEquiv = "Content-Security-Policy"
+          meta.content = ${policy}
+          document.head.appendChild(meta)
+          return true
+        })()`)
+        return contents.executeJavaScript(buildScriptCode(skill.prompt, args))
+      })()
+
+      const guard = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          try { sandbox?.destroy() } catch (_) {}
+          reject(fail('AI_SKILL_TIMEOUT', `执行超过 ${Math.round(SCRIPT_TIMEOUT / 1000)} 秒`))
+        }, SCRIPT_TIMEOUT)
+      })
+      const value = await Promise.race([work, guard])
+      const text = formatScriptResult(value)
+      if (!text) throw fail('AI_SKILL_EMPTY_RESULT', '脚本没有返回内容')
+      return {
+        ok: true,
+        kind: 'script',
+        text,
+        title: skill.label,
+        result: { text, title: skill.label }
+      }
     } catch (e) {
       if (isSkillError(e)) throw e
       throw fail('AI_SKILL_SCRIPT_FAILED', `脚本执行失败：${errorMessage(e)}`)
-    }
-
-    const text = formatScriptResult(value)
-    if (!text) throw fail('AI_SKILL_EMPTY_RESULT', '脚本没有返回内容')
-    return {
-      ok: true,
-      kind: 'script',
-      text,
-      title: skill.label,
-      result: { text, title: skill.label }
+    } finally {
+      if (timer) clearTimeout(timer)
+      try { sandbox?.destroy() } catch (_) {}
+      try { await sandboxSession.clearStorageData() } catch (_) {}
+      sandboxBusy = false
     }
   }
 

@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>安全检查</title>
+    <link rel="stylesheet" href="hira://shared/base.css" />
+    <link rel="stylesheet" href="hira://error/error.css" />
+  </head>
+  <body>
+    <div class="container">
+      <svg
+        class="icon risk"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M12 3 2.7 19a1 1 0 0 0 .86 1.5h16.88A1 1 0 0 0 21.3 19L12 3Z" />
+        <path d="M12 9v5" />
+        <path d="M12 17.5h.01" />
+      </svg>
+      <h1 id="title">此页面可能存在风险</h1>
+      <div class="desc" id="reason"></div>
+      <div class="code" id="url"></div>
+      <div class="buttons">
+        <button class="btn" id="back">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 12H5" />
+            <path d="M12 19l-7-7 7-7" />
+          </svg>
+          返回
+        </button>
+        <button class="btn btn-primary" id="reload">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10" />
+            <polyline points="1 20 1 14 7 14" />
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+          </svg>
+          重新加载
+        </button>
+      </div>
+    </div>
+    <script type="module" src="./security-warning.js"></script>
+  </body>
+</html>

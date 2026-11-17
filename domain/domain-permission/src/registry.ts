@@ -1,6 +1,5 @@
 import type {
   CreatePendingRequestInput,
-  PermissionGrantRegistry,
   PermissionRequestRegistry,
   PendingPermissionRequest,
   RegisterPendingResult
@@ -65,31 +64,8 @@ export class InMemoryPermissionRequestRegistry implements PermissionRequestRegis
   }
 }
 
-export class InMemoryPermissionGrantRegistry implements PermissionGrantRegistry {
-  readonly #grants = new Set<string>()
-
-  add(key: string): void {
-    this.#grants.add(key)
-  }
-
-  has(key: string): boolean {
-    return this.#grants.has(key)
-  }
-
-  removeScope(prefix: string): number {
-    let removed = 0
-    for (const key of this.#grants) {
-      if (!key.startsWith(prefix)) continue
-      this.#grants.delete(key)
-      removed++
-    }
-    return removed
-  }
-}
-
 /**
- * Process-wide stores preserve the existing multi-profile contract: a prompt is
+ * A process-wide store preserves the existing multi-profile contract: a prompt is
  * global to the process, while its persistence target belongs to the request.
  */
 export const sharedPermissionRequests = new InMemoryPermissionRequestRegistry()
-export const sharedPermissionGrants = new InMemoryPermissionGrantRegistry()

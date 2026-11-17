@@ -112,7 +112,7 @@ interface SubAgentDeps {
   complete(request: Record<string, unknown>): Promise<CompletionStep>
   buildToolCtx(sessionId: string): Record<string, unknown>
   approvals: { request(payload: Record<string, unknown>): Promise<{ decision?: 'allow' | 'deny'; reason?: string; remember?: boolean }> }
-  grants: { has(toolName: string): boolean; add(toolName: string, site?: string): unknown }
+  grants: { has(toolName: string, site?: string): boolean; add(toolName: string, site?: string): unknown }
   logger?: { warn?(...args: unknown[]): void }
 }
 
@@ -137,10 +137,11 @@ const ROLES: Record<string, SubAgentProfile> = {
       'app_action_list', 'app_state_read',
       // 域数据面的只读视图：把"用户现在有什么"当成资料的一部分。
       'downloads_list', 'extensions_list', 'permissions_list', 'spaces_list',
-      'apps_list', 'passwords_status', 'named_sessions_list',
-      // 内部页的只读面：cookie / 填充条目摘要 / 主题 / 快捷键 / 自动化 / 游戏 /
-      // profile / 崩溃与证书 / 进程指标 / 插件清单 —— 研究角色可查证，不可改。
-      'cookies_list', 'formfill_list', 'themes_list', 'shortcuts_list',
+      'apps_list', 'named_sessions_list',
+      // 内部页的只读面：主题 / 快捷键 / 自动化 / 游戏 / profile /
+      // 崩溃与证书 / 进程指标 / 插件清单 —— 研究角色可查证，不可改。
+      // Cookie、密码和表单填充元数据只留给明确的操作任务，不进入泛研究上下文。
+      'themes_list', 'shortcuts_list',
       'automation_get', 'games_list', 'profiles_list', 'crash_reports_list',
       'certificates_list', 'tasks_list', 'plugins_list'
     ]

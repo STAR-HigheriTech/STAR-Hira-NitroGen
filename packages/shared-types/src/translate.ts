@@ -15,9 +15,9 @@
 
 /** 上限：一次翻译任务的规模（页面引擎据此截断，绝不会把整站文本一次性推给引擎）。 */
 export const TRANSLATE_LIMITS = Object.freeze({
-  maxTexts: 300,
-  maxTextsPerBatch: 150,
-  maxCharsPerBatch: 5000,
+  maxTexts: 1200,
+  maxTextsPerBatch: 48,
+  maxCharsPerBatch: 1800,
   minTextLength: 2,
   maxTextLength: 12000
 })
@@ -52,6 +52,7 @@ export const LANGUAGES = Object.freeze([
 /** 在线来源选择；`auto` 会先走当前网络更稳定的微软通道，再切换 Google。 */
 export const TRANSLATION_ENGINE_OPTIONS = Object.freeze([
   ['auto', '自动切换'],
+  ['custom', '自定义 API'],
   ['bing', 'Bing 中国直连'],
   ['microsoft', 'Microsoft'],
   ['google', 'Google']
@@ -64,14 +65,20 @@ export const TRANSLATE_SETTING_KEYS = Object.freeze({
   /** 目标语言 id（取值必须来自 `LANGUAGES`）。 */
   targetLanguage: 'languages.target_language',
   /** 在线翻译来源；插件 `translate.provider` 始终优先。 */
-  engine: 'languages.translation_engine'
+  engine: 'languages.translation_engine',
+  customEndpoint: 'languages.translation_custom_endpoint',
+  customApiKey: 'languages.translation_custom_api_key',
+  customModel: 'languages.translation_custom_model'
 })
 
 /** 设置缺省值；目标语言取语言表首项，避免两处各写一个字符串。 */
 export const DEFAULT_TRANSLATE_SETTINGS = Object.freeze({
   [TRANSLATE_SETTING_KEYS.translatePages]: true,
   [TRANSLATE_SETTING_KEYS.targetLanguage]: LANGUAGES[0].id,
-  [TRANSLATE_SETTING_KEYS.engine]: 'auto'
+  [TRANSLATE_SETTING_KEYS.engine]: 'auto',
+  [TRANSLATE_SETTING_KEYS.customEndpoint]: '',
+  [TRANSLATE_SETTING_KEYS.customApiKey]: '',
+  [TRANSLATE_SETTING_KEYS.customModel]: ''
 })
 
 /** 语言 → 主要文字系统（用于"是不是已经是目标语言"的粗判）。 */
@@ -140,7 +147,7 @@ export function shouldSkipText(text: string, targetLang: string, sourceLang?: st
   if (!/[A-Za-z\u00c0-\u024f\u0400-\u052f\u0590-\u05ff\u0600-\u06ff\u0900-\u097f\u0e00-\u0e7f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af]/.test(s)) return true
   const source = normalizeLanguageTag(sourceLang)
   const target = normalizeLanguageTag(targetLang)
-  if (source && source !== 'auto' && source !== target) return false
+  if (source && source !== 'auto') return source === target
   // 拉丁、西里尔、阿拉伯等文字系统都跨多种语言；源语言未知时不能用“同文字”判定同语言。
   // 只有汉字 / 假名 / 谚文这类目标文字系统才值得做低成本短路。
   const targetScript = SCRIPT_OF[String(targetLang || '') as keyof typeof SCRIPT_OF]

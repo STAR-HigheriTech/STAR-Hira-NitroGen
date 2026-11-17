@@ -42,7 +42,7 @@ interface ZoomIndicatorController {
 const STYLE_ID = 'hira-zoom-indicator-styles'
 
 /** 胶囊四周留给投影的留白（宿主按「胶囊尺寸 + 2×本值」上报 view 尺寸）。 */
-export const ZOOM_SHADOW_PAD = 16
+export const ZOOM_SHADOW_PAD = 24
 
 /** 自动收起延迟（毫秒）。连续点击会不断顺延，松手后 ~1.6s 收掉。 */
 export const ZOOM_AUTO_HIDE_MS = 2200
@@ -55,12 +55,12 @@ export function injectZoomStyles(doc: Document): void {
     .hira-zoom {
       position: fixed;
       box-sizing: border-box;
-      display: inline-flex; align-items: center; gap: 3px;
-      padding: 4px;
+      display: inline-flex; align-items: center; gap: 2px;
+      padding: 5px;
       border-radius: var(--hira-theme-radius, 12px);
       background: var(--hira-bg-elevated, #f7f9fc);
       border: 1px solid var(--hira-border-subtle, rgba(0, 0, 0, 0.1));
-      box-shadow: var(--hira-zoom-shadow, 0 8px 24px rgba(0, 0, 0, 0.2));
+      box-shadow: var(--hira-zoom-shadow, 0 4px 14px rgba(0, 0, 0, 0.18));
       color: var(--hira-text-primary, #1a1a1a);
       /* 唯一字体令牌（shared-types/theme.mjs#UI_FONT_STACK）；兜底串同值。 */
       font-family: var(--hira-font-ui, "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", system-ui, -apple-system, sans-serif);
@@ -83,7 +83,9 @@ export function injectZoomStyles(doc: Document): void {
     }
     .hira-zoom__btn {
       display: flex; align-items: center; justify-content: center;
-      width: 36px; height: 36px; flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      flex-shrink: 0;
       border: 0; padding: 0;
       border-radius: var(--hira-radius-control, var(--hira-theme-radius, 8px));
       background: transparent;
@@ -102,14 +104,15 @@ export function injectZoomStyles(doc: Document): void {
     /* 中间那枚百分比同时是「回到 100%」按钮：比两侧窄一点、字号大一点，
        数字用等宽字形 —— 100% → 125% → 150% 切换时宽度不跳。 */
     .hira-zoom__value {
-      min-width: 76px; height: 36px;
-      padding: 0 10px;
+      min-width: 68px;
+      height: 32px;
+      padding: 0 8px;
       border: 0; border-radius: var(--hira-radius-control, var(--hira-theme-radius, 8px));
       background: transparent;
       color: inherit;
       font: inherit;
       font-weight: 600;
-      font-size: 14px;
+      font-size: 13px;
       font-variant-numeric: tabular-nums;
       cursor: pointer;
       transition: background var(--ng-anim-fast, 120ms) var(--ng-anim-ease, ease);
@@ -123,9 +126,9 @@ export function injectZoomStyles(doc: Document): void {
   doc.head.appendChild(style)
   const shadow = doc.createElement('style')
   shadow.textContent = `
-    :root { --hira-zoom-shadow: 0 8px 24px rgba(0, 0, 0, 0.2); }
+    :root { --hira-zoom-shadow: 0 4px 14px rgba(0, 0, 0, 0.18); }
     body.dark, body.dark-mode, html[data-theme='dark'] {
-      --hira-zoom-shadow: 0 10px 30px rgba(0, 0, 0, 0.58);
+      --hira-zoom-shadow: 0 5px 16px rgba(0, 0, 0, 0.46);
     }
   `
   doc.head.appendChild(shadow)
@@ -158,7 +161,7 @@ export function createZoomIndicator(doc: Document, ctx: ZoomIndicatorOptions = {
   btnOut.title = '缩小 (Ctrl+-)'
   btnOut.setAttribute('aria-label', '缩小页面')
   btnOut.tabIndex = -1
-  btnOut.appendChild(Minus(doc, { size: 18 }))
+  btnOut.appendChild(Minus(doc, { size: 16 }))
 
   const value = doc.createElement('button')
   value.type = 'button'
@@ -174,7 +177,7 @@ export function createZoomIndicator(doc: Document, ctx: ZoomIndicatorOptions = {
   btnIn.title = '放大 (Ctrl+=)'
   btnIn.setAttribute('aria-label', '放大页面')
   btnIn.tabIndex = -1
-  btnIn.appendChild(Plus(doc, { size: 18 }))
+  btnIn.appendChild(Plus(doc, { size: 16 }))
 
   root.appendChild(btnOut)
   root.appendChild(value)

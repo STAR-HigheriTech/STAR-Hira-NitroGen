@@ -20,6 +20,7 @@
  */
 
 import type { BrowserWindow, WebContents } from 'electron'
+import { onWebContentsDestroyed } from '@hira-ng/infra-window'
 import { errorMessage } from './types'
 import type { IpcRoutes, IpcSchemas, IpcTypedMain, IpcRawMain } from './types'
 
@@ -145,7 +146,7 @@ export function registerButtonsEditIpc(
     if (!senderId || trackedReportSenders.has(senderId)) return
     trackedReportSenders.add(senderId)
     try {
-      sender.once('destroyed', () => cleanupReportSender(senderId))
+      onWebContentsDestroyed(sender, () => cleanupReportSender(senderId))
     } catch (_) {
       trackedReportSenders.delete(senderId)
     }

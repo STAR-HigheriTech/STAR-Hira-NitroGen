@@ -90,7 +90,7 @@ const FAVICON_RADIUS = 5
  * 观感走内联而不是写进两种模式各自的 CSS：这些数字是**图标槽自己**的口径，
  * 与"横向留多宽 / 纵向留多高"无关；写在这里，横竖两端永远同一份。
  */
-const ICON_SLOT_CSS = `display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:${FAVICON_BOX}px;height:${FAVICON_BOX}px;border-radius:${FAVICON_RADIUS}px;background-color:var(${TAB_FAVICON_BG_VAR},var(--ng-tab-active-fg,var(--hira-accent,#3b82f6)));transition:background-color var(--ng-anim-fast,120ms) var(--ng-anim-ease,ease);`
+const ICON_SLOT_CSS = `display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:${FAVICON_BOX}px;height:${FAVICON_BOX}px;border-radius:${FAVICON_RADIUS}px;background-color:var(${TAB_FAVICON_BG_VAR},#fff);transition:background-color var(--ng-anim-fast,120ms) var(--ng-anim-ease,ease);`
 
 /**
  * favicon 本体：glyph 内容框 + pad 边 = box 的选中态前景色底板。
@@ -115,9 +115,9 @@ const FAVICON_SELF_BADGED_CSS = `width:${FAVICON_BOX}px;height:${FAVICON_BOX}px;
  * 上下留白不对称，同一个字看起来就偏沉一点（用户："有的图标会下沉一点点" —— 「有的」正是
  * 这些没有 favicon、显示首字的行）。行盒 = 格子高，字形的 em 盒才会真正居中。
  */
-const LETTER_CSS = `display:none;align-items:center;justify-content:center;width:${FAVICON_GLYPH}px;height:${FAVICON_GLYPH}px;box-sizing:content-box;padding:${FAVICON_PAD}px;border-radius:${FAVICON_RADIUS}px;background-color:transparent;font-family:${uiFontVar()};font-size:${Math.round(FAVICON_GLYPH * 0.66)}px;font-weight:600;line-height:${FAVICON_GLYPH}px;color:var(${TAB_FAVICON_FG_VAR},var(--hira-bg-elevated,#fff));user-select:none;-webkit-user-select:none;transition:color var(--ng-anim-fast,120ms) var(--ng-anim-ease,ease);`
+const LETTER_CSS = `display:none;align-items:center;justify-content:center;width:${FAVICON_GLYPH}px;height:${FAVICON_GLYPH}px;box-sizing:content-box;padding:${FAVICON_PAD}px;border-radius:${FAVICON_RADIUS}px;background-color:transparent;font-family:${uiFontVar()};font-size:${Math.round(FAVICON_GLYPH * 0.66)}px;font-weight:600;line-height:${FAVICON_GLYPH}px;color:var(${TAB_FAVICON_FG_VAR},#0b0c0e);user-select:none;-webkit-user-select:none;transition:color var(--ng-anim-fast,120ms) var(--ng-anim-ease,ease);`
 /** 无痕标识：与图标槽同尺寸，字号随槽位等比放大（此前写死 14px/16px 会显得空）。 */
-const INCOGNITO_CSS = `font-size:${Math.round(FAVICON_BOX * 0.68)}px;line-height:${FAVICON_GLYPH}px;display:flex;align-items:center;justify-content:center;width:${FAVICON_BOX}px;height:${FAVICON_BOX}px;color:var(${TAB_FAVICON_FG_VAR},var(--hira-bg-elevated,#fff));`
+const INCOGNITO_CSS = `font-size:${Math.round(FAVICON_BOX * 0.68)}px;line-height:${FAVICON_GLYPH}px;display:flex;align-items:center;justify-content:center;width:${FAVICON_BOX}px;height:${FAVICON_BOX}px;color:var(${TAB_FAVICON_FG_VAR},#0b0c0e);`
 
 /**
  * @param {{ classNames?: object }} [opts]

@@ -36,7 +36,7 @@ import type {
 import { IPC_EVENTS } from '@hira-ng/shared-types/src/ipc-channels.mjs'
 // 菜单快捷键提示的唯一真源（动作名 → 键位 id → 当前组合串 → Electron accelerator）。
 import { menuAccelerator } from '@hira-ng/shared-types/src/keybindings.mjs'
-import { navigateWebHistory, showWebContentMenu, type ContextMenuOptions } from '@hira-ng/infra-window'
+import { navigateWebHistory, onWebContentsDestroyed, showWebContentMenu, type ContextMenuOptions } from '@hira-ng/infra-window'
 import { createFindBarController } from '../find-bar'
 import { createZoomController, type ZoomPayload } from '../zoom-controller'
 import { createKeybindingsManager } from '../keybindings'
@@ -389,7 +389,7 @@ export function createPwaAppFeatures(input: PwaAppFeaturesInput) {
     }
 
     keybindings.attach(wc)
-    on('destroyed', release)
+    onWebContentsDestroyed(wc, release)
     on('before-input-event', handleEscape)
 
     if (page) {

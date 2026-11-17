@@ -5,6 +5,8 @@
  * 安装时把方法绑定回宿主，保持既有公开调用面不变。
  */
 
+import { onWebContentsDestroyed } from './webContentsLifecycle'
+
 const PANEL_REVEAL_FALLBACK_MS = 1200
 const PANEL_PREPARE_TTL_MS = 3000
 
@@ -258,7 +260,7 @@ class PanelLayoutController {
     if (panelWc && typeof panelWc.on === 'function') {
       try {
         panelWc.on('focus', () => { this.host._rememberContentFocus(panelWc, 'panel', id) })
-        if (typeof panelWc.once === 'function') panelWc.once('destroyed', () => { this.host.forgetContentFocus(panelWc) })
+        onWebContentsDestroyed(panelWc, () => { this.host.forgetContentFocus(panelWc) })
       } catch (_) {}
     }
     return normalized

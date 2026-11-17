@@ -151,7 +151,8 @@ let lastDisplaySignature: string | null = null
  * 时间兜底 —— 卡片从「上次显示」起最多存活这么久，到点不问原因自收。
  *
  * 为什么必须有它（而不是"把丢掉的信号都补齐"）：预览的收起信号**全部**来自外部
- * —— 宿主列表的 mouseout / mouseover(项以外) / mousedown / 锚点消失（见 ui-common#hoverPreview 六条规则），
+ * —— 宿主列表的 mouseout / mouseover(项以外) / mousedown / 锚点消失 / 菜单与拖拽暂停
+ * （见 ui-common#hoverPreview 七条规则），
  * 以及主进程的切标签 / 关标签 / 窗口失焦 / 面板被关。这些信号任何一条都可能丢：
  * 标签节点被 remove 时不派发 mouseout；光标停在标签上不动时、别处发生的布局变化
  * 也不会产生任何指针事件；视图被闲置回收重建后订阅晚于推送（那一次推送必然丢）。

@@ -178,6 +178,7 @@ describe('domain-permission · 站点视图与批量清理', () => {
       expect(service.PERMISSION_TYPES).toContain('clipboard-read')
       // 必须使用 Electron 实际传入的权限名（对齐旧 Hira permissionManager 的处理清单）
       expect(service.PERMISSION_TYPES).toContain('notifications')
+      expect(service.PERMISSION_TYPES).toContain('push')
       expect(service.PERMISSION_TYPES).toContain('media')
       expect(service.PERMISSION_TYPES).toContain('geolocation')
       expect(service.PERMISSION_TYPES).toContain('display-capture')
@@ -227,13 +228,20 @@ describe('domain-permission · 在飞行请求', () => {
     }
   })
 
-  it('persist=false 时只回调不落库', () => {
+  it('允许一次只回答当前请求，不落库也不留下可复用授权', () => {
     const { service, close } = makeService()
     try {
-      const id = service.createRequest('https://a.example.com/', 'camera', () => {})
-      service.respondToRequest(id, true, false)
+      const first = vi.fn()
+      const id = service.createRequest('https://a.example.com/', 'camera', first, 'tab1')
+      expect(service.respondToRequest(id, true, false)).toBe(true)
+      expect(first).toHaveBeenCalledWith(true)
 
       expect(service.getPermission('https://a.example.com/', 'camera')).toBe('ask')
+
+      const second = vi.fn()
+      service.createRequest('https://a.example.com/', 'camera', second, 'tab1')
+      expect(second).not.toHaveBeenCalled()
+      expect(service.listPendingRequests().length).toBe(1)
     } finally {
       close()
     }
@@ -303,15 +311,21 @@ describe('domain-permission · 在飞行请求', () => {
     }
   })
 
-  it('去重后允许：为每个等待方的 scope 记会话内授予', () => {
+  it('不同页面各自保留请求，允许一次不会跨页面复用', () => {
     const { service, close } = makeService()
     try {
-      const id = service.createRequest('https://a.example.com/', 'camera', () => {}, 'tab1')
-      service.createRequest('https://a.example.com/', 'camera', () => {}, 'tab2')
+      const first = vi.fn()
+      const second = vi.fn()
+      const firstId = service.createRequest('https://a.example.com/', 'camera', first, 'tab1')
+      const secondId = service.createRequest('https://a.example.com/', 'camera', second, 'tab2')
 
-      service.respondToRequest(id, true, false)
-      expect(service.hasGrant('https://a.example.com/', 'camera', 'tab1')).toBe(true)
-      expect(service.hasGrant('https://a.example.com/', 'camera', 'tab2')).toBe(true)
+      expect(secondId).not.toBe(firstId)
+      expect(service.listPendingRequests().length).toBe(2)
+
+      service.respondToRequest(firstId, true, false)
+      expect(first).toHaveBeenCalledWith(true)
+      expect(second).not.toHaveBeenCalled()
+      expect(service.getPermission('https://a.example.com/', 'camera')).toBe('ask')
     } finally {
       close()
     }

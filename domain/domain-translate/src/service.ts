@@ -4,6 +4,7 @@ import {
   type TranslationBatchResult,
   type TranslationFailure,
   type TranslationMode,
+  type TranslationPostprocessContext,
   type TranslationProvider,
   type TranslationProviderRequest,
   type TranslationRequest,
@@ -47,7 +48,7 @@ function withDeadline<T>(task: Promise<T>, timeoutMs: number): Promise<T> {
 }
 
 function normalizeMode(value: unknown): TranslationMode {
-  return value === 'bing' || value === 'google' || value === 'microsoft' ? value : 'auto'
+  return value === 'custom' || value === 'bing' || value === 'google' || value === 'microsoft' ? value : 'auto'
 }
 
 function normalizeLanguage(value: unknown): string {
@@ -100,6 +101,7 @@ export function createTranslationService(options: TranslationServiceOptions = {}
   const cache = createLruCache<string>({ maxEntries: maxCacheEntries, maxWeight: 8 * 1024 * 1024, weigh: (value) => value.length * 2 })
   const providerMap = new Map<string, RuntimeProvider>()
   const circuits = new Map<string, CircuitState>()
+  let preferredProviderId = ''
 
   function registerProvider(provider: TranslationProvider): () => void {
     if (!provider || !provider.id || typeof provider.translate !== 'function') {
@@ -111,6 +113,7 @@ export function createTranslationService(options: TranslationServiceOptions = {}
 
   function providerAllowed(provider: TranslationProvider, mode: TranslationMode): boolean {
     if (provider.kind === 'plugin') return true
+    if (mode === 'custom') return provider.id === 'custom-openai'
     if (mode === 'bing') return provider.id === 'bing'
     if (mode === 'microsoft') return provider.id === 'microsoft'
     if (mode === 'google') return provider.id === 'google'
@@ -119,10 +122,19 @@ export function createTranslationService(options: TranslationServiceOptions = {}
   }
 
   function orderedProviders(mode: TranslationMode): TranslationProvider[] {
-    return [...providerMap.values()]
+    const providers = [...providerMap.values()]
       .filter(({ provider }) => providerAllowed(provider, mode))
       .sort((left, right) => left.order - right.order)
       .map(({ provider }) => provider)
+    if (!preferredProviderId) return providers
+    const preferredIndex = providers.findIndex((provider) => (
+      provider.id === preferredProviderId && provider.kind !== 'plugin'
+    ))
+    if (preferredIndex <= 0) return providers
+    const [preferred] = providers.splice(preferredIndex, 1)
+    const firstRemote = providers.findIndex((provider) => provider.kind !== 'plugin')
+    providers.splice(firstRemote < 0 ? providers.length : firstRemote, 0, preferred)
+    return providers
   }
 
   async function warmup(): Promise<void> {
@@ -139,9 +151,11 @@ export function createTranslationService(options: TranslationServiceOptions = {}
 
   function recordProviderSuccess(providerId: string): void {
     circuits.delete(providerId)
+    preferredProviderId = providerId
   }
 
   function recordProviderFailure(providerId: string, message: string): void {
+    if (preferredProviderId === providerId) preferredProviderId = ''
     const state = circuits.get(providerId) || { failures: 0, openUntil: 0, lastError: '' }
     state.failures += 1
     state.lastError = message
@@ -179,6 +193,17 @@ export function createTranslationService(options: TranslationServiceOptions = {}
       throw new Error('提供者返回的译文数量不一致')
     }
     return output.map((value) => typeof value === 'string' ? value : String(value ?? ''))
+  }
+
+  async function postprocess(context: TranslationPostprocessContext): Promise<string[]> {
+    if (typeof options.postprocess !== 'function') return [...context.texts]
+    try {
+      const output = await options.postprocess(context)
+      if (!Array.isArray(output) || output.length !== context.texts.length) return [...context.texts]
+      return output.map((value) => typeof value === 'string' ? value : String(value ?? ''))
+    } catch (_) {
+      return [...context.texts]
+    }
   }
 
   async function translate(request: TranslationRequest): Promise<TranslationBatchResult> {
@@ -263,7 +288,8 @@ export function createTranslationService(options: TranslationServiceOptions = {}
       const providerRequest: TranslationProviderRequest = {
         texts: flattenedParts,
         from,
-        to
+        to,
+        url: request.url
       }
       try {
         if (typeof provider.supports === 'function' && !(await provider.supports(providerRequest))) {
@@ -271,12 +297,25 @@ export function createTranslationService(options: TranslationServiceOptions = {}
         }
         const translated = validateOutput(await callProvider(provider, providerRequest, deadlineAt), flattenedParts.length)
         let translatedOffset = 0
+        const translatedSources: string[] = []
         for (const sourceText of sourceTexts) {
           const parts = sourceParts.get(sourceText) || [{ text: sourceText, joinAfter: '' }]
           const text = parts.map((part) => {
             const next = translated[translatedOffset++] || part.text
             return `${next}${part.joinAfter}`
           }).join('').trimEnd()
+          translatedSources.push(text || sourceText)
+        }
+        const processed = await postprocess({
+          texts: translatedSources,
+          sourceTexts,
+          from,
+          to,
+          url: request.url
+        })
+        for (let index = 0; index < sourceTexts.length; index += 1) {
+          const sourceText = sourceTexts[index]
+          const text = processed[index] || translatedSources[index]
           if (!text) continue
           for (const inputIndex of pendingByText.get(sourceText) || []) output[inputIndex] = text
           cache.set(`${from}\u0000${to}\u0000${sourceText}`, text)
@@ -332,6 +371,7 @@ export function createTranslationService(options: TranslationServiceOptions = {}
     warmup,
     translate,
     translateTexts,
+    clearCache: (): void => cache.clear(),
     listProviders: (): Array<{ id: string; label: string; kind: string; order: number }> => (
       [...providerMap.values()]
         .sort((left, right) => left.order - right.order)

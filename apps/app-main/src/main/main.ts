@@ -366,6 +366,9 @@ let pluginRegistry: PluginRegistryPort | null = null
 // ── 启动分层（对齐 RT `src/main/app/*`）：生命周期 / 单实例 / URL 入口 ──
 // 把「app 级原始事件接线」从 main.js 里抽走，让 main.js 只做装配与编排。
 const { createPreboot } = require('./app/preboot')
+const { issueSafeBrowsingWarning } = require('./safe-browsing') as {
+  issueSafeBrowsingWarning(url: unknown): string
+}
 // 用户数据目录的唯一真源（%APPDATA%\STAR_HigheriTech\STAR Hira NitroGen）：必须先于 preboot，
 // 因为 preboot 在 ready 之前就会直读 userData 下的设置文件。
 const { applyAppDataPaths } = require('./app/data-paths')
@@ -564,6 +567,17 @@ const { defaultUserAgent, listenerRegistry, broadcaster, httpAuthManager } = pre
 // 模块级创建：IPC 必须能在最早时机就按发送方解析窗口。primary 在窗口运行单元
 // 建好后回填（见下方 setPrimary）；解析不到窗口时一律回退 primary。
 const runtimeRegistry = createWindowRuntimeRegistry()
+preboot.setCertificateScopeResolver((webContents: Electron.WebContents) => {
+  let profileId = 'default'
+  let spaceId = ''
+  try {
+    const runtime = runtimeRegistry.matchBySender(webContents)
+    const current = runtime?.spaceRuntime?.getCurrent?.()
+    if (current?.profileId) profileId = String(current.profileId)
+    if (current?.spaceId) spaceId = String(current.spaceId)
+  } catch {}
+  return `${profileId}\n${spaceId}`
+})
 
 /**
  * 文件拖入窗口（应用级单例）。
@@ -1104,6 +1118,13 @@ app.whenReady().then(async () => {
     // 延迟解析 `siteGuard`（权限服务就绪后才建）；未就绪时放行 = 与改造前一致。
     guardWindowOpen: (payload: UnknownRecord) => (siteGuard ? siteGuard.evaluatePopup(payload) : true),
     guardDownload: (payload: UnknownRecord) => (siteGuard ? siteGuard.evaluateDownload(payload) : true),
+    getSafeBrowsingWarning: (url: string) => {
+      try {
+        return issueSafeBrowsingWarning(url)
+      } catch {
+        return ''
+      }
+    },
     // 新窗口空间归属 + 首个标签地址（均延迟解析：依赖下方构造的服务）
     getWindowSpace: () => null,
     // 「关闭最后一个标签」替换地址 / 新窗口首个标签：都要**实际**会落到的地址，
@@ -4111,7 +4132,15 @@ app.whenReady().then(async () => {
       openCookies: () => { targetTabs().navigate({ url: pageUrl('cookies') }) },
       openClearData: () => { targetTabs().navigate({ url: pageUrl('clear-data') }) },
       openImportData: () => { targetTabs().navigate({ url: pageUrl('import-data') }) },
-      openCertificates: () => { targetTabs().navigate({ url: pageUrl('certificates') }) },
+      // 与页面信息同一条来源语义：新标签读取点菜单时正在看的站点，不覆盖它。
+      openCertificates: () => {
+        const tabs = targetTabs()
+        const sourceTabId = tabs.getActiveTabId ? tabs.getActiveTabId() : null
+        const url = sourceTabId
+          ? pageUrl('certificates', { tabId: sourceTabId })
+          : pageUrl('certificates')
+        tabs.newTab({ url })
+      },
       // 页面信息看的是「点菜单时那一页」：来源 tabId 必须在开新标签**之前**取。
       // 沿用当前标签会把那一页替换掉，之后 page-info 只能查到它自己。
       openPageInfo: () => {
@@ -5104,6 +5133,8 @@ app.whenReady().then(async () => {
       }
       // 主题目录随插件启停同步（禁用主题插件 = 其主题立刻从目录消失）
       refreshThemeSources()
+      // 译文缓存可能带有刚被禁用插件的后处理结果，下一次翻译必须重新走管线。
+      try { translateService.clearCache() } catch (_) {}
       // 贡献面（面板 / 内部页 / bang / 菜单）同样随启停同步 —— 与主题走同一时机。
       refreshPluginSurfaces()
       // 应用菜单的入口门禁（§10.4）：引擎被关掉 → 依赖它的菜单项必须立刻消失。
@@ -5117,6 +5148,8 @@ app.whenReady().then(async () => {
     onPluginsActivated: () => {
       runPluginMigrations()
       l10nService.reload()
+      // 新启用的翻译插件可能带新语言检测、DOM 规则或术语表，旧译文不可继续复用。
+      try { translateService.clearCache() } catch (_) {}
       refreshThemeSources()
       // 新启用的插件带来的内部页 / bang / 菜单必须立刻可见（不等下次重启）。
       refreshPluginSurfaces()

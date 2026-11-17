@@ -2,6 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>证书</title>
     <link rel="stylesheet" href="hira://shared/base.css" />
     <link rel="stylesheet" href="./certificates.css" />
@@ -13,11 +14,35 @@
       </div>
       <div class="toolbar">
         <span class="status" id="status">读取中…</span>
-        <button class="btn" id="refresh">刷新</button>
+        <button class="btn" id="refresh" type="button">刷新</button>
       </div>
     </header>
-    <div class="notice" id="notice"></div>
-    <div class="list" id="list"></div>
+
+    <main class="certificate-page">
+      <div class="notice" id="notice" hidden></div>
+
+      <section class="section" id="source-section" hidden>
+        <div class="section-title">来源站点</div>
+        <div id="source-content"></div>
+      </section>
+
+      <section class="section" id="observed-section">
+        <div class="section-title">
+          本会话已读取
+          <span class="count" id="observed-count"></span>
+        </div>
+        <div class="certificate-list" id="observed-list"></div>
+      </section>
+
+      <section class="section" id="error-section">
+        <div class="section-title">
+          证书校验失败
+          <span class="count" id="error-count"></span>
+        </div>
+        <div class="certificate-list" id="error-list"></div>
+      </section>
+    </main>
+
     <script type="module" src="./certificates.js"></script>
   </body>
 </html>

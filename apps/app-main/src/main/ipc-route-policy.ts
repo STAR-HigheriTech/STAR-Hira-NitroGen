@@ -49,6 +49,7 @@ const WEB_PRELOAD_INVOKE_ROUTES = routeSet([
   PRELOAD_ROUTES.filesDrop,
   PRELOAD_ROUTES.pageTextCaptured,
   PRELOAD_ROUTES.translateText,
+  PRELOAD_ROUTES.translatePageContext,
   PRELOAD_ROUTES.translateTarget,
   PRELOAD_ROUTES.automationGesture,
   PRELOAD_ROUTES.automationGestureMap,

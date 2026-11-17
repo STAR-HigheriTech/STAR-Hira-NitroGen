@@ -88,8 +88,8 @@ function localRuntimeFile(userDataPath: string): string {
 
 function writeJson(file: string, value: unknown): void {
   fs.mkdirSync(path.dirname(file), { recursive: true })
-  const temp = `${file}.${process.pid}.tmp`
-  fs.writeFileSync(temp, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 })
+  const temp = `${file}.${process.pid}.${crypto.randomBytes(8).toString('hex')}.tmp`
+  fs.writeFileSync(temp, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600, flag: 'wx' })
   try {
     fs.chmodSync(temp, 0o600)
   } catch (_) {}

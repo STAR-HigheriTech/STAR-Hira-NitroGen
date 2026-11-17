@@ -39,6 +39,8 @@ export const blockingSection: import('./registry.js').SiteInfoSection = {
     toggle.addEventListener('mousedown', (event) => {
       event.preventDefault()
       event.stopPropagation()
+    })
+    toggle.addEventListener('click', () => {
       if (toggle.disabled) return
       emit('adblocker-toggle', { enabled: !currentEnabled })
     })

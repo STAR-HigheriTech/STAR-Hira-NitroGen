@@ -355,13 +355,26 @@ export function createAiStore({ doc, ai, host = 'panel', onIntentComplete }: {
   // ── 会话 ────────────────────────────────────────────────────────────
   function syncSession(): void {
     if (!state.sessionId) { state.session = null; return }
-    state.session = state.sessions.find((s) => s.id === state.sessionId) || state.session
+    state.session = state.sessions.find((s) => s.id === state.sessionId) ||
+      (state.session && state.session.id === state.sessionId ? state.session : null)
   }
 
+  let sessionsRefreshSerial = 0
+  const forgottenSessionIds = new Set<string>()
   async function refreshSessions(): Promise<void> {
+    const serial = ++sessionsRefreshSerial
     try {
       const res = await ai.sessions.list({ limit: 50 })
-      state.sessions = res.sessions ?? []
+      if (serial !== sessionsRefreshSerial) return
+      const list = (Array.isArray(res.sessions) ? res.sessions.slice() : [])
+        .filter((session) => !forgottenSessionIds.has(String(session.id || '')))
+      const currentId = state.sessionId
+      if (currentId && !forgottenSessionIds.has(currentId) && !list.some((session) => session.id === currentId)) {
+        const current = state.session && state.session.id === currentId ? state.session : null
+        if (current) list.push(current)
+      }
+      list.sort((a, b) => (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0) || String(b.id).localeCompare(String(a.id)))
+      state.sessions = list
       syncSession()
     } catch (_) { /* 引擎不可用时保持旧列表 */ }
   }
@@ -371,40 +384,73 @@ export function createAiStore({ doc, ai, host = 'panel', onIntentComplete }: {
    * 供「别处已经切了，我跟随」与「引擎广播 created/deleted」使用 ——
    * 那两种场景真源已经改过，再上报就是回声。
    */
-  async function switchSessionLocal(sessionId: string | null): Promise<void> {
+  let sessionSwitchSerial = 0
+
+  async function applySessionSwitch(sessionId: string | null, serial: number): Promise<boolean> {
     const id = sessionId ? String(sessionId) : null
-    if (id === state.sessionId && state.messages.length) return
+    if (id === state.sessionId && (state.messages.length || !id)) return true
+    const changed = id !== state.sessionId
     state.sessionId = id
     syncSession()
     state.messages = []
     state.lastSeq = 0
     state.streaming = null
-    state.approvals = state.approvals.filter((a) => a.sessionId === id)
     state.error = null
     state.pendingUser = null
+    // 引用项属于具体上下文。换对话时继续携带会把上一段对话的页面/文件悄悄串进来。
+    if (changed) state.chips = []
     ensureModelChoice()
     notify()
-    if (!id) return
+    if (!id) return serial === sessionSwitchSerial
     try {
-      const res = await ai.messages(id, { limit: HISTORY_LIMIT })
-      if (state.sessionId !== id) return
-      state.messages = res.messages ?? []
-      state.lastSeq = Number(res && res.lastSeq) || 0
+      const snap = await ai.state({ host: HOST, sessionId: id, consumePending: false, select: false })
+      if (serial !== sessionSwitchSerial || state.sessionId !== id) return false
+      const resolvedId = snap.sessionId ? String(snap.sessionId) : null
+      if (resolvedId !== id || !snap.session) {
+        // 目标会话刚好被删除 / 被其它窗口清理：采用主进程给出的安全回退，
+        // 绝不把旧会话正文挂在新的 sessionId 下。
+        state.sessionId = resolvedId
+        state.sessions = snap.sessions ?? state.sessions
+        state.session = snap.session ?? null
+        state.messages = snap.messages ?? []
+        state.lastSeq = Number(snap && snap.lastSeq) || 0
+        state.running = new Map((snap.running ?? []).map((run) => [run.sessionId, run.turnId]))
+        state.approvals = Array.isArray(snap.approvals) ? snap.approvals : state.approvals
+        syncSession()
+        notify()
+        return false
+      }
+      state.sessions = snap.sessions ?? state.sessions
+      state.session = snap.session ?? null
+      state.messages = snap.messages ?? []
+      state.lastSeq = Number(snap && snap.lastSeq) || 0
+      state.running = new Map((snap.running ?? []).map((run) => [run.sessionId, run.turnId]))
+      state.approvals = Array.isArray(snap.approvals) ? snap.approvals : state.approvals
+      alignShared(snap.uiState)
       // 切进来时回合还在跑：先立一个占位，等 `turn-end` 补齐（否则界面像死了）
-      if (res && res.running && !state.streaming) {
-        state.streaming = { turnId: null, parts: [], orphan: true, done: false }
+      if (state.running.has(id) && !state.streaming) {
+        state.streaming = { turnId: state.running.get(id) ?? null, parts: [], orphan: true, done: false }
       }
       syncSession()
     } catch (e) {
-      if (state.sessionId === id) state.error = errorPayload(e)
+      if (serial === sessionSwitchSerial && state.sessionId === id) state.error = errorPayload(e)
     }
-    notify()
+    if (serial === sessionSwitchSerial) notify()
+    return serial === sessionSwitchSerial && state.sessionId === id
+  }
+
+  async function switchSessionLocal(sessionId: string | null): Promise<boolean> {
+    return applySessionSwitch(sessionId, ++sessionSwitchSerial)
   }
 
   /** 用户主动切会话：本地切完把选择写进**本宿主**那一格（其它宿主不受影响）。 */
   async function switchSession(sessionId: string | null): Promise<void> {
-    await switchSessionLocal(sessionId)
-    pushShared({ host: HOST, sessionId: state.sessionId })
+    const serial = ++sessionSwitchSerial
+    const applied = await applySessionSwitch(sessionId, serial)
+    // 快速连续切 A→B 时，A 的慢请求不能在上报时把宿主槽位改回 A。
+    if (applied && serial === sessionSwitchSerial) {
+      pushShared({ host: HOST, sessionId: state.sessionId })
+    }
   }
 
   async function ensureSession(): Promise<string | null> {
@@ -475,6 +521,7 @@ export function createAiStore({ doc, ai, host = 'panel', onIntentComplete }: {
     if (!sessionId) return
     try {
       await ai.sessions.remove(sessionId)
+      forgottenSessionIds.add(sessionId)
       state.sessions = state.sessions.filter((s) => s.id !== sessionId)
       if (state.sessionId === sessionId) {
         await switchSession(state.sessions[0] ? state.sessions[0].id : null)
@@ -724,20 +771,13 @@ export function createAiStore({ doc, ai, host = 'panel', onIntentComplete }: {
   }
 
   /**
-   * 「始终允许」= 记住这个工具 + 开启允许模式 + 放行当前这一条。
+   * 「始终允许」= 记住这个工具在当前站点的授权 + 放行当前这一条。
    *
-   * 三件事各自解决一个真实抱怨：
-   *   · `remember: true` → 主进程把工具名落 `ai_approval_grant`（跨会话 / 跨重启都免问）；
-   *   · 允许模式（`ai_ui_state`）→ 后续**所有非破坏性**工具不再弹卡，而不只是这一个；
-   *   · 立刻放行当前条 → 用户点完按钮，屏幕上的卡马上消失。
-   *
-   * 顺序不能反：先裁决这一条（带 remember），再切模式。反过来的话，
-   * 切模式会先触发主进程 `allowPending()` 把这一条按 `remember=false` 放掉，
-   * 紧接着的显式裁决就成了 `unknown-approval`（用户还会看到一条"审批已失效"）。
+   * 它**不会**顺带打开全局允许模式：用户只授权了一个动作，不能因此让后续所有
+   * 非破坏性工具都静默放行。需要全局免问时应由输入栏的独立开关明确开启。
    */
   async function allowAlways(approvalId: string): Promise<void> {
     await resolveApproval(approvalId, 'allow', true)
-    chooseApprovalMode('allow')
   }
 
   // ── 状态变化（引擎广播） ────────────────────────────────────────────
@@ -768,6 +808,8 @@ export function createAiStore({ doc, ai, host = 'panel', onIntentComplete }: {
       // 标题/时间变了，列表顺序也可能变
       refreshSessions().then(notify)
     } else if (reason === 'deleted') {
+      if (changedSessionId) forgottenSessionIds.add(changedSessionId)
+      if (changedSessionId === state.sessionId) state.session = null
       const wasCurrent = changedSessionId === state.sessionId
       await refreshSessions()
       // 引擎删除时已把共享状态指向下一条 —— 本地跟随即可
@@ -1208,7 +1250,17 @@ export function createAiStore({ doc, ai, host = 'panel', onIntentComplete }: {
       await switchSession(intent.sessionId)
     }
 
-    for (const raw of Array.isArray(intent.items) ? intent.items : []) addChip(raw)
+    for (const raw of Array.isArray(intent.items) ? intent.items : []) {
+      const item = raw && typeof raw === 'object' ? raw as Record<string, unknown> : null
+      const payload = item && item.payload && typeof item.payload === 'object'
+        ? item.payload as Record<string, unknown>
+        : null
+      if (item?.kind === 'file' && payload?.path && !payload.text) {
+        await captureInto('file', { path: payload.path, name: payload.name || item.title })
+        continue
+      }
+      addChip(raw)
+    }
 
     if (intent.autoSend === true) {
       await send({ text: intent.prompt || intent.text || DEFAULT_PROMPT })
@@ -1236,19 +1288,23 @@ export function createAiStore({ doc, ai, host = 'panel', onIntentComplete }: {
     const value = snap && typeof snap === 'object' ? snap as AiSnapshot : {}
     state.ready = true
     state.unavailable = null
-    state.sessions = value.sessions ?? []
+    const sessions = (Array.isArray(value.sessions) ? value.sessions.slice() : [])
+      .filter((session) => !forgottenSessionIds.has(String(session.id || '')))
+    const current = value.session && typeof value.session === 'object' ? value.session : null
+    if (current && !sessions.some((session) => session.id === current.id)) sessions.unshift(current)
+    state.sessions = sessions
     state.providers = value.providers ?? []
     state.skills = value.skills ?? []
     state.skillKinds = value.skillKinds ?? []
     state.sessionId = value.sessionId ?? null
-    state.session = value.session ?? null
+    state.session = current
     state.messages = value.messages ?? []
     state.lastSeq = Number(value.lastSeq) || 0
     state.running = new Map(
       (value.running ?? []).map((r) => [r.sessionId, r.turnId])
     )
     state.streaming = null
-    state.approvals = []
+    state.approvals = Array.isArray(value.approvals) ? value.approvals : []
     state.pendingUser = null
     state.error = null
     // 模型 / 推理 / 审批来自共享状态：初始快照就带上，三个宿主天然一致

@@ -30,6 +30,7 @@ interface PendingApproval {
   timer: ReturnType<typeof setTimeout>
   sessionId: unknown
   risk: unknown
+  payload: Record<string, unknown>
 }
 
 function createApprovals({ emit, events, timeoutMs = 120000 }: {
@@ -53,12 +54,13 @@ function createApprovals({ emit, events, timeoutMs = 120000 }: {
   function request(payload: ApprovalPayload = {}): Promise<ApprovalResult> {
     const approvalId = `ap_${crypto.randomBytes(6).toString('hex')}`
     const { sessionId, turnId, toolName, args, risk, site, hint } = payload
+    const requestPayload = {
+      approvalId, sessionId, turnId, toolName, risk, site: site || '', hint: hint || '',
+      argsPreview: preview(args)
+    }
     let delivered = 0
     try {
-      delivered = emit(events.aiApprovalRequest, {
-        approvalId, sessionId, turnId, toolName, risk, site: site || '', hint: hint || '',
-        argsPreview: preview(args)
-      })
+      delivered = emit(events.aiApprovalRequest, requestPayload)
     } catch (_) { delivered = 0 }
     if (!delivered) return Promise.resolve({ decision: 'deny', reason: 'no-ui' })
 
@@ -68,7 +70,7 @@ function createApprovals({ emit, events, timeoutMs = 120000 }: {
         resolve({ decision: 'deny', reason: 'timeout' })
       }, timeoutMs)
       // risk 留着给 `allowPending` 用：切到允许模式时，**只有非破坏性**的待决卡能自动放行。
-      pending.set(approvalId, { resolve, timer, sessionId, risk: risk || '' })
+      pending.set(approvalId, { resolve, timer, sessionId, risk: risk || '', payload: requestPayload })
     })
   }
 
@@ -136,6 +138,14 @@ function createApprovals({ emit, events, timeoutMs = 120000 }: {
     }
   }
 
+  /** 当前待决审批快照：宿主重挂载或切换会话时用来恢复卡片。 */
+  function list(sessionId?: unknown) {
+    const sid = String(sessionId || '')
+    return [...pending.values()]
+      .filter((entry) => !sid || String(entry.sessionId || '') === sid)
+      .map((entry) => ({ ...entry.payload }))
+  }
+
   /** 插件停用 / 应用退出：所有待决审批一律按拒绝收尾（绝不留下悬空 Promise）。 */
   function dispose() {
     for (const [id, entry] of pending) {
@@ -147,7 +157,7 @@ function createApprovals({ emit, events, timeoutMs = 120000 }: {
     // 插件停用 / 重启都不该让用户重新点一遍「始终允许」。
   }
 
-  return { request, resolve, allowPending, cancelSession, dispose }
+  return { request, resolve, allowPending, cancelSession, list, dispose }
 }
 
 module.exports = { createApprovals }

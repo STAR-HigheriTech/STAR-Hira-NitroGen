@@ -170,6 +170,17 @@ export function registerTabsIpc(
     }
   })
 
+  // 落位预览 renderer 已真正应用某一帧。按 previewId 确认当前在途帧；
+  // 未确认的帧由控制器低频重推，解决"bounds 已显示但内容是透明空层"。
+  ipcMainScoped.on(sendCh(routes.tabDragDropShown), (_event, req) => {
+    try {
+      if (!tabDropZone || typeof tabDropZone.acknowledge !== 'function') return
+      tabDropZone.acknowledge(req && req.previewId)
+    } catch (err) {
+      console.warn('[tabs] drag-drop-shown failed:', errorMessage(err))
+    }
+  })
+
   ipcMainScoped.on(sendCh(routes.tabDragDropContent), (_event, req) => {
     try {
       // 先收尾（停表 + 收浮层），拿到**最后一次意图** —— 它就是用户刚才看到的那一块。

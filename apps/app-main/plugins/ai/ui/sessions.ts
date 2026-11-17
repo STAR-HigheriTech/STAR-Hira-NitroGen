@@ -317,6 +317,9 @@ export function createSessions(doc: Document, deps: {
   }
 
   function render(state: AiUiState, force: boolean = false): void {
+    // 改名输入框是本地瞬态。流式更新 / 自动标题 / 排序变化都不应把它重建，
+    // 否则用户正在输入时会突然失焦，甚至把半截标题提交出去。
+    if (!force && renamingId) return
     const sessions = Array.isArray(state.sessions) ? state.sessions : []
     const next = [
       sessions.map((s) => `${s.id}|${s.title || ''}|${s.updatedAt || 0}`).join('~'),

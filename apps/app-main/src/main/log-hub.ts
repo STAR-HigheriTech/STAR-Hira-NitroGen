@@ -23,6 +23,7 @@
  */
 
 import { format } from 'node:util'
+import { onWebContentsDestroyed } from '@hira-ng/infra-window'
 
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error'
 
@@ -449,21 +450,19 @@ export function createLogHub(options: { capacity?: number } = {}) {
     })
 
     let detach = (): void => {}
+    let offDestroyed = (): void => {}
     const onDestroyed = (): void => detach()
     detach = () => {
       for (const [event, fn] of handlers) {
         try { wc.removeListener(event, fn) } catch (_) {}
       }
       handlers.length = 0
-      try { wc.removeListener('destroyed', onDestroyed) } catch (_) {}
+      offDestroyed()
       attached.delete(wc)
       const index = detachers.indexOf(detach)
       if (index >= 0) detachers.splice(index, 1)
     }
-    try {
-      if (typeof wc.once === 'function') wc.once('destroyed', onDestroyed)
-      else wc.on('destroyed', onDestroyed)
-    } catch (_) {}
+    offDestroyed = onWebContentsDestroyed(wc, onDestroyed)
     detachers.push(detach)
     return detach
   }

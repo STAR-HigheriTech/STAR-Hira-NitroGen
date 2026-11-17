@@ -266,7 +266,7 @@ export const SETTINGS_INTERNAL_ENTRIES = Object.freeze([
   },
   {
     host: 'certificates',
-    desc: '检查本机信任的根证书与站点证书链。',
+    desc: '查看本次会话读取过的站点证书链与证书校验失败记录。',
     action: '打开证书查看器'
   },
   {

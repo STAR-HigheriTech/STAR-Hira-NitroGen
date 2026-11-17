@@ -11,7 +11,7 @@
  * 可脱离一切运行时单测。磁盘路径由 spaceUtil.spaceRelPath 产出，APPS 层再 join 到 userData。
  */
 import { spaces } from '@hira-ng/infra-db/schema'
-import { and as drizzleAnd, desc as drizzleDesc, eq as drizzleEq } from 'drizzle-orm'
+import { and as drizzleAnd, eq as drizzleEq } from 'drizzle-orm'
 import { generateId } from '@hira-ng/shared-utils'
 import SpaceUtil from './spaceUtil'
 import type { ReorderEntry, SpaceRecord } from './spaceUtil'
@@ -31,7 +31,6 @@ export interface SpaceRow {
 type Condition = unknown
 type BinaryCondition = (column: unknown, value: unknown) => Condition
 const eq = drizzleEq as unknown as BinaryCondition
-const desc = drizzleDesc as unknown as (column: unknown) => unknown
 const and = drizzleAnd as unknown as (...conditions: Condition[]) => Condition
 
 interface SpaceSelectWhere {
@@ -42,7 +41,7 @@ interface SpaceDatabase {
   select(): {
     from(table: unknown): {
       where(condition: Condition): SpaceSelectWhere
-      orderBy(value: unknown): { all(): SpaceRow[] }
+      all(): SpaceRow[]
     }
   }
   insert(table: unknown): { values(value: Record<string, unknown>): { run(): unknown } }
@@ -142,24 +141,25 @@ function createSpaceService(db: SpaceDatabase, options: SpaceServiceOptions = {}
   function listAll(): SpaceRecord[] {
     const ids = profileIdsForFanout()
     if (!ids) {
-      const rows = db.select().from(spaces).orderBy(desc(spaces.lastUsed)).all()
-      return rows.map(toDomain).filter((space): space is SpaceRecord => space !== null)
+      const rows = db.select().from(spaces).all()
+      return SpaceUtil.sortSpaces(
+        rows.map(toDomain).filter((space): space is SpaceRecord => space !== null)
+      )
     }
     const out: SpaceRecord[] = []
     for (const pid of ids) {
       try {
         const rows = dbFor(pid).select().from(spaces).where(eq(spaces.profileId, pid)).all()
-        for (const row of rows) {
-          const space = toDomain(row)
-          if (space) out.push(space)
-        }
+        out.push(...SpaceUtil.sortSpaces(
+          rows.map(toDomain).filter((space): space is SpaceRecord => space !== null)
+        ))
       } catch (e) {
         const message = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e)
         console.warn('[domain-space] 读取 profile 空间失败（跳过）:', pid, message)
       }
     }
-    // 与原 `orderBy(desc(spaces.lastUsed))` 同口径
-    out.sort((a, b) => (Number(b.lastUsed) || 0) - (Number(a.lastUsed) || 0))
+    // 每个 profile 各自按持久化 order 排列，profile 之间的先后保持 fanout 清单顺序。
+    // lastUsed 不参与这里：切换空间只更新「上次使用」，不得让列表立即重排。
     return out
   }
 

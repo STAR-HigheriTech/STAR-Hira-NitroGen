@@ -14,9 +14,8 @@
  * 现在只有这一处知道"哪些工具免问"，落 `ai_approval_grant`（见 core/db.cjs）。
  * 工具裁决闸（`tool-gate.cjs`）与页面上下文（`turn-runner.cjs`）都查同一份。
  *
- * 键**只有工具名**：站点维度对大量工具（下载控制 / 插件启停 / 清历史）没有意义，
- * 按活动标签页取 origin 只会让同一条授权随窗口切换而失效 —— 用户点「始终允许」
- * 的语义就是"这个工具别再问我了"。`site` 列只留作审计展示，不参与匹配。
+ * 键是**工具 + 站点**。页面写操作、Cookie 与权限变更不能因为用户在 A 站
+ * 点过「始终允许」而在 B 站静默放行；没有页面上下文的工具使用 `local`。
  */
 
 /**
@@ -33,12 +32,22 @@ function createApprovalGrants({ sqlite, logger = console }: {
   sqlite: GrantDatabase
   logger?: Pick<Console, 'warn'>
 }) {
-  /** tool_name → { tool, site, createdAt }（内存缓存；真源在库里）。 */
+  /** `tool_name\\0site` → { tool, site, createdAt }（内存缓存；真源在库里）。 */
   let cache: Map<string, GrantRecord> | null = null
 
   // 与 core/store.cjs 同一条理由：`kernel.sqlite` 是按 profile 路由的 Proxy，
   // 换空间会换底层连接，语句不能缓存。
   const db = () => sqlite
+
+  function siteScope(site: unknown): string {
+    const value = String(site || '').trim()
+    if (!value || value === 'local') return 'local'
+    try { return new URL(value).origin.toLowerCase() } catch (_) { return value.toLowerCase() }
+  }
+
+  function keyOf(tool: string, site: string): string {
+    return `${tool}\0${site}`
+  }
 
   function load() {
     if (cache) return cache
@@ -48,9 +57,10 @@ function createApprovalGrants({ sqlite, logger = console }: {
       for (const row of rows || []) {
         const name = String((row && row.tool_name) || '').trim()
         if (!name) continue
-        cache.set(name, {
+        const site = siteScope(row.site)
+        cache.set(keyOf(name, site), {
           tool: name,
-          site: row.site ? String(row.site) : null,
+          site,
           createdAt: Number(row.created_at) || 0
         })
       }
@@ -60,29 +70,30 @@ function createApprovalGrants({ sqlite, logger = console }: {
     return cache
   }
 
-  /** 这个工具是否被用户点过「始终允许」。 */
-  function has(toolName: unknown): boolean {
+  /** 这个工具在指定站点是否被用户点过「始终允许」。 */
+  function has(toolName: unknown, site?: unknown): boolean {
     const name = String(toolName || '').trim()
     if (!name) return false
-    return load().has(name)
+    return load().has(keyOf(name, siteScope(site)))
   }
 
   /**
    * 记住一条授权（幂等）。
    * @param {string} toolName
-   * @param {string} [site] 仅供审计展示，不参与匹配
+   * @param {string} [site] 授权作用域；缺省为 local
    */
   function add(toolName: string, site?: string) {
     const name = String(toolName || '').trim()
     if (!name) return false
+    const scope = siteScope(site)
     const now = Date.now()
-    const record = { tool: name, site: site ? String(site) : null, createdAt: now }
-    load().set(name, record)
+    const record = { tool: name, site: scope, createdAt: now }
+    load().set(keyOf(name, scope), record)
     try {
       db().prepare(
         `INSERT INTO ai_approval_grant (tool_name, site, created_at) VALUES (?, ?, ?)
-         ON CONFLICT(tool_name) DO UPDATE SET site = excluded.site, created_at = excluded.created_at`
-      ).run(record.tool, record.site, now)
+         ON CONFLICT(tool_name, site) DO UPDATE SET created_at = excluded.created_at`
+      ).run(record.tool, scope, now)
     } catch (e) {
       logger.warn && logger.warn('[ai] 授权记忆落库失败：', e instanceof Error ? e.message : String(e))
     }
@@ -90,11 +101,24 @@ function createApprovalGrants({ sqlite, logger = console }: {
   }
 
   /** 撤销一条授权（用户反悔时用；下次调用会重新询问）。 */
-  function remove(toolName: unknown): boolean {
+  function remove(toolName: unknown, site?: unknown): boolean {
     const name = String(toolName || '').trim()
     if (!name) return false
-    const existed = load().delete(name)
-    try { db().prepare('DELETE FROM ai_approval_grant WHERE tool_name = ?').run(name) } catch (_) {}
+    const explicitSite = site != null && String(site).trim() !== ''
+    if (!explicitSite) {
+      let existed = false
+      const prefix = `${name}\0`
+      for (const key of Array.from(load().keys())) {
+        if (key.startsWith(prefix)) existed = load().delete(key) || existed
+      }
+      try { db().prepare('DELETE FROM ai_approval_grant WHERE tool_name = ?').run(name) } catch (_) {}
+      return existed
+    }
+    const scope = siteScope(site)
+    const existed = load().delete(keyOf(name, scope))
+    try {
+      db().prepare('DELETE FROM ai_approval_grant WHERE tool_name = ? AND site = ?').run(name, scope)
+    } catch (_) {}
     return existed
   }
 
@@ -118,7 +142,7 @@ function createApprovalGrants({ sqlite, logger = console }: {
     cache = null
   }
 
-  return { has, add, remove, clear, list, reset }
+  return { has, add, remove, clear, list, reset, siteScope }
 }
 
 module.exports = { createApprovalGrants }

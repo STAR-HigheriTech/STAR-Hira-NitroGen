@@ -2,12 +2,14 @@ import type {
   BrowserWindow as BrowserWindowType,
   BrowserWindowConstructorOptions,
   Event as ElectronEvent,
+  RenderProcessGoneDetails,
   WebPreferences
 } from 'electron'
 import { buildWebPreferences, type WebPreferenceOptions } from './webPreferences'
 import { WindowRegistry } from './WindowRegistry'
 
 const { BrowserWindow } = require('electron') as { BrowserWindow: typeof import('electron').BrowserWindow }
+const { dialog } = require('electron') as { dialog: typeof import('electron').dialog }
 interface WebContentsManagerInstance { loadUiShell(): Promise<unknown>; loadRail(): Promise<unknown> }
 interface LayoutCoordinatorInstance { attachUiShell(): void; attachRail(): void }
 const { WebContentsManager } = require('./WebContentsManager') as {
@@ -62,6 +64,62 @@ interface MainWindowResult {
   ready: Promise<unknown>
 }
 
+function attachOwnedPageRecovery(win: BrowserWindowType): void {
+  let attempts = 0
+  let lastFailureAt = 0
+  let retryTimer: ReturnType<typeof setTimeout> | null = null
+  const clear = (): void => {
+    if (retryTimer) clearTimeout(retryTimer)
+    retryTimer = null
+  }
+  win.once('closed', clear)
+  let unresponsivePromptOpen = false
+  win.webContents.on('unresponsive', () => {
+    if (unresponsivePromptOpen || win.isDestroyed()) return
+    unresponsivePromptOpen = true
+    void dialog.showMessageBox(win, {
+      type: 'warning',
+      title: '界面无响应',
+      message: '浏览器界面暂时无响应',
+      detail: '可以继续等待，或重新加载界面。正在浏览的网页不会因此关闭。',
+      buttons: ['继续等待', '重新加载界面'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true
+    }).then((result) => {
+      unresponsivePromptOpen = false
+      if (result.response === 1 && !win.isDestroyed() && !win.webContents.isDestroyed()) {
+        try { win.webContents.reload() } catch (_) {}
+      }
+    }).catch(() => {
+      unresponsivePromptOpen = false
+    })
+  })
+  win.webContents.on('responsive', () => {
+    unresponsivePromptOpen = false
+  })
+  win.webContents.on('render-process-gone', (_event: ElectronEvent, details: RenderProcessGoneDetails) => {
+    if (win.isDestroyed() || details.reason === 'clean-exit') return
+    const now = Date.now()
+    if (now - lastFailureAt > 60_000) attempts = 0
+    lastFailureAt = now
+    if (attempts >= 3) {
+      console.error('[window] own renderer crashed repeatedly; automatic recovery stopped')
+      return
+    }
+    attempts += 1
+    clear()
+    retryTimer = setTimeout(() => {
+      retryTimer = null
+      if (win.isDestroyed() || win.webContents.isDestroyed()) return
+      console.warn(`[window] own renderer crashed (${details.reason}); reloading ${attempts}/3`)
+      try { win.webContents.reload() } catch (error) {
+        console.error('[window] own renderer recovery failed:', error instanceof Error ? error.message : String(error))
+      }
+    }, 250 * attempts)
+  })
+}
+
 export function setDefaultWindowIcon(iconPath: string | null | undefined): void {
   defaultWindowIcon = iconPath || null
 }
@@ -91,6 +149,7 @@ export function createMainWindow(options: MainWindowOptions = {}): MainWindowRes
     backgroundColor: options.backgroundColor ?? '#f9fafb',
     webPreferences: buildWebPreferences()
   })
+  attachOwnedPageRecovery(win)
 
   // 恢复「上次是最大化」的窗口：必须在 show 之前 maximize，
   // 否则用户会先看到一个小窗口再跳成最大化（闪一下）。
@@ -201,6 +260,7 @@ export function createSubWindow(options: SubWindowOptions = {}): { win: BrowserW
     useContentSize: true,
     webPreferences: buildWebPreferences(options.webPreferences || {})
   })
+  attachOwnedPageRecovery(win)
 
   const registry = options.windowRegistry || null
   if (registry instanceof WindowRegistry) registry.register(win, options.windowType || 'window')
