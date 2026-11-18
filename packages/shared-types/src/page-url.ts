@@ -11,6 +11,20 @@
  */
 
 /**
+ * 与 RT 重名或同义的页面使用 RT 的公开名称；旧名称继续作为兼容别名。
+ * 物理入口文件仍由页面协议层决定，不要求 URL host 等于目录名。
+ */
+export const PAGE_ROUTE_ALIASES: Readonly<Record<string, string>> = Object.freeze({
+  newtab: 'new-tab',
+  pdf: 'pdf-viewer'
+})
+
+export function canonicalPageHost(host: unknown): string {
+  const key = String(host == null ? '' : host).trim().toLowerCase()
+  return PAGE_ROUTE_ALIASES[key] || key
+}
+
+/**
  * `query` 支持两种形态：
  *   · 字符串 —— 原样拼（带不带 `?` 都行），用于 `'tab=update'` 这类深链；
  *   · 对象   —— 走 URLSearchParams（自动编码），空值自动丢弃。
@@ -20,7 +34,7 @@
  * @returns {string}
  */
 export function pageUrl(host: unknown, query?: string | Record<string, unknown>): string {
-  const key = String(host == null ? '' : host).trim().toLowerCase()
+  const key = canonicalPageHost(host)
   const base = key ? `hira://${key}` : 'hira://'
   if (query == null || query === '') return base
   if (typeof query === 'string') {

@@ -2,6 +2,7 @@ import { IPC_EVENTS, IPC_ROUTES } from '@hira-ng/shared-types/src/ipc-channels.m
 import { DEFAULT_SEARCH_SETTINGS } from '@hira-ng/shared-types/src/search-settings.mjs'
 import { DEFAULT_SEARCH_ENGINE, DEFAULT_SEARCH_TEMPLATE } from '@hira-ng/shared-types/src/search-engines.mjs'
 import { LAYOUT_SETTING_KEYS } from '@hira-ng/shared-types/src/layout.mjs'
+import { canonicalPageHost, pageUrl } from '@hira-ng/shared-types/src/page-url.mjs'
 import type { JsonRecord, RendererBridge } from '../shared/bridge.js'
 
 const STORAGE_KEY = 'hira:ng:browser-preview:v1'
@@ -87,16 +88,17 @@ function saveState(state: PreviewState): void {
 }
 
 function titleForUrl(url: string): string {
-  if (!url || url === 'about:blank' || url === 'hira://newtab') return '新标签页'
+  if (!url || url === 'about:blank') return '新标签页'
   try {
     const parsed = new URL(url)
+    if (parsed.protocol === 'hira:' && canonicalPageHost(parsed.hostname) === 'new-tab') return '新标签页'
     return parsed.hostname || parsed.protocol.replace(':', '') || url
   } catch {
     return url
   }
 }
 
-function createPreviewTab(tabId: string, url = 'hira://newtab'): PreviewTab {
+function createPreviewTab(tabId: string, url = pageUrl('newtab')): PreviewTab {
   return {
     type: 'tab',
     tabId,
@@ -274,7 +276,7 @@ function createBridge(): RendererBridge {
         } as T
 
       case IPC_ROUTES.tabNew: {
-        const tab = createPreviewTab(`preview-tab-${nextTabId++}`, String(request.url || 'hira://newtab'))
+        const tab = createPreviewTab(`preview-tab-${nextTabId++}`, String(request.url || pageUrl('newtab')))
         tabs = [...tabs.map((item) => ({ ...item, active: false })), tab]
         emitTabs()
         return { tabId: tab.tabId } as T
@@ -294,7 +296,7 @@ function createBridge(): RendererBridge {
       }
 
       case IPC_ROUTES.navGo:
-        setActiveUrl(String(request.url || 'hira://newtab'))
+        setActiveUrl(String(request.url || pageUrl('newtab')))
         return { ok: true } as T
 
       case IPC_ROUTES.bookmarkPinnedList:
@@ -332,7 +334,7 @@ function createBridge(): RendererBridge {
         } as T
 
       case IPC_ROUTES.homeUrl:
-        return { url: 'hira://newtab', newTabUrl: 'hira://newtab' } as T
+        return { url: pageUrl('newtab'), newTabUrl: pageUrl('newtab') } as T
 
       case IPC_ROUTES.windowGetState:
         return { isMaximized: false, isFullscreen: false } as T

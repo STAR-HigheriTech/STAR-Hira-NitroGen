@@ -24,6 +24,7 @@ interface CredentialCaptureScanner {
   getBestPasswordField(): HTMLInputElement | null
 }
 interface CredentialCaptureHandlers { onCaptured?(username: string, password: string): void }
+interface CredentialCaptureOptions { isEnabled?(): boolean }
 
 const LOGIN_LABEL_PATTERN = /\b(log[\s-]?in|sign[\s-]?in|submit|continue|next|enter)\b|登录|登陆|提交|确定|下一步|继续/i
 const AUXILIARY_LABEL_PATTERN = /\b(show|hide|reveal|toggle|visibility|eye|cancel|forgot|reset|register|sign[\s-]?up|create account)\b|显示密码|隐藏密码|密码可见|眼睛|忘记|取消|注册|创建账号/i
@@ -50,12 +51,17 @@ function elementLabel(el: HTMLElement): string {
   ].join(' ').trim()
 }
 
-function createCredentialCapture(scanner: CredentialCaptureScanner, handlers?: CredentialCaptureHandlers) {
+function createCredentialCapture(
+  scanner: CredentialCaptureScanner,
+  handlers?: CredentialCaptureHandlers,
+  options: CredentialCaptureOptions = {}
+) {
   let lastTypedCredentials = { hostname: '', username: '', password: '', time: 0 }
   let lastCapturedCredential = { hostname: '', username: '', password: '', time: 0 }
   let lastTrustedInputAt = 0
   let isFormSubmitOverridden = false
   const submitBridgeToken = `submit-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
+  const isEnabled = () => !options.isEnabled || options.isEnabled() !== false
 
   function trackInput(e: Event): void {
     if (e.isTrusted === false) return
@@ -63,6 +69,7 @@ function createCredentialCapture(scanner: CredentialCaptureScanner, handlers?: C
     if (!t) return
 
     if (scanner.isUsernameLikeField(t) || scanner.isPasswordLikeField(t)) {
+      installFormSubmitOverride()
       lastTrustedInputAt = Date.now()
       scanner.startObserver(9000)
       scanner.scheduleRefresh()
@@ -99,6 +106,7 @@ function createCredentialCapture(scanner: CredentialCaptureScanner, handlers?: C
   }
 
   function sendCapturedCredentials(): void {
+    if (!isEnabled()) return
     const now = Date.now()
     const recentUserActivity = Math.max(lastTrustedInputAt, lastTypedCredentials.time)
     // Scripts cannot forge trusted input/events. Without a recent real interaction,
@@ -226,9 +234,11 @@ function createCredentialCapture(scanner: CredentialCaptureScanner, handlers?: C
    * 对齐 Hira：隔离世界（contextIsolation）里修改 HTMLFormElement.prototype
    * 不影响页面主世界，因此用 webFrame.executeJavaScript 在主世界打补丁，
    * 通过 postMessage 把事件送回隔离世界。
+   * 补丁必须收在 IIFE 内：否则 `origSubmit` 会泄漏成页面全局 `var`，与站点
+   * 后续脚本的同名 `const/let` 冲突时会让整份脚本编译失败。
    */
   function installFormSubmitOverride() {
-    if (isFormSubmitOverridden) return
+    if (!isEnabled() || isFormSubmitOverridden) return
     isFormSubmitOverridden = true
 
     let webFrame = null
@@ -241,14 +251,20 @@ function createCredentialCapture(scanner: CredentialCaptureScanner, handlers?: C
     if (webFrame && typeof webFrame.executeJavaScript === 'function') {
       try {
         webFrame.executeJavaScript(`
-          if (!window.__ngPasswordSubmitPatched) {
+          (function () {
+            if (window.__ngPasswordSubmitPatched) return
             window.__ngPasswordSubmitPatched = true
             var origSubmit = HTMLFormElement.prototype.submit
+            var notify = function () {
+              try {
+                window.postMessage({ message: 'ngFormSubmit', token: ${JSON.stringify(submitBridgeToken)} })
+              } catch (_) {}
+            }
             HTMLFormElement.prototype.submit = function () {
-              window.postMessage({ message: 'ngFormSubmit', token: ${JSON.stringify(submitBridgeToken)} })
+              notify()
               return origSubmit.apply(this, arguments)
             }
-          }
+          })()
         `).catch(function () {})
       } catch (_) {}
     }
@@ -268,6 +284,7 @@ function createCredentialCapture(scanner: CredentialCaptureScanner, handlers?: C
 
     window.addEventListener('click', function (e: MouseEvent) {
       if (e.isTrusted === false) return
+      installFormSubmitOverride()
       const legacyPath = (e as MouseEvent & { path?: EventTarget[] }).path
       const path = legacyPath || (e.composed ? e.composedPath() : null)
       if (!path) return
@@ -288,6 +305,7 @@ function createCredentialCapture(scanner: CredentialCaptureScanner, handlers?: C
     window.addEventListener('keydown', function (e: KeyboardEvent) {
       if (!e) return
       if (e.isTrusted === false) return
+      installFormSubmitOverride()
       const isEnter = e.key === 'Enter' || e.keyCode === 13
       if (!isEnter) return
 
@@ -329,7 +347,8 @@ function createCredentialCapture(scanner: CredentialCaptureScanner, handlers?: C
   return {
     bind,
     onRouteChange,
-    captureNow: sendCapturedCredentials
+    captureNow: sendCapturedCredentials,
+    syncSubmitOverride: installFormSubmitOverride
   }
 }
 

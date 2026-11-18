@@ -50,7 +50,7 @@ function fetchCertificateTableViaTls(origin: string): Promise<TlsProbeResult> {
     }
 
     try {
-      socket = tls.connect({
+      const client = tls.connect({
         host,
         port,
         servername: net.isIP(host) ? undefined : host,
@@ -61,7 +61,7 @@ function fetchCertificateTableViaTls(origin: string): Promise<TlsProbeResult> {
           const tableNames: string[] = []
           const seen = new Set<string>()
           let current: import('node:tls').DetailedPeerCertificate | undefined =
-            socket?.getPeerCertificate(true)
+            client.getPeerCertificate(true)
           while (current && current.raw && current.raw.length) {
             const encoded = current.raw.toString('base64')
             if (!encoded || seen.has(encoded)) break
@@ -80,8 +80,9 @@ function fetchCertificateTableViaTls(origin: string): Promise<TlsProbeResult> {
           finish({ tableNames: [], error: errorCode(error) })
         }
       })
-      socket.setTimeout(TIMEOUT_MS, () => finish({ tableNames: [], error: 'tls-timeout' }))
-      socket.once('error', (error) => finish({ tableNames: [], error: errorCode(error) }))
+      socket = client
+      client.setTimeout(TIMEOUT_MS, () => finish({ tableNames: [], error: 'tls-timeout' }))
+      client.once('error', (error) => finish({ tableNames: [], error: errorCode(error) }))
     } catch (error) {
       finish({ tableNames: [], error: errorCode(error) })
     }

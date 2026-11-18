@@ -33,7 +33,7 @@
 import { settingsGroupLabel } from './settings-groups.js'
 // 地址拼法本身是零依赖原语（`page-url.mjs`），这里只是转出去 —— 历史上把拼法
 // 和身份表写在一起，导致被 pages.mjs 依赖的 settings-groups 反过来只能手抄地址。
-import { pageUrl } from './page-url.js'
+import { canonicalPageHost, pageUrl } from './page-url.js'
 
 export { pageUrl }
 
@@ -130,14 +130,19 @@ export const PAGES: ReadonlyArray<Readonly<PageDef & { section: string|null, she
   }))
 )
 
-const BY_HOST = new Map(PAGES.map((page) => [page.host, page]))
+const BY_HOST = new Map(PAGES.flatMap((page) => {
+  const canonical = canonicalPageHost(page.host)
+  return canonical === page.host
+    ? [[page.host, page] as const]
+    : [[page.host, page] as const, [canonical, page] as const]
+}))
 
 /**
  * @param {unknown} host
  * @returns {Readonly<PageDef> | null}
  */
 export function findPage(host: unknown) : Readonly<PageDef> | null {
-  return BY_HOST.get(String(host == null ? '' : host).trim().toLowerCase()) || null
+  return BY_HOST.get(canonicalPageHost(host)) || null
 }
 
 /**

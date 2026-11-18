@@ -61,6 +61,39 @@ function hasCredentialField(): boolean {
 
 if (!isTopFrame() && isHttpProtocol(window.location.protocol)) {
   let started = false
+  let captureEnabled = false
+  let syncCaptureMode: (() => void) | null = null
+  const CAPTURE_SETTING_KEY = 'privacy.password_save_prompt'
+  const SETTINGS_CHANGED_CHANNEL = 'ngipc:event:settings:changed'
+
+  const applyCaptureSetting = (value: unknown): void => {
+    captureEnabled = value !== false
+    if (syncCaptureMode) syncCaptureMode()
+  }
+
+  const refreshCaptureSetting = (): Promise<void> => Promise.resolve(
+    ipcRenderer.invoke(`ngipc:invoke:${PRELOAD_ROUTES.settingsGet}`, { key: CAPTURE_SETTING_KEY })
+  ).then((result) => {
+    const value = result && typeof result === 'object' && 'value' in result
+      ? (result as { value?: unknown }).value
+      : result
+    applyCaptureSetting(value)
+  }).catch(() => applyCaptureSetting(true))
+
+  const bindCaptureSetting = (): void => {
+    const listenerId = `password-frame-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+    ipcRenderer.on(SETTINGS_CHANGED_CHANNEL, (_event, payload: unknown) => {
+      if (!payload || typeof payload !== 'object') return
+      const change = payload as { key?: unknown; value?: unknown }
+      if (change.key === CAPTURE_SETTING_KEY || change.key === '*' || change.key === '') {
+        applyCaptureSetting(change.value)
+      }
+    })
+    ipcRenderer.send(`ngipc:send:${PRELOAD_ROUTES.listenersAdd}`, {
+      channel: 'settings:changed',
+      listenerId
+    })
+  }
 
   const activate = (captureNow = false): void => {
     if (started) return
@@ -70,21 +103,29 @@ if (!isTopFrame() && isHttpProtocol(window.location.protocol)) {
       window.removeEventListener('submit', probe, true)
     } catch (_) {}
 
-    const scanner = createCredentialFieldScanner()
-    const capture = createCredentialCapture(scanner, {
-      onCaptured(username, password) {
-        const hostname = String(window.location.hostname || '')
-        if (!hostname || hostname.length > MAX_HOSTNAME_CHARS) return
-        if (username.length > MAX_USERNAME_CHARS || password.length > MAX_PASSWORD_CHARS) return
-        try {
-          Promise.resolve(ipcRenderer.invoke(CAPTURE_CHANNEL, { hostname, username, password })).catch(() => {})
-        } catch (_) {}
-      }
+    bindCaptureSetting()
+    void refreshCaptureSetting().then(() => {
+      const scanner = createCredentialFieldScanner()
+      const capture = createCredentialCapture(
+        scanner,
+        {
+          onCaptured(username, password) {
+            const hostname = String(window.location.hostname || '')
+            if (!hostname || hostname.length > MAX_HOSTNAME_CHARS) return
+            if (username.length > MAX_USERNAME_CHARS || password.length > MAX_PASSWORD_CHARS) return
+            try {
+              Promise.resolve(ipcRenderer.invoke(CAPTURE_CHANNEL, { hostname, username, password })).catch(() => {})
+            } catch (_) {}
+          }
+        },
+        { isEnabled: () => captureEnabled }
+      )
+      syncCaptureMode = capture.syncSubmitOverride
+      capture.bind()
+      scanner.startObserver(9000)
+      scanner.scheduleRefresh()
+      if (captureNow) capture.captureNow()
     })
-    capture.bind()
-    scanner.startObserver(9000)
-    scanner.scheduleRefresh()
-    if (captureNow) capture.captureNow()
   }
 
   function probe(event: Event): void {

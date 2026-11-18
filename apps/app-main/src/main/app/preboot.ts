@@ -126,14 +126,6 @@ function applyEarlyChromiumSwitches(app: App, settings: Record<string, unknown>)
   // FedCm（Google One Tap）在 Electron 里原生提示永不弹出，禁用即可。
   // 不再自创 disk-cache-dir / media-cache-dir —— 让每个 session 用 Chromium 默认缓存目录。
   app.commandLine.appendSwitch('disable-features', 'FedCm')
-  /**
-   * 暴露 `global.gc()` —— 内存压力回收里那句 `global.gc()` 目前是**死分支**：
-   * 主进程默认不暴露它，`typeof global.gc === 'function'` 恒为 false，于是
-   * 「压力到来时把主进程堆还给系统」这一步从来没执行过。
-   *
-   * 只增加一个调试面绑定，没有运行时开销；渲染进程（沙箱、无 node）不受影响。
-   */
-  app.commandLine.appendSwitch('js-flags', '--expose-gc')
 }
 
 /** 订阅侧名册校验（开发态）：同一路由只报一次，避免 renderer 反复重订刷爆控制台。 */

@@ -23,9 +23,9 @@ import './userscript/index.js'
 // （协议名定义见 apps/app-main/src/main/external-games/catalog.js#GAME_SCHEME）
 // 普通网页、扩展页、游戏 bundle 与插件内部页一律拿不到全量 app IPC。
 // preload 内部功能（密码填充 / 下载 / 手势等）直接使用 ipcRenderer，不依赖主世界桥。
-const APP_BRIDGE_SCHEMES = new Set(['hira:'])
+const APP_BRIDGE_SCHEMES = new Set(['hira:', 'hx:', 'hirax-internal:'])
 const JS_DIALOG_SCHEMES = new Set([
-  'http:', 'https:', 'file:', 'hira:', 'chrome-extension:', 'about:', 'data:', 'blob:'
+  'http:', 'https:', 'file:', 'hira:', 'hx:', 'hirax-internal:', 'chrome-extension:', 'about:', 'data:', 'blob:'
 ])
 const pageProtocol = (() => {
   try { return String((window.location && window.location.protocol) || '') } catch { return '' }

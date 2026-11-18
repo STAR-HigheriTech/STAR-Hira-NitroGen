@@ -533,13 +533,12 @@ async function runPostIpcModules(deps: PostIpcDependencies) : Promise<PostIpcBoo
             lastModerateAt = now
           }
 
-          // 主进程侧回收：清 HTTP 内存缓存（不碰 cookie / localStorage / disk cache）+ 主动 GC。
-          // 这是「软信号」，不强制杀任何进程，仅加速 hibernate/destroy 后的堆回收。
+          // 主进程侧回收：清 HTTP 内存缓存（不碰 cookie / localStorage / disk cache）。
+          // 这是「软信号」，不强制杀任何进程。
           try {
             const s = typeof getSession === 'function' ? getSession() : null
             if (s && typeof s.clearCache === 'function') void s.clearCache().catch(() => {})
           } catch (_) {}
-          if (typeof global.gc === 'function') { try { global.gc() } catch (_) {} }
 
           // 渲染侧回收**顺序有讲究**：先收 UI 壳（浮层 → 面板 → 侧栏），再睡标签。
           //   浮层 / 面板 = 纯 UI，重建 ~65ms，用户几乎无感（面板会丢滚动位置与临时编辑，

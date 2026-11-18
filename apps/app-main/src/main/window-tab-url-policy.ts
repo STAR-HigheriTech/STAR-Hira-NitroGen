@@ -6,6 +6,9 @@
 const { extensionIdOfUrl } = require('@hira-ng/domain-extension')
 const { HIRA_SCHEME } = require('./hira-protocol')
 const { extensionIconUrl } = require('@hira-ng/shared-types/src/extension-icon.mjs')
+const { canonicalPageHost } = require('@hira-ng/shared-types/src/page-url.mjs') as {
+  canonicalPageHost(host: unknown): string
+}
 
 interface ExtensionServicePort {
   profileId?: string
@@ -46,7 +49,8 @@ export function isHiraNewTabUrl(url: unknown): boolean {
   if (!raw) return false
   try {
     const parsed = new URL(raw)
-    return parsed.protocol === `${HIRA_SCHEME}:` && parsed.hostname.toLowerCase() === 'newtab'
+    return parsed.protocol === `${HIRA_SCHEME}:`
+      && canonicalPageHost(parsed.hostname) === 'new-tab'
   } catch (_) {
     return false
   }

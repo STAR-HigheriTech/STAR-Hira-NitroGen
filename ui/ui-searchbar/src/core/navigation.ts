@@ -38,6 +38,7 @@ export function resolveVerbatimTarget(
   const isLocalhost = LOCALHOST.test(query)
 
   if (hasScheme || isWindowsPath || isPosixPath) return { kind: 'url', url: query }
-  if (isDomain || isLocalhost) return { kind: 'url', url: `https://${query}` }
+  if (isLocalhost) return { kind: 'url', url: `http://${query}` }
+  if (isDomain) return { kind: 'url', url: `https://${query}` }
   return { kind: 'search', query, url: searchUrl(query) }
 }

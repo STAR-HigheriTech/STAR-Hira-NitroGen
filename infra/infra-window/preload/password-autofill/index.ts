@@ -30,7 +30,7 @@ import { createCredentialMenu } from './menus.js'
 import { createCredentialCapture } from './capture.js'
 import { createPasswordGenerator } from './generate.js'
 import { ipcRenderer } from 'electron'
-import { PRELOAD_EVENTS } from '@hira-ng/shared-types/src/ipc-channels-preload'
+import { PRELOAD_EVENTS, PRELOAD_ROUTES } from '@hira-ng/shared-types/src/ipc-channels-preload'
 // 协议白名单走 shared-types 的唯一判据（与地址填充、PWA 线索同一条）。
 import { isHttpProtocol } from '@hira-ng/shared-types/src/url-protocols'
 
@@ -62,8 +62,17 @@ function isTopFrame() {
 type AutofillReason = 'load' | 'focus' | 'manual'
 interface AutofillProvider { invoke(route: string, payload?: unknown): Promise<unknown> | unknown }
 type AutofillSubscribe = (route: string, listener: (payload: unknown) => void) => () => void
-interface AutofillOptions { provider?: AutofillProvider; subscribe?: AutofillSubscribe }
-interface AutofillEngine { activate(anchor: HTMLInputElement | null | undefined): void; dispose(): void }
+interface AutofillOptions {
+  provider?: AutofillProvider
+  subscribe?: AutofillSubscribe
+  isCaptureEnabled?(): boolean
+}
+interface AutofillEngine {
+  activate(anchor: HTMLInputElement | null | undefined): void
+  dispose(): void
+  syncCaptureMode(): void
+  captureNow(): void
+}
 interface SuggestionCache { hostname: string; credentials: PasswordCredential[] | null; time: number }
 
 function startAutofillEngine(options: AutofillOptions): AutofillEngine {
@@ -71,7 +80,9 @@ function startAutofillEngine(options: AutofillOptions): AutofillEngine {
   const subscribe = options && typeof options.subscribe === 'function'
     ? options.subscribe
     : () => () => {}
-  if (!provider) return { activate: () => {}, dispose: () => {} }
+  if (!provider) {
+    return { activate: () => {}, dispose: () => {}, syncCaptureMode: () => {}, captureNow: () => {} }
+  }
 
   const bridge = makeBridge(provider, subscribe)
 
@@ -97,11 +108,15 @@ function startAutofillEngine(options: AutofillOptions): AutofillEngine {
     }
   }).show)
 
-  const capture = createCredentialCapture(scanner, {
-    onCaptured(username, password) {
-      bridge.reportCaptured(window.location.hostname, username, password)
-    }
-  })
+  const capture = createCredentialCapture(
+    scanner,
+    {
+      onCaptured(username, password) {
+        bridge.reportCaptured(window.location.hostname, username, password)
+      }
+    },
+    { isEnabled: options.isCaptureEnabled }
+  )
 
   // ── 自动填充状态 ──
   const suggestionCache: SuggestionCache = { hostname: '', credentials: null, time: 0 }
@@ -573,6 +588,16 @@ function startAutofillEngine(options: AutofillOptions): AutofillEngine {
       try {
         capture.onRouteChange()
       } catch (_) {}
+    },
+    syncCaptureMode() {
+      try {
+        capture.syncSubmitOverride()
+      } catch (_) {}
+    },
+    captureNow() {
+      try {
+        capture.captureNow()
+      } catch (_) {}
     }
   }
 }
@@ -597,6 +622,8 @@ function startAutofillEngine(options: AutofillOptions): AutofillEngine {
 
   let provider: AutofillProvider | null = null
   let subscribe: AutofillSubscribe | null = null
+  const listenerScope = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  let listenerSeq = 0
 
   try {
     if (ipcRenderer && typeof ipcRenderer.invoke === 'function') {
@@ -614,7 +641,12 @@ function startAutofillEngine(options: AutofillOptions): AutofillEngine {
         const ch = makeChannel('ngipc', 'event', route)
         const fn = (_e: Electron.IpcRendererEvent, payload: unknown) => listener(payload)
         ipcRenderer.on(ch, fn)
-        return () => ipcRenderer.removeListener(ch, fn)
+        const listenerId = `${listenerScope}#${++listenerSeq}`
+        ipcRenderer.send(makeChannel('ngipc', 'send', PRELOAD_ROUTES.listenersAdd), { channel: route, listenerId })
+        return () => {
+          ipcRenderer.removeListener(ch, fn)
+          ipcRenderer.send(makeChannel('ngipc', 'send', PRELOAD_ROUTES.listenersRemove), { listenerId })
+        }
       }
     }
   } catch (_) {}
@@ -639,6 +671,30 @@ function startAutofillEngine(options: AutofillOptions): AutofillEngine {
   const activeSubscribe: AutofillSubscribe = subscribe || (() => () => {})
 
   let started = false
+  let captureEnabled = false
+  let activeEngine: AutofillEngine | null = null
+  const CAPTURE_SETTING_KEY = 'privacy.password_save_prompt'
+
+  function applyCaptureSetting(value: unknown): void {
+    captureEnabled = value !== false
+    if (activeEngine) activeEngine.syncCaptureMode()
+  }
+
+  function refreshCaptureSetting(): Promise<void> {
+    try {
+      return Promise.resolve(activeProvider.invoke(PRELOAD_ROUTES.settingsGet, { key: CAPTURE_SETTING_KEY }))
+        .then((result) => {
+          const value = result && typeof result === 'object' && 'value' in result
+            ? (result as { value?: unknown }).value
+            : result
+          applyCaptureSetting(value)
+        })
+        .catch(() => applyCaptureSetting(true))
+    } catch (_) {
+      applyCaptureSetting(true)
+      return Promise.resolve()
+    }
+  }
 
   // 廉价探针：一次原生选择器查询即可判断页面是否存在凭据输入框。
   // 成本恒定，绝不做全量 input 遍历 / 评分。
@@ -677,18 +733,33 @@ function startAutofillEngine(options: AutofillOptions): AutofillEngine {
       autocomplete === 'email'
   }
 
-  function activate(anchor: EventTarget | null): void {
+  function activate(anchor: EventTarget | null, captureNow = false): void {
     if (started) return
     started = true
     // 引擎启动后由它自己接管这些事件，先撤掉探针避免重复处理。
     window.removeEventListener('focusin', probe, true)
     window.removeEventListener('submit', probe, true)
     try {
-      const engine = startAutofillEngine({ provider: activeProvider, subscribe: activeSubscribe })
-      const field = (anchor instanceof HTMLInputElement)
-        ? anchor
-        : (document.activeElement instanceof HTMLInputElement ? document.activeElement : null)
-      if (field && engine && typeof engine.activate === 'function') engine.activate(field)
+      activeSubscribe('settings:changed', (payload) => {
+        if (!payload || typeof payload !== 'object') return
+        const change = payload as { key?: unknown; value?: unknown }
+        if (change.key === CAPTURE_SETTING_KEY || change.key === '*' || change.key === '') {
+          applyCaptureSetting(change.value)
+        }
+      })
+      void refreshCaptureSetting().then(() => {
+        const engine = startAutofillEngine({
+          provider: activeProvider,
+          subscribe: activeSubscribe,
+          isCaptureEnabled: () => captureEnabled
+        })
+        activeEngine = engine
+        const field = (anchor instanceof HTMLInputElement)
+          ? anchor
+          : (document.activeElement instanceof HTMLInputElement ? document.activeElement : null)
+        if (field && typeof engine.activate === 'function') engine.activate(field)
+        if (captureNow) engine.captureNow()
+      })
     } catch (e) {
       console.error('[password-autofill] init failed:', e instanceof Error ? e.message : e)
     }
@@ -698,7 +769,7 @@ function startAutofillEngine(options: AutofillOptions): AutofillEngine {
   function probe(e: Event): void {
     try {
       if (e && e.type === 'submit') {
-        if (hasCredentialField()) activate(null)
+        if (hasCredentialField()) activate(null, true)
         return
       }
       const input = eventInput(e)

@@ -5,6 +5,7 @@ import {
   initTheme,
   openLink
 } from 'hira://shared/runtime.js'
+import { pageUrl } from '@hira-ng/shared-types/src/pages.mjs'
 import type { PageRpcRecord } from 'hira://shared/runtime.js'
 
 interface ArchivedPage extends PageRpcRecord {
@@ -32,7 +33,7 @@ initTheme()
 
 function goBack(): void {
   if (history.length > 1) history.back()
-  else location.href = 'hira://newtab'
+  else location.href = pageUrl('newtab')
 }
 
 backButton.addEventListener('click', goBack)

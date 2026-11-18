@@ -63,7 +63,9 @@ export function createInstanceController({
   onAction,
   onPwaApp
 }: InstanceControllerOptions): InstanceController {
-  const hasLock = !!app.requestSingleInstanceLock()
+  const hasLock = process.env.HIRA_SMOKE_SINGLE_INSTANCE === '1'
+    ? true
+    : !!app.requestSingleInstanceLock()
   const getWindow = typeof getMainWindow === 'function' ? getMainWindow : () => null
 
   /** 把已有主窗口拉到前台（show 兜底：窗口可能被最小化/隐藏，只 focus 拉不回来）。 */

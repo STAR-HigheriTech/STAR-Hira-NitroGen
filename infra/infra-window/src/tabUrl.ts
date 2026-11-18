@@ -16,6 +16,13 @@ const { pageUrl } = require('@hira-ng/shared-types/src/pages')
 export function normalizeUrl(input: unknown): string {
   const raw = String(input || '').trim()
   if (!raw) return 'about:blank'
+  if (/^https?:\/*/i.test(raw) && !/^https?:\/\//i.test(raw)) {
+    return raw.replace(/^(https?):\/*/i, (_match, scheme: string) => `${scheme.toLowerCase()}://`)
+  }
+  if (/^file:\/*/i.test(raw) && !/^file:\/\/\//i.test(raw)) {
+    const rest = raw.replace(/^file:\/*/i, '')
+    return /^[a-zA-Z]:[\\/]/.test(rest) ? `file:///${rest.replace(/\\/g, '/')}` : `file://${rest}`
+  }
   if (hasKnownScheme(raw)) {
     return raw
   }
@@ -34,6 +41,9 @@ export function normalizeUrl(input: unknown): string {
       const expanded = path.resolve(home, raw.slice(1))
       return `file://${expanded.replace(/\\/g, '/')}`
     } catch {}
+  }
+  if (/^(localhost|\d{1,3}(?:\.\d{1,3}){3}|\[::1\]|0\.0\.0\.0)(?::\d+)?(?:[/?#]|$)/i.test(raw)) {
+    return `http://${raw}`
   }
   return `https://${raw}`
 }
@@ -64,7 +74,7 @@ export function isPdfUrl(url: unknown): boolean {
   }
 }
 
-/** 将 PDF URL 包装为 hira://pdf 查看器 URL */
+/** 将 PDF URL 包装为 RT 同名的 hira://pdf-viewer 查看器 URL */
 export function wrapPdfUrl(url: string): string {
   return pageUrl('pdf', { url })
 }
@@ -72,7 +82,8 @@ export function wrapPdfUrl(url: string): string {
 /**
  * PDF 分流的**唯一判据**：这个地址最终该去哪（`tabUrl` 是这条判据的家）。
  *
- * 三件事串成一步：①确实是 PDF；②设置里没关掉内置查看器；③于是改道 `hira://pdf`。
+ * 三件事串成一步：①确实是 PDF；②设置里没关掉内置查看器；③于是改道
+ * `hira://pdf-viewer`（旧 `hira://pdf` 继续作为协议别名兼容）。
  * **为什么必须收成一个函数**：这套组合原先在四处各写一遍 ——
  *   新建标签（`TabManager#_createTabSync`）、地址栏导航（`TabManager#navigate`）、
  *   页面自己发起的导航（`tabEvents` 的 will-navigate / will-redirect）、独立侧栏（`web-sidebar`）。

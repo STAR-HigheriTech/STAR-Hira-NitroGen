@@ -32,6 +32,9 @@ import { isHttpProtocol } from '@hira-ng/shared-types/src/url-protocols.mjs'
 import { pageIconSvgText } from '@hira-ng/shared-types/src/page-icon.mjs'
 import { CHROME_FAVICON_QUERY_KEY, chromeFaviconPageUrl } from '@hira-ng/shared-types/src/favicon-compat.mjs'
 import { ARCHIVE_CONTENT_HOST, archiveContentId } from '@hira-ng/shared-types/src/archive-content.mjs'
+const { PAGE_ROUTE_ALIASES } = require('@hira-ng/shared-types/src/page-url.mjs') as {
+  PAGE_ROUTE_ALIASES: Readonly<Record<string, string>>
+}
 
 const fsp = fs.promises
 // 「算不算普通网页」的唯一判据（favicon 只代理 http(s)，重定向后同样复核）。
@@ -728,6 +731,9 @@ function ensureBuiltinHiraPages () {
   registerHiraPage({ host: ARCHIVE_CONTENT_HOST, kind: 'dynamic', resolve: serveArchiveContent })
   // hira://settings —— 设置页**不在这里**：它是 out/pages/settings/ 下的普通静态页，
   // 由下面的磁盘发现自动注册。任何页面都不再需要"显式注册 + 自定义路径映射"。
+  for (const [legacyHost, publicHost] of Object.entries(PAGE_ROUTE_ALIASES)) {
+    registerHiraPage({ host: publicHost, kind: 'static', dir: legacyHost })
+  }
 
   // 磁盘发现前置到首个请求，交给异步协议流水线，Scan 完成前 miss 的静态页
   // 由 handler 侧的 ensureBuiltinHiraPagesScan() 兜底补扫一次
@@ -813,7 +819,7 @@ function htmlResponse (html: string, status = 200): Response {
  * @param {Request} request
  * @returns {Promise<Response>}
  */
-async function hiraHandler (request: Request): Promise<Response> {
+export async function serveHiraRequest (request: Request): Promise<Response> {
   try {
     ensureBuiltinHiraPages()
     // 静态页目录发现异步执行：首个请求让位给 scan 完成后分发，保证内部页可解析
@@ -853,6 +859,6 @@ async function hiraHandler (request: Request): Promise<Response> {
 export function registerHiraProtocol (session?: Session): void {
   ensureBuiltinHiraPages()
   const target = session ? session.protocol : protocol
-  target.handle(HIRA_SCHEME, hiraHandler)
+  target.handle(HIRA_SCHEME, serveHiraRequest)
 }
 

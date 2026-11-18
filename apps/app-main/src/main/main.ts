@@ -150,6 +150,7 @@ const { createBookmarkBackupFeature } = require('./bookmark-backup')
 const { runSnapshotIfNeeded } = require('./snapshot-bootstrap')
 const {
   registerHiraProtocol,
+  serveHiraRequest,
   registerHiraPage,
   unregisterHiraPage,
   setExtensionIconPort,
@@ -181,6 +182,15 @@ const { createPrintService } = require('./print/service')
 const { createSavePageService } = require('./save-page/service')
 // 外部静态 bundle（游戏）特性模块：hira-game:// 协议 + 目录 + IPC，见 main/external-games/
 const { createExternalGamesFeature } = require('./external-games')
+const { createGameProtocolHandler } = require('./external-games/protocol') as {
+  createGameProtocolHandler(catalog: unknown): (request: Request) => Promise<Response>
+}
+const { createRtProtocolCompatibility } = require('./rt-protocol-compat') as {
+  createRtProtocolCompatibility(options: {
+    serveHira(request: Request): Promise<Response>
+    serveGame(request: Request): Promise<Response>
+  }): { registerOn(session?: Session): void }
+}
 // 外部协议（mailto: 等）授权记录：记录复用 domain-settings，见 main/open-external.js
 const { createOpenExternalPermissions } = require('./open-external')
 // PWA（把站点安装为应用）：域服务只碰数据库，探测/安装/快捷方式是 APPS 层编排，
@@ -871,6 +881,18 @@ app.whenReady().then(async () => {
   // External static bundles (games) over hira-game:// — separate scheme so
   // third-party code never shares the internal pages' origin / IPC bridge.
   const externalGames = createExternalGamesFeature()
+  const rtProtocolCompatibility = createRtProtocolCompatibility({
+    serveHira: serveHiraRequest,
+    serveGame: createGameProtocolHandler(externalGames.catalog)
+  })
+  rtProtocolCompatibility.registerOn()
+  app.on('session-created', (createdSession: Session) => {
+    try {
+      rtProtocolCompatibility.registerOn(createdSession)
+    } catch (error) {
+      console.warn('[rt-protocol] session registration failed:', errorMessage(error))
+    }
+  })
 
   // ── 会话装配（对齐 RT sessions-controller）──────────────────────
   // 每个 profile 一个 `session.fromPath(profiles/<id>)` 持久会话：会话对象与真实磁盘

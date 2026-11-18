@@ -235,6 +235,7 @@ export function createQuickLayoutEditor(options: QuickLayoutEditorOptions): Quic
     ? String(options.windowControlsHost)
     : windowControlsHostOptions[0].value
   let windowControlsChangeId = 0
+  let closeChoiceMenu: (() => void) | null = null
   let chipLayer: HTMLElement
   let panel: HTMLElement
   let trayHost: HTMLElement
@@ -283,6 +284,12 @@ export function createQuickLayoutEditor(options: QuickLayoutEditorOptions): Quic
     .hqe__sectionNote{margin:0;color:var(--hira-text-tertiary,#98a2b3);font-size:10px;line-height:1.45}
     .hqe__select{height:32px;min-width:126px;border:1px solid var(--hira-border-subtle,#d7dee7);border-radius:var(--hira-radius-control,var(--hira-theme-radius,6px));background:var(--hira-bg-elevated,#fff);padding:0 30px 0 10px;color:var(--hira-text-primary,#17202a);cursor:pointer}
     .hqe__select:disabled{opacity:.5;cursor:not-allowed}
+    .hqe__choice{position:relative;min-width:126px}
+    .hqe__selectTrigger{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left}
+    .hqe__selectTrigger::after{content:"⌄";color:var(--hira-text-tertiary,#98a2b3);font-size:12px;line-height:1}
+    .hqe__choiceMenu{position:fixed;z-index:120;display:flex;flex-direction:column;gap:2px;min-width:160px;max-height:260px;padding:5px;border:1px solid var(--hira-border-subtle,#d7dee7);border-radius:var(--hira-radius-md,10px);background:var(--hira-bg-elevated,#fff);box-shadow:0 12px 32px rgba(17,24,39,.2);overflow:auto;pointer-events:auto}
+    .hqe__choiceOption{min-height:30px;padding:0 9px;border:0;border-radius:var(--hira-radius-control,var(--hira-theme-radius,6px));background:transparent;color:var(--hira-text-primary,#17202a);font:inherit;text-align:left;cursor:pointer}
+    .hqe__choiceOption:hover,.hqe__choiceOption[aria-selected="true"]{background:var(--hira-accent-soft,#e7f5f2);color:var(--hira-accent,#0f766e)}
     .hqe__barSettingsList{display:flex;flex-direction:column;gap:10px}
     .hqe__barOption{display:flex;flex-direction:column;align-items:stretch;gap:9px;width:100%;min-width:0;padding:12px 14px;border:1px solid var(--hira-border-subtle,#d7dee7);border-radius:var(--hira-radius-lg,12px);background:var(--hira-bg-elevated,#fff);box-shadow:0 1px 2px rgba(17,24,39,.035)}
     .hqe__barOptionHead{display:flex;align-items:center;justify-content:space-between;gap:10px}
@@ -645,6 +652,111 @@ export function createQuickLayoutEditor(options: QuickLayoutEditorOptions): Quic
     }
   }
 
+  function createChoiceControl(input: {
+    value: string
+    options: QuickLayoutBarSettingOption[]
+    disabled?: boolean
+    title?: string
+    label: string
+    onChange: (value: string) => void
+  }): HTMLElement {
+    let current = input.options.some((option) => option.value === input.value)
+      ? input.value
+      : (input.options[0]?.value || input.value)
+    const wrap = html(doc, 'div', 'hqe__choice')
+    const trigger = html(doc, 'button', 'hqe__select hqe__selectTrigger')
+    trigger.type = 'button'
+    trigger.setAttribute('aria-label', input.label)
+    trigger.setAttribute('aria-haspopup', 'listbox')
+    trigger.setAttribute('aria-expanded', 'false')
+    trigger.disabled = input.disabled === true
+    trigger.title = input.title || ''
+    const valueText = html(doc, 'span')
+    trigger.appendChild(valueText)
+    wrap.appendChild(trigger)
+
+    let menu: HTMLElement | null = null
+    let detach = (): void => {}
+
+    const close = (): void => {
+      detach()
+      detach = () => {}
+      menu?.remove()
+      menu = null
+      trigger.setAttribute('aria-expanded', 'false')
+      if (closeChoiceMenu === close) closeChoiceMenu = null
+    }
+
+    const paintValue = (): void => {
+      valueText.textContent = input.options.find((option) => option.value === current)?.label || current
+    }
+    paintValue()
+
+    const open = (): void => {
+      if (trigger.disabled || menu) return
+      closeChoiceMenu?.()
+      menu = html(doc, 'div', 'hqe__choiceMenu')
+      menu.setAttribute('role', 'listbox')
+      menu.setAttribute('aria-label', input.label)
+      for (const option of input.options) {
+        const item = html(doc, 'button', 'hqe__choiceOption')
+        item.type = 'button'
+        item.setAttribute('role', 'option')
+        item.setAttribute('aria-selected', String(option.value === current))
+        item.textContent = option.label
+        item.addEventListener('click', (event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          if (option.value === current) {
+            close()
+            return
+          }
+          current = option.value
+          paintValue()
+          close()
+          input.onChange(current)
+        })
+        menu.appendChild(item)
+      }
+      root.appendChild(menu)
+      const rect = trigger.getBoundingClientRect()
+      const width = Math.max(160, Math.round(rect.width))
+      menu.style.width = `${width}px`
+      const height = menu.offsetHeight
+      const below = rect.bottom + 4
+      const top = below + height <= window.innerHeight - 8
+        ? below
+        : Math.max(8, rect.top - height - 4)
+      menu.style.left = `${Math.max(8, Math.min(window.innerWidth - width - 8, Math.round(rect.left)))}px`
+      menu.style.top = `${Math.round(top)}px`
+      trigger.setAttribute('aria-expanded', 'true')
+      closeChoiceMenu = close
+
+      const onOutside = (event: PointerEvent): void => {
+        const target = event.target
+        if (!(target instanceof Node) || wrap.contains(target) || menu?.contains(target)) return
+        close()
+      }
+      const onViewportChange = (): void => close()
+      window.addEventListener('pointerdown', onOutside, true)
+      window.addEventListener('resize', onViewportChange)
+      window.addEventListener('scroll', onViewportChange, true)
+      detach = () => {
+        window.removeEventListener('pointerdown', onOutside, true)
+        window.removeEventListener('resize', onViewportChange)
+        window.removeEventListener('scroll', onViewportChange, true)
+      }
+    }
+
+    trigger.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      if (menu) close()
+      else open()
+    })
+    return wrap
+  }
+
   function setStatus(text: string, tone: 'neutral' | 'ok' | 'warn' = 'neutral'): void {
     if (statusText.textContent === text && status.dataset.tone === tone) return
     statusText.textContent = text
@@ -856,6 +968,7 @@ export function createQuickLayoutEditor(options: QuickLayoutEditorOptions): Quic
       return
     }
     const scrollTop = panelBody.scrollTop
+    closeChoiceMenu?.()
     trayHost.replaceChildren()
     renderTrayContent(state)
     lastTraySignature = nextSignature
@@ -937,18 +1050,14 @@ export function createQuickLayoutEditor(options: QuickLayoutEditorOptions): Quic
     const controlsLine = html(doc, 'div', 'hqe__sectionControlRow')
     const controlsLabel = html(doc, 'strong')
     controlsLabel.textContent = '窗口控制按钮位置'
-    const controlsSelect = html(doc, 'select', 'hqe__select')
-    controlsSelect.setAttribute('aria-label', '窗口控制按钮位置')
-    for (const option of windowControlsHostOptions) {
-      const node = html(doc, 'option')
-      node.value = option.value
-      node.textContent = option.label
-      controlsSelect.appendChild(node)
-    }
-    controlsSelect.value = windowControlsHost
-    controlsSelect.disabled = !options.onWindowControlsHostChange
-    controlsSelect.addEventListener('change', () => {
-      void changeWindowControlsHost(controlsSelect.value)
+    const controlsSelect = createChoiceControl({
+      value: windowControlsHost,
+      options: windowControlsHostOptions,
+      disabled: !options.onWindowControlsHostChange,
+      label: '窗口控制按钮位置',
+      onChange: (value) => {
+        void changeWindowControlsHost(value)
+      }
     })
     const controlsNote = html(doc, 'p', 'hqe__sectionNote')
     controlsNote.textContent = options.windowControlsHostHint ||
@@ -1001,19 +1110,15 @@ export function createQuickLayoutEditor(options: QuickLayoutEditorOptions): Quic
             })
             fieldRow.append(fieldLabel, toggle)
           } else {
-            const select = html(doc, 'select', 'hqe__select')
-            select.setAttribute('aria-label', setting.label)
-            for (const option of setting.options || []) {
-              const optionNode = html(doc, 'option')
-              optionNode.value = option.value
-              optionNode.textContent = option.label
-              select.appendChild(optionNode)
-            }
-            select.value = String(setting.value)
-            select.disabled = setting.disabled === true
-            select.title = setting.disabledReason || setting.description || ''
-            select.addEventListener('change', () => {
-              void changeBarSetting(item.id, setting.key, select.value)
+            const select = createChoiceControl({
+              value: String(setting.value),
+              options: setting.options || [],
+              disabled: setting.disabled === true,
+              title: setting.disabledReason || setting.description || '',
+              label: setting.label,
+              onChange: (value) => {
+                void changeBarSetting(item.id, setting.key, value)
+              }
             })
             fieldRow.append(fieldLabel, select)
           }
@@ -1465,6 +1570,7 @@ export function createQuickLayoutEditor(options: QuickLayoutEditorOptions): Quic
   }
 
   const finishEditing = (): void => {
+    closeChoiceMenu?.()
     flushPendingCommits()
     options.onFinish()
   }
@@ -1472,6 +1578,7 @@ export function createQuickLayoutEditor(options: QuickLayoutEditorOptions): Quic
   undoFooter.addEventListener('click', undo)
   redoFooter.addEventListener('click', redo)
   const cancelEditing = (): void => {
+    closeChoiceMenu?.()
     if (commitFrame) {
       cancelAnimationFrame(commitFrame)
       commitFrame = 0
@@ -1502,6 +1609,11 @@ export function createQuickLayoutEditor(options: QuickLayoutEditorOptions): Quic
       return
     }
     if (event.key !== 'Escape') return
+    if (closeChoiceMenu) {
+      event.preventDefault()
+      closeChoiceMenu()
+      return
+    }
     if (drag?.active) {
       endDrag()
       setStatus('已取消拖动')
@@ -1562,6 +1674,7 @@ export function createQuickLayoutEditor(options: QuickLayoutEditorOptions): Quic
     destroy(): void {
       if (destroyed) return
       destroyed = true
+      closeChoiceMenu?.()
       endDrag()
       flushPendingCommits()
       if (renderFrame) cancelAnimationFrame(renderFrame)

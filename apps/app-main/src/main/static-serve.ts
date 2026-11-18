@@ -193,13 +193,21 @@ async function serveStaticAsync (baseDir: string, pathname: string, opts: ServeS
     const baseCheck = process.platform === 'win32' ? realBase.toLowerCase() : realBase
     const keyCheck = process.platform === 'win32' ? realKey.toLowerCase() : realKey
     if (keyCheck !== baseCheck && !keyCheck.startsWith(baseCheck + path.sep)) return null
-    const st = await fsp.stat(realKey).catch(() => null)
+    let resolvedFile = realKey
+    let st = await fsp.stat(resolvedFile).catch(() => null)
+    if (st?.isDirectory()) {
+      resolvedFile = await fsp.realpath(path.join(realKey, 'index.html')).catch(() => '')
+      if (!resolvedFile) return null
+      const fileCheck = process.platform === 'win32' ? resolvedFile.toLowerCase() : resolvedFile
+      if (fileCheck !== baseCheck && !fileCheck.startsWith(baseCheck + path.sep)) return null
+      st = await fsp.stat(resolvedFile).catch(() => null)
+    }
     if (!st || !st.isFile()) return null
-    const data = await fsp.readFile(realKey)
+    const data = await fsp.readFile(resolvedFile)
     const etag = `"${Buffer.byteLength(data).toString(16)}"`
     const headers = { ...(opts.headers || {}) }
-    const resp = new Response(data as unknown as BodyInit, { headers: _respHeaders(key, { ...headers, ETag: etag }) })
-    if (cache) _cacheSet(key, { data, etag: { ETag: etag }, headers })
+    const resp = new Response(data as unknown as BodyInit, { headers: _respHeaders(resolvedFile, { ...headers, ETag: etag }) })
+    if (cache) _cacheSet(resolvedFile, { data, etag: { ETag: etag }, headers })
     return resp
   } catch (error) {
     console.error(`[${opts.label || 'static-serve'}] async read failed:`, baseDir, pathname, error instanceof Error ? error.message : error)

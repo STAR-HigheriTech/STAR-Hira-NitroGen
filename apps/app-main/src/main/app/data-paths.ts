@@ -100,7 +100,10 @@ function migrateLegacyUserData(appData: string, targetDir: string, isDevelopment
  */
 export function applyAppDataPaths({ app, isDevelopment = isDevRuntime() }: AppDataPathsOptions): AppDataPathsResult {
   const vendorDir = path.join(app.getPath('appData'), VENDOR_DIR)
-  const userDataPath = path.join(vendorDir, PRODUCT_DIR + (isDevelopment ? DEV_SUFFIX : ''))
+  const smokeAppData = String(process.env.HIRA_SMOKE_APPDATA || '').trim()
+  const userDataPath = smokeAppData
+    ? path.join(smokeAppData, PRODUCT_DIR + (isDevelopment ? DEV_SUFFIX : ''))
+    : path.join(vendorDir, PRODUCT_DIR + (isDevelopment ? DEV_SUFFIX : ''))
 
   // 先定名：`app.getName()` 是窗口标题 / 通知 / updater 缓存目录 / 日志归属的共同来源，
   // 打包态由 productName 决定，开发态只能靠这里对齐，否则两态跑出两个名字。

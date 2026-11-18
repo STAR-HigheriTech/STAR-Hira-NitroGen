@@ -55,7 +55,8 @@ export function verbatimSuggestor(ctx: SuggestorContext): Suggestion[] {
     // 已带 scheme（http/https/file/hira/about/chrome/...）原样使用
     // 否则补 https://（域名/localhost/路径才走到这里）
     const hasScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(q) || /^(about|blob|data|mailto|tel|ftp):/i.test(q)
-    const url = hasScheme ? q : `https://${q}`
+    const isLocalhost = /^(localhost|\d{1,3}(?:\.\d{1,3}){3}|\[::1\]|0\.0\.0\.0)(?::\d+)?(?:[/?#]|$)/i.test(q)
+    const url = hasScheme ? q : isLocalhost ? `http://${q}` : `https://${q}`
     results.push({
       type: 'website' as const,
       title: url,

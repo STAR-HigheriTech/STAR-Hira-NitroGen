@@ -33,6 +33,15 @@ const { HIRA_SCHEME } = require('./hira-protocol') as { HIRA_SCHEME: string }
 const { PLUGIN_SCHEME } = require('./plugin-protocol') as { PLUGIN_SCHEME: string }
 const { THEME_SCHEME } = require('./theme-asset-protocol') as { THEME_SCHEME: string }
 const { PWA_SCHEME } = require('./hira-pwa-protocol') as { PWA_SCHEME: string }
+const {
+  RT_BROWSER_SCHEME,
+  RT_INTERNAL_SCHEME,
+  RT_EXTERNAL_SCHEME
+} = require('./rt-protocol-constants') as {
+  RT_BROWSER_SCHEME: string
+  RT_INTERNAL_SCHEME: string
+  RT_EXTERNAL_SCHEME: string
+}
 import { GAME_SCHEME } from './external-games/catalog'
 
 interface SchemePrivileges {
@@ -112,6 +121,36 @@ export const PRIVILEGES = Object.freeze({
     allowServiceWorkers: false,
     corsEnabled: true,
     stream: true
+  }),
+  /** RT 兼容页：与 RT 保持相同的 fetch / Service Worker 限制。 */
+  rtBrowser: Object.freeze({
+    standard: true,
+    secure: true,
+    supportFetchAPI: false,
+    allowServiceWorkers: false,
+    corsEnabled: true,
+    stream: false,
+    codeCache: true
+  }),
+  /** RT 浏览器内部页。 */
+  rtInternal: Object.freeze({
+    standard: true,
+    secure: true,
+    supportFetchAPI: false,
+    allowServiceWorkers: false,
+    corsEnabled: true,
+    stream: false,
+    codeCache: true
+  }),
+  /** RT 外部静态 bundle：保留流式媒体。 */
+  rtExternal: Object.freeze({
+    standard: true,
+    secure: true,
+    supportFetchAPI: false,
+    allowServiceWorkers: false,
+    corsEnabled: true,
+    stream: true,
+    codeCache: true
   })
 })
 
@@ -124,7 +163,10 @@ export const SCHEMES: readonly SchemeRegistration[] = Object.freeze([
   { scheme: GAME_SCHEME, privileges: PRIVILEGES.game },
   { scheme: PLUGIN_SCHEME, privileges: PRIVILEGES.plugin },
   { scheme: THEME_SCHEME, privileges: PRIVILEGES.themeAsset },
-  { scheme: PWA_SCHEME, privileges: PRIVILEGES.pwaAsset }
+  { scheme: PWA_SCHEME, privileges: PRIVILEGES.pwaAsset },
+  { scheme: RT_BROWSER_SCHEME, privileges: PRIVILEGES.rtBrowser },
+  { scheme: RT_INTERNAL_SCHEME, privileges: PRIVILEGES.rtInternal },
+  { scheme: RT_EXTERNAL_SCHEME, privileges: PRIVILEGES.rtExternal }
 ])
 
 /**
@@ -134,7 +176,13 @@ export const SCHEMES: readonly SchemeRegistration[] = Object.freeze([
  * 该不该补 `https://`。少了这一步，`hira-game://dino/index.html` 会被补成
  * `https://hira-game://…`（ERR_NAME_NOT_RESOLVED）。
  */
-export const BROWSABLE_SCHEMES: readonly string[] = Object.freeze([HIRA_SCHEME, GAME_SCHEME])
+export const BROWSABLE_SCHEMES: readonly string[] = Object.freeze([
+  HIRA_SCHEME,
+  GAME_SCHEME,
+  RT_BROWSER_SCHEME,
+  RT_INTERNAL_SCHEME,
+  RT_EXTERNAL_SCHEME
+])
 
 let done = false
 
