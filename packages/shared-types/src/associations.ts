@@ -549,9 +549,12 @@ export function buildRegistryPlan({
   put(`${classes}\\${APP_PROGID_URL}`, 'FriendlyTypeName', `${appName} Protocol`)
   put(`${classes}\\${APP_PROGID_URL}`, 'URL Protocol', '')
 
-  // ── ③ 每种扩展登记到「打开方式」（只加候选，不改默认）────────────────
+  // ── ③ 扩展与协议都登记到「打开方式」（只加候选，不改默认）─────────
   for (const ext of associatedExtensions) {
     put(`${classes}\\${ext}\\OpenWithProgids`, APP_PROGID_FILE, '')
+  }
+  for (const scheme of urlSchemes) {
+    put(`${classes}\\${scheme}\\OpenWithProgids`, APP_PROGID_URL, '')
   }
 
   // ── ④ 默认应用列表入口 ─────────────────────────────────────────────
@@ -661,6 +664,9 @@ export function buildUnregisterPlan({
   ops.push({ type: 'deleteValue', key: 'Software\\RegisteredApplications', name: appName, scope })
   for (const ext of associatedExtensions) {
     ops.push({ type: 'deleteValue', key: `Software\\Classes\\${ext}\\OpenWithProgids`, name: APP_PROGID_FILE, scope })
+  }
+  for (const scheme of urlSchemes) {
+    ops.push({ type: 'deleteValue', key: `Software\\Classes\\${scheme}\\OpenWithProgids`, name: APP_PROGID_URL, scope })
   }
   if (scope === 'user') {
     // 协议回退键只删自己写的值（键本身可能还被别的应用使用）。

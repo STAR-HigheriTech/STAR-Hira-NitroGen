@@ -16,6 +16,7 @@
 
 import { VolumeX, Volume2 } from '../icons'
 import { isPageIconUrl } from '@hira-ng/shared-types/src/page-icon.mjs'
+import { faviconSourceCandidates } from '@hira-ng/shared-types/src/favicon-src.mjs'
 // 首字兜底同样必须显式指定字体（纯文字节点，继承链可能落到系统默认宋体点阵）。
 import { uiFontVar } from '@hira-ng/shared-types/src/font-stack.mjs'
 import { audioToggleLabel } from './audioLabel'
@@ -197,6 +198,8 @@ export function createTabFavicon(
   const state = { favicon: data.favicon || '', title: data.title, url: data.url }
   /** 最近一次**加载失败**的图标地址：同一张破图不再反复发请求（换图即自动重试）。 */
   let failedSrc = ''
+  /** 正在尝试的**直连兜底**地址；它也失败时才真正降级到首字。 */
+  let fallbackSrc = ''
 
   /**
    * 图标本体的几何**只在这里写一份**（横向标签条 / 纵向行都不再各写一套）。
@@ -225,8 +228,21 @@ export function createTabFavicon(
   // 破图占位。只在**当前这张图**失败时回退（旧图的迟到 error 不能把新图标打掉）。
   img.addEventListener('error', () => {
     const failed = img.getAttribute('src') || ''
-    if (!failed || failed !== state.favicon) return
+    const candidates = faviconSourceCandidates(state.url, state.favicon)
+    if (!failed || failed !== candidates.primary) {
+      if (fallbackSrc && failed === fallbackSrc) {
+        fallbackSrc = ''
+        showLetter()
+      }
+      return
+    }
+    // 首选来源失败后：若还留有原始 URL，先做第二段直连；两段都失败才交给首字。
     failedSrc = failed
+    if (candidates.raw && candidates.raw !== failed) {
+      fallbackSrc = candidates.raw
+      img.src = candidates.raw
+      return
+    }
     showLetter()
   })
 
@@ -238,9 +254,24 @@ export function createTabFavicon(
       if (patch.url !== undefined) state.url = patch.url
     }
     paintFaviconBox()
-    if (state.favicon && state.favicon !== failedSrc) {
+    // 标签行与 badge / 面板 / 书签栏共用同一条来源链：显式图标代理 → 显式原始图标，
+    // 或页面地址推出的 /favicon.ico。这样 Chromium 漏报、icon URL 挂掉时，
+    // 标签行仍有一条代理→直连的最后活路，而不是直接跳到首字。
+    const candidates = faviconSourceCandidates(state.url, state.favicon)
+    const nextSrc = candidates.primary || ''
+    const currentSrc = img.getAttribute('src') || ''
+    const alreadyLoaded = !!currentSrc
+      && img.naturalWidth > 0
+      && (currentSrc === nextSrc || (!!candidates.raw && currentSrc === candidates.raw))
+    if (alreadyLoaded) {
+      img.style.display = ''
+      letter.textContent = ''
+      letter.style.display = 'none'
+      return
+    }
+    if (nextSrc && nextSrc !== failedSrc) {
       // 同值不重设：避免每次标题变化都让浏览器对同一地址重新发起加载
-      if (img.getAttribute('src') !== state.favicon) img.src = state.favicon
+      if (img.getAttribute('src') !== nextSrc) img.src = nextSrc
       img.style.display = ''
       letter.textContent = ''
       letter.style.display = 'none'

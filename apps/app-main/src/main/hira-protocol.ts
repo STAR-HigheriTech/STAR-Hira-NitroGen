@@ -56,7 +56,7 @@ interface HiraPageDescriptor {
   host: string
   kind?: 'static' | 'dynamic'
   dir?: string
-  resolve?(url: URL): Response | Promise<Response> | null | undefined
+  resolve?(url: URL, session?: Session | null): Response | Promise<Response> | null | undefined
 }
 
 interface RegisteredHiraPage extends HiraPageDescriptor {
@@ -470,18 +470,63 @@ export function setFaviconIconPort(fn: FaviconIconPort | null | undefined): void
 interface FaviconBytes { buffer: Buffer; contentType: string }
 type FaviconRequestResult = { kind: 'bytes'; entry: FaviconBytes } | { kind: 'redirect'; target: string } | null
 
+/**
+ * Chromium favicon 请求的媒体类型清单。
+ *
+ * 有些站点用内容协商 / 反爬网关判定"这不是浏览器请求"，缺少 Accept 时直接回
+ * HTML 或 403。这里是 `<img>` 天然会声明的集合，不带第三方 UA 字符串。
+ */
+const FAVICON_ACCEPT = [
+  'image/avif',
+  'image/webp',
+  'image/apng',
+  'image/svg+xml',
+  'image/*',
+  '*/*;q=0.8'
+].join(',')
+
+/**
+ * 服务器把图片标成 `application/octet-stream` / 不给 Content-Type 的情况并不少见；
+ * 这里按文件头认一遍常用图标格式，HTML / JSON 等非图片仍然拒绝。
+ */
+function sniffFaviconMimeType(buffer: Buffer): string {
+  if (!buffer || buffer.length < 4) return ''
+  if (buffer[0] === 0xff && buffer[1] === 0xd8) return 'image/jpeg'
+  if (buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png'
+  if (buffer.subarray(0, 4).toString('ascii') === 'GIF8') return 'image/gif'
+  if (buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WEBP') return 'image/webp'
+  if (buffer.subarray(4, 8).toString('ascii') === 'ftyp' && buffer.subarray(8, 12).toString('ascii').startsWith('avif')) return 'image/avif'
+  if (buffer[0] === 0x00 && buffer[1] === 0x00 && buffer[2] === 0x01 && buffer[3] === 0x00) return 'image/x-icon'
+  if (buffer[0] === 0x42 && buffer[1] === 0x4d) return 'image/bmp'
+  const head = buffer.subarray(0, 512).toString('utf8').toLowerCase()
+  if (/^(<\?xml[^>]*\?>\s*)?<svg[\s>]/i.test(head)) return 'image/svg+xml'
+  return ''
+}
+
 function drainIncomingMessage(res: Electron.IncomingMessage): void {
   const resumable = res as Electron.IncomingMessage & { resume?: () => void }
   try { resumable.resume?.() } catch (_) {}
 }
 
 /** 单跳请求。`manual` 保证服务器响应头里的内网地址不会在 Chromium 内被直接取走。 */
-function requestFaviconOnce(target: string, timeoutMs: number): Promise<FaviconRequestResult> {
+function requestFaviconOnce(target: string, timeoutMs: number, session: Session | null = null): Promise<FaviconRequestResult> {
   if (timeoutMs <= 0) return Promise.resolve(null)
   return new Promise<FaviconRequestResult>((resolve) => {
     let req: Electron.ClientRequest
     try {
-      req = net.request({ method: 'GET', url: target, redirect: 'manual' })
+      const targetUrl = new URL(target)
+      const userAgent = typeof session?.getUserAgent === 'function' ? session.getUserAgent() : ''
+      req = net.request({
+        method: 'GET',
+        url: target,
+        redirect: 'manual',
+        headers: {
+          Accept: FAVICON_ACCEPT,
+          Referer: targetUrl.origin + '/',
+          ...(userAgent ? { 'User-Agent': userAgent } : {})
+        },
+        ...(session ? { session, useSessionCookies: true } : {})
+      })
     } catch (_) {
       resolve(null)
       return
@@ -522,11 +567,7 @@ function requestFaviconOnce(target: string, timeoutMs: number): Promise<FaviconR
 
       const rawType = res.headers['content-type']
       const type = String(Array.isArray(rawType) ? rawType[0] : (rawType || '')).toLowerCase()
-      if (type && !/^image\//i.test(type)) {
-        drainIncomingMessage(res)
-        finish(null)
-        return
-      }
+
       const rawLength = res.headers['content-length']
       if (Number(Array.isArray(rawLength) ? rawLength[0] : (rawLength || 0)) > FAVICON_MAX_BYTES) {
         drainIncomingMessage(res)
@@ -547,9 +588,15 @@ function requestFaviconOnce(target: string, timeoutMs: number): Promise<FaviconR
       })
       res.on('end', () => {
         if (!total) return finish(null)
+        const bytes = Buffer.concat(chunks)
+        const declaredType = type.split(';')[0].trim().toLowerCase()
+        const contentType = /^image\//i.test(declaredType)
+          ? declaredType
+          : sniffFaviconMimeType(bytes)
+        if (!contentType) return finish(null)
         finish({
           kind: 'bytes',
-          entry: { buffer: Buffer.concat(chunks), contentType: type.split(';')[0] || 'image/x-icon' }
+          entry: { buffer: bytes, contentType }
         })
       })
       res.on('error', () => finish(null))
@@ -560,7 +607,7 @@ function requestFaviconOnce(target: string, timeoutMs: number): Promise<FaviconR
 }
 
 /** 取回 favicon 字节；任何一步不合规都返回 null（由调用方转 404，绝不放行脏数据）。 */
-async function fetchFaviconBytes(target: string | URL): Promise<FaviconBytes | null> {
+async function fetchFaviconBytes(target: string | URL, session: Session | null = null): Promise<FaviconBytes | null> {
   const deadline = Date.now() + FAVICON_TIMEOUT_MS
   let current = String(target)
 
@@ -570,7 +617,7 @@ async function fetchFaviconBytes(target: string | URL): Promise<FaviconBytes | n
     const remaining = deadline - Date.now()
     if (remaining <= 0) return null
 
-    const result = await requestFaviconOnce(verdict.url, remaining)
+    const result = await requestFaviconOnce(verdict.url, remaining, session)
     if (!result) return null
     if (result.kind === 'bytes') return result.entry
     current = result.target
@@ -615,7 +662,7 @@ function faviconResponse(entry: { buffer: Buffer; contentType: string }): Respon
  * @param {URL} url
  * @returns {Promise<Response>}
  */
-async function serveFavicon (url: URL): Promise<Response> {
+async function serveFavicon (url: URL, session: Session | null = null): Promise<Response> {
   // 本地图标（导入时从源浏览器搬来的字节）：内容寻址，零联网、可长缓存。
   // 参数优先于 url/chrome —— 它不解析任何外部地址，是纯本地读。
   const iconHash = url.searchParams.get('icon') || ''
@@ -657,7 +704,7 @@ async function serveFavicon (url: URL): Promise<Response> {
 
   let task = faviconInflight.get(key)
   if (!task) {
-    task = runFaviconTask(() => fetchFaviconBytes(key)).catch(() => null)
+    task = runFaviconTask(() => fetchFaviconBytes(key, session)).catch(() => null)
     faviconInflight.set(key, task)
     task.finally(() => faviconInflight.delete(key))
   }
@@ -819,7 +866,7 @@ function htmlResponse (html: string, status = 200): Response {
  * @param {Request} request
  * @returns {Promise<Response>}
  */
-export async function serveHiraRequest (request: Request): Promise<Response> {
+export async function serveHiraRequest (request: Request, session: Session | null = null): Promise<Response> {
   try {
     ensureBuiltinHiraPages()
     // 静态页目录发现异步执行：首个请求让位给 scan 完成后分发，保证内部页可解析
@@ -837,7 +884,7 @@ export async function serveHiraRequest (request: Request): Promise<Response> {
 
     if (page) {
       const resp = page.kind === 'dynamic'
-        ? page.resolve ? await page.resolve(url) : null
+        ? page.resolve ? await page.resolve(url, session) : null
         : await serveStaticAsync(path.join(PAGES_ROOT, page.dir || host), url.pathname, { label: 'hira-protocol' })
       if (resp) return secureHiraDocument(resp)
       // 带上 referrer：这条警告只说明「文件不存在」，但不说明**谁在要**。
@@ -854,11 +901,13 @@ export async function serveHiraRequest (request: Request): Promise<Response> {
 
 /**
  * 注册 hira:// 协议处理器。
- * @param {import('electron').Session} [session]  指定 session 则注册到该 session，否则注册到默认 session
+ * @param {import('electron').Session} [session] 指定 session 则注册到该 session，否则注册到默认 session
  */
 export function registerHiraProtocol (session?: Session): void {
   ensureBuiltinHiraPages()
+  // 每个 session 的 hira:// 处理器要带上它自己的 session：favicon 代理据此继承
+  // 该 profile 的 cookie / 登录态，而不是回落到全局默认 session。
   const target = session ? session.protocol : protocol
-  target.handle(HIRA_SCHEME, serveHiraRequest)
+  target.handle(HIRA_SCHEME, (request) => serveHiraRequest(request, session || null))
 }
 

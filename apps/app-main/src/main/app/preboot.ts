@@ -124,8 +124,12 @@ function applyEarlyChromiumSwitches(app: App, settings: Record<string, unknown>)
       : 'enable-smooth-scrolling'
   )
   // FedCm（Google One Tap）在 Electron 里原生提示永不弹出，禁用即可。
+  // CalculateNativeWinOcclusion（Windows 原生遮挡检测）会把「被其他窗口 / 自家置顶
+  // 子窗口盖住」的窗口判成 occluded：可见标签的 rAF、合成、定时器全部停摆，页面冻在
+  // 最后一帧，刷新或切标签（一次强制的可见性重置）才恢复。关掉它，被盖住时宁可多
+  // 合成几帧，换前台页面的确定性不冻结（与 VS Code / Discord 同一处理）。
   // 不再自创 disk-cache-dir / media-cache-dir —— 让每个 session 用 Chromium 默认缓存目录。
-  app.commandLine.appendSwitch('disable-features', 'FedCm')
+  app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion,FedCm')
 }
 
 /** 订阅侧名册校验（开发态）：同一路由只报一次，避免 renderer 反复重订刷爆控制台。 */

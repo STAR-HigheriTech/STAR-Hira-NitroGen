@@ -20,6 +20,7 @@
 // 这一份必须共用：横向溢出的条，普通滚轮（只带 deltaY）在 Chromium 里**不会**横滚，
 // 缺了「滚轮换算」那一环的表现就是「书签多到溢出，滚轮却滚不动」。
 import { createStripScroller, injectStripScrollerStyles, createFolderIcon, setDragItem, getDragItem, hasDragItem, pickDropEffect } from '@hira-ng/ui-common'
+import { createFaviconImg, faviconSourceCandidates } from '@hira-ng/shared-types/src/favicon-src.mjs'
 // 首字兜底必须显式指定字体（纯文字节点，继承链可能落到系统默认宋体点阵）。
 import { uiFontVar } from '@hira-ng/shared-types/src/font-stack.mjs'
 
@@ -323,17 +324,20 @@ export function createBookmarkbar(doc: Document, handlers: BookmarkbarHandlers =
     if (isFolder) {
       // 文件夹图标取自**共用那一份**（ui-common#createFolderIcon）——绝不在这里另画一遍。
       el.appendChild(createFolderIcon(doc, { size: 14, className: 'bookmarkbar__folder-ico' }))
-    } else if (item.favicon) {
-      const img = doc.createElement('img')
-      img.className = 'bookmarkbar__favicon'
-      img.src = item.favicon
-      img.alt = ''
-      img.loading = 'lazy'
-      img.addEventListener('error', () => {
-        // favicon 加载失败 → 降级为首字母，不让破图占位
-        img.replaceWith(makeFallback(item.nickname || item.title))
-      })
-      el.appendChild(img)
+    } else if (item.url) {
+      // 与内部页 / 面板共用同一条来源链：主进程代理 → 站点原始图标 → 首字。
+      const candidates = faviconSourceCandidates(item.url, item.favicon ?? null)
+      if (!candidates.primary) {
+        el.appendChild(makeFallback(item.nickname || item.title))
+      } else {
+        const img = createFaviconImg(doc, candidates, {
+          size: 14,
+          className: 'bookmarkbar__favicon',
+          borderRadius: 3,
+          onFail: () => img.replaceWith(makeFallback(item.nickname || item.title))
+        })
+        el.appendChild(img)
+      }
     } else {
       el.appendChild(makeFallback(item.nickname || item.title))
     }

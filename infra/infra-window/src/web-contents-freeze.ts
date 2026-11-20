@@ -92,14 +92,18 @@ export function freezeWebContents(wc: WebContents | null | undefined): boolean {
  */
 export function thawWebContents(wc: WebContents | null | undefined): boolean {
   if (!isAlive(wc) || !owned.has(wc)) return false
-  owned.delete(wc)
   const detach = () => { try { wc.debugger.detach() } catch (_) {} }
+  const finish = () => { owned.delete(wc); detach() }
   try {
+    // 调试器已不在手上（被 DevTools 抢走 / 连接掉线）→ 只销账、绝不动别人的调试器。
+    if (!wc.debugger.isAttached()) { owned.delete(wc); return false }
     const p = wc.debugger.sendCommand('Page.setWebLifecycleState', { state: 'active' })
-    if (p && typeof p.then === 'function') p.then(detach, detach)
-    else detach()
+    // ⚠ 回执成功才销账；命令失败保留调试器与记账 —— 下次 open 会真的重发这条命令，
+    // 而不是撞上 isAttached=false 只销账不重试（那才是「永远冻住」）。
+    if (p && typeof p.then === 'function') p.then(finish, () => {})
+    else finish()
   } catch (_) {
-    detach()
+    // 同步抛错（极少见的竞态）同样保留记账，交给下次 open 重试。
   }
   return true
 }

@@ -73,7 +73,7 @@ export function wellKnownFaviconUrl (pageUrl: string) : string|null {
  *   primary —— 首选 src（http 资源已换成主进程代理 URL）
  *   raw     —— 直连兜底 src；与 primary 不同才有意义（null = 无可兜底）
  */
-export function faviconSourceCandidates (pageUrl: string, storedFavicon: string|null) : {primary: string|null, raw: string|null} {
+export function faviconSourceCandidates (pageUrl: string|null|undefined, storedFavicon: string|null|undefined) : {primary: string|null, raw: string|null} {
   const stored = storedFavicon == null ? '' : String(storedFavicon).trim()
 
   if (stored) {
@@ -83,7 +83,7 @@ export function faviconSourceCandidates (pageUrl: string, storedFavicon: string|
     return { primary: stored, raw: null }
   }
 
-  const wellKnown = wellKnownFaviconUrl(pageUrl)
+  const wellKnown = wellKnownFaviconUrl(pageUrl == null ? '' : String(pageUrl))
   if (!wellKnown) return { primary: null, raw: null }
   return { primary: faviconProxyUrl(wellKnown), raw: wellKnown }
 }

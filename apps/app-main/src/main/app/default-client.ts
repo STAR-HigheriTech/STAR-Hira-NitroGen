@@ -484,9 +484,11 @@ async function pruneStaleCapabilityValues(plan: readonly RegistryPlanEntry[]): P
     '$allowedFileSet = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)',
     '$allowedOpenSet = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)',
     '$allowedUrlSet = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)',
+    '$allowedUrlOpenSet = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)',
     'foreach ($name in $allowedFiles) { [void]$allowedFileSet.Add($name) }',
     'foreach ($name in $allowedOpenFiles) { [void]$allowedOpenSet.Add($name) }',
     'foreach ($name in $allowedUrls) { [void]$allowedUrlSet.Add($name) }',
+    'foreach ($name in $allowedUrls) { [void]$allowedUrlOpenSet.Add($name) }',
     '$fileKey = $hive.OpenSubKey($fileKeyPath, $true)',
     'if ($null -ne $fileKey) {',
     '  foreach ($ext in @($fileKey.GetValueNames())) {',
@@ -501,8 +503,14 @@ async function pruneStaleCapabilityValues(plan: readonly RegistryPlanEntry[]): P
     '}',
     '$urlKey = $hive.OpenSubKey($urlKeyPath, $true)',
     'if ($null -ne $urlKey) {',
-    '  foreach ($scheme in @($urlKey.GetValueNames())) { if (-not $allowedUrlSet.Contains($scheme)) { $urlKey.DeleteValue($scheme, $false) } }',
+    '  $urlSchemes = @($urlKey.GetValueNames())',
+    '  foreach ($scheme in $urlSchemes) { if (-not $allowedUrlSet.Contains($scheme)) { $urlKey.DeleteValue($scheme, $false) } }',
     '  $urlKey.Close()',
+    '  foreach ($scheme in $urlSchemes) {',
+    '    if ($allowedUrlOpenSet.Contains($scheme)) { continue }',
+    '    $open = $hive.OpenSubKey("Software\\Classes\\$scheme\\OpenWithProgids", $true)',
+    '    if ($null -ne $open) { $open.DeleteValue("HiraNGURL", $false); $open.Close() }',
+    '  }',
     '}'
   ].join('\r\n')
   const encoded = Buffer.from(script, 'utf16le').toString('base64')

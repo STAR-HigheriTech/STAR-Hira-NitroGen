@@ -179,6 +179,12 @@ export const EVENT_CATALOG: Readonly<Record<string, EventSpec>> = Object.freeze(
     subscribers: [],
     note: '历史库唯一变更广播；订阅方按需去抖刷新，禁止轮询'
   },
+  [E.faviconChanged]: {
+    scope: APP,
+    payload: '{ url, origin, favicon }',
+    subscribers: ['panel'],
+    note: '图标缓存晚到广播；订阅方按站点补齐展示，不重拉列表'
+  },
   [E.noteChanged]: {
     scope: APP,
     payload: '{ reason, id, folderId }',

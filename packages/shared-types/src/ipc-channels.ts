@@ -1251,6 +1251,10 @@ const EVENTS_OWN = {
   // payload: { reason, id, url }
   bookmarkChanged: 'bookmark:changed',
   historyChanged: 'history:changed',
+  // Favicon 缓存回填广播（main → 所有 renderer）：
+  // payload = { url, origin, favicon }
+  // 只通知"图标晚到了"，不触发整条历史/书签列表重拉。
+  faviconChanged: 'favicon:changed',
   // 笔记变更广播（main → 所有 renderer）：任何来源的增删改都推一条，
   // 笔记面板据此刷新（对齐 bookmark/history 的变更广播）。
   noteChanged: 'note:changed',

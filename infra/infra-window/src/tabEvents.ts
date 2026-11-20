@@ -763,9 +763,17 @@ export function bindTabEvents(host: TabEventsHost, tabId: string): void {
     if (!wc || wc.isDestroyed()) return
     let pending
     try {
-      // rel~="icon" 是**整词**匹配：icon / shortcut icon 命中，apple-touch-icon / mask-icon 不命中
+      // 页面内图标候选。只读显式声明，不猜 `/favicon.ico`；顺序是"普通图标 →
+      // Apple 触屏图标 → mask 图标"。Electron 的 page-favicon-updated 已经
+      // 覆盖普通图标的常规路径，这里只是它迟到/漏报时的最后兜底。
       pending = wc.executeJavaScript(
-        '(() => { const l = document.querySelector("link[rel~=\\"icon\\" i]"); return l && l.href ? String(l.href) : "" })()',
+        `(() => {
+           const href = (node) => node && node.href ? String(node.href) : '';
+           const rel = (value) => [...document.querySelectorAll('link[rel]')]
+             .find((node) => String(node.rel || '').toLowerCase().split(/\\s+/).includes(value));
+           const first = rel('icon') || rel('shortcut icon') || rel('apple-touch-icon') || rel('mask-icon');
+           return href(first);
+         })()`,
         false
       )
     } catch (_) {

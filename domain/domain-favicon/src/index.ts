@@ -53,10 +53,17 @@ interface FaviconWhere {
 interface FaviconDatabase {
   select(projection?: Record<string, unknown>): { from(table: unknown): { where(condition: Condition): FaviconWhere } }
   insert(table: unknown): { values(value: Record<string, unknown>): { run(): unknown } }
-  update(table: unknown): { set(value: Record<string, unknown>): { where(condition: Condition): { run(): unknown } } }
+  update(table: unknown): { set(value: Record<string, unknown>): { where(condition: Condition): { run(): { changes?: unknown } } } }
   delete(table: unknown): { where(condition: Condition): { run(): { changes: number } } }
 }
 export interface FaviconServiceOptions { getProfileId?: () => string }
+
+export interface FaviconChange {
+  url: string
+  origin: string
+  favicon: string
+}
+export type FaviconChangeListener = (change: FaviconChange) => void
 
 /** 图标字节行的键前缀：内容寻址（`icon:<sha1>`），与页面 URL 缓存分开命名空间。 */
 const ICON_KEY_PREFIX = 'icon:'
@@ -109,19 +116,38 @@ function originKeyOf(url: unknown): string {
 function createFaviconService(db: FaviconDatabase, options: FaviconServiceOptions = {}) {
   const now = () => Date.now()
   const profileIdPort = typeof options.getProfileId === 'function' ? options.getProfileId : null
+  const listeners = new Set<FaviconChangeListener>()
 
   /**
    * 当前 profile。端口缺失或抛错一律回落 'default' ——
    * **绝不能**「拿不到就不过滤」：那等于跨 profile 串数据。
    * @returns {string}
    */
-  function currentProfile() : string {
+  function currentProfile(): string {
     if (!profileIdPort) return 'default'
     try {
       const v = profileIdPort()
       return v ? String(v) : 'default'
     } catch (_) {
       return 'default'
+    }
+  }
+
+  function subscribe(listener: FaviconChangeListener): () => void {
+    if (typeof listener !== 'function') return () => {}
+    listeners.add(listener)
+    return () => {
+      listeners.delete(listener)
+    }
+  }
+
+  function emit(change: FaviconChange): void {
+    for (const listener of listeners) {
+      try {
+        listener(change)
+      } catch (_) {
+        // An observer must never break favicon persistence.
+      }
     }
   }
 
@@ -217,16 +243,16 @@ function createFaviconService(db: FaviconDatabase, options: FaviconServiceOption
    * @param {string} urlCol  该表的 URL 列名
    * @param {{ url:string, favicon:string }} entry
    */
-  function syncInto(table: unknown, urlCol: unknown, entry: { url: string; favicon: string }): void {
+  function syncInto(table: unknown, urlCol: unknown, entry: { url: string; favicon: string }): number {
     try {
       const target = table as Record<string, unknown>
       const key = pageKey(entry.url)
-      if (!key) return
+      if (!key) return 0
       const origin = originKeyOf(key)
       const scope = origin
         ? or(eq(urlCol, key), eq(urlCol, origin), like(urlCol, `${origin}/%`))
         : eq(urlCol, key)
-      db.update(table)
+      const result = db.update(table)
         .set({ favicon: entry.favicon })
         .where(and(
           eq(target.profileId, currentProfile()),
@@ -234,8 +260,10 @@ function createFaviconService(db: FaviconDatabase, options: FaviconServiceOption
           scope
         ))
         .run()
+      return Math.max(0, Number(result?.changes) || 0)
     } catch (_) {
       // 表可能不存在或 schema 不同，忽略
+      return 0
     }
   }
 
@@ -245,11 +273,12 @@ function createFaviconService(db: FaviconDatabase, options: FaviconServiceOption
    * @param {string} pageUrl
    * @param {string} faviconUrl
    */
-  function syncToBookmarksAndHistory(pageUrl: unknown, faviconUrl: unknown): void {
-    if (!pageUrl || !faviconUrl) return
+  function syncToBookmarksAndHistory(pageUrl: unknown, faviconUrl: unknown): number {
+    if (!pageUrl || !faviconUrl) return 0
     const entry = { url: String(pageUrl), favicon: String(faviconUrl) }
-    syncInto(bookmarks, bookmarks.url, entry)
-    syncInto(history, history.url, entry)
+    const bookmarkCount = syncInto(bookmarks, bookmarks.url, entry)
+    const historyCount = syncInto(history, history.url, entry)
+    return Math.max(bookmarkCount, historyCount)
   }
 
   /**
@@ -261,7 +290,14 @@ function createFaviconService(db: FaviconDatabase, options: FaviconServiceOption
   function cacheAndSync(pageUrl: unknown, faviconUrl: unknown): void {
     if (!pageUrl || !faviconUrl) return
     cache(pageUrl, faviconUrl)
-    syncToBookmarksAndHistory(pageUrl, faviconUrl)
+    if (syncToBookmarksAndHistory(pageUrl, faviconUrl) > 0) {
+      const key = pageKey(pageUrl)
+      emit({
+        url: key,
+        origin: originKeyOf(key),
+        favicon: String(faviconUrl)
+      })
+    }
   }
 
   /**
@@ -361,6 +397,7 @@ function createFaviconService(db: FaviconDatabase, options: FaviconServiceOption
     putIcon,
     getIcon,
     syncToBookmarksAndHistory,
+    subscribe,
     cacheAndSync,
     removeBefore
   }

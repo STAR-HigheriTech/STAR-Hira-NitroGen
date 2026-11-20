@@ -128,6 +128,7 @@ const { createBookmarkEventRelay } = require('./ipc/bookmark-events')
 const { createNoteEventRelay } = require('./ipc/notes-events')
 const { createTotpEventRelay } = require('./ipc/totp-events')
 const { createHistoryEventRelay } = require('./ipc/history-events')
+const { createFaviconEventRelay } = require('./ipc/favicon-events')
 const { createThemeRuntime } = require('./theme-runtime')
 // 原生应用菜单（对齐 RT app-menu-controller）：纯装配，动作与状态都由本文件注入
 const { createAppMenu } = require('./app-menu')
@@ -2288,6 +2289,9 @@ app.whenReady().then(async () => {
   })
   const historyEventRelay = createHistoryEventRelay(historyService, { send: emit })
   historyEventRelay.start()
+  // 图标缓存回填有自己的事件：历史写入可以领先图标到达，面板补图标不应拉整列表。
+  const faviconEventRelay = createFaviconEventRelay(faviconService, { send: emit })
+  faviconEventRelay.start()
   // 浏览器一键迁移：持领域服务的引用，写库仍走它们既有的批量入口。
   // faviconService 只用于「图标入库」（putIcon）—— 让导入结果自带本地图标、零联网。
   // 扩展用 getter：扩展服务随 profile 切换重建，迁移必须拿到**当前**那份。
@@ -5787,7 +5791,7 @@ app.whenReady().then(async () => {
     settings: settingsService,
     stopFeatureModules: async () => {
       try { breakModeRef?.stop?.() } catch (_) {}
-      for (const relay of [bookmarkEventRelay, noteEventRelay, historyEventRelay, totpEventRelay]) {
+      for (const relay of [bookmarkEventRelay, noteEventRelay, historyEventRelay, totpEventRelay, faviconEventRelay]) {
         try { relay.stop?.() } catch (_) {}
       }
       const managers = [

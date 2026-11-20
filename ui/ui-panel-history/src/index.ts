@@ -59,6 +59,12 @@ const SEGMENTS: Segment[] = [...HISTORY_VIEW_MODES.flatMap((key) => (
 
 interface RecentListItem extends HistoryListItem { restoreIndex?: number }
 
+interface FaviconChangePayload {
+  url?: string
+  origin?: string
+  favicon?: string
+}
+
 interface HistoryPanelIntent {
   type: string
   query?: string
@@ -318,6 +324,7 @@ export function createRecentList(doc: Document, ctx: PanelContext = {}) : { elem
 export function createHistoryPanel(doc: Document, ctx: PanelContext = {}) : {
   element: HTMLDivElement,
   setItems: (items: readonly HistoryListItem[]) => void,
+  patchFavicons: (change: { url?: string; origin?: string; favicon?: string } | null) => boolean,
   setRecentItems: (items: readonly RecentListItem[]|null) => void,
   refresh: () => Promise<void>,
   focusSearch: () => boolean,
@@ -551,6 +558,7 @@ export function createHistoryPanel(doc: Document, ctx: PanelContext = {}) : {
   return {
     element: wrap,
     setItems: historyList.setItems,
+    patchFavicons: historyList.patchFavicons,
     setRecentItems,
     /** 本面板的数据全部由宿主推（history / recent）；宿主换 profile 时统一重推，无需自刷。 */
     refresh() {
@@ -631,6 +639,13 @@ export const panelDefinition: PanelDefinition = {
       }
     })
 
+    /** 图标晚到只补行；这里仍不订阅整条历史变更，避免后台写入重排面板。 */
+    const offFaviconChanged = typeof panelCtx.on === 'function'
+      ? panelCtx.on(String((panelCtx.events as Record<string, string> | undefined)?.faviconChanged || 'favicon:changed'), (payload: unknown) => {
+        panel.patchFavicons(payload as FaviconChangePayload | null)
+      })
+      : () => {}
+
     async function loadRecent() {
       try {
         const res = await historyTabs.recentlyClosed()
@@ -663,7 +678,10 @@ export const panelDefinition: PanelDefinition = {
       element: panel.element,
       refresh,
       focusSearch: () => panel.focusSearch(),
-      dispose: () => panel.dispose()
+      dispose: () => {
+        offFaviconChanged()
+        panel.dispose()
+      }
     }
   }
 }

@@ -130,6 +130,7 @@ export function makeRowDraggable(row: HTMLElement, item: HistoryListItem) {
 export function createHistoryList(doc: Document, ctx: PanelContext = {}) : {
   element: HTMLElement,
   setItems: (items: readonly HistoryListItem[]|null) => void,
+  patchFavicons: (change: { url?: string; origin?: string; favicon?: string } | null) => boolean,
   toggleSelectAll: () => void,
   clearSelection: () => void,
   selectedIds: () => string[]
@@ -389,5 +390,29 @@ export function createHistoryList(doc: Document, ctx: PanelContext = {}) : {
     render()
   }
 
-  return { element: list, setItems, toggleSelectAll, clearSelection, selectedIds }
+  /** 图标缓存晚到时，只按站点补当前数据；不重排列表，也不丢失滚动和选中态。 */
+  function patchFavicons(change: { url?: string; origin?: string; favicon?: string } | null): boolean {
+    const favicon = String(change?.favicon || '')
+    const sourceUrl = String(change?.url || '')
+    if (!favicon || (!sourceUrl && !change?.origin)) return false
+    let patched = false
+    for (const item of items) {
+      const itemUrl = String(item.url || '')
+      if (!itemUrl) continue
+      let itemOrigin = ''
+      try { itemOrigin = new URL(itemUrl).origin } catch (_) {}
+      const sameSite = itemUrl === sourceUrl || (!!itemOrigin && itemOrigin === change?.origin)
+      if (!sameSite || item.favicon === favicon) continue
+
+      item.favicon = favicon
+      const idKey = item.id != null ? String(item.id) : itemUrl
+      const row = list.querySelector<HTMLElement>(`[data-row][data-id="${CSS.escape(idKey)}"]`)
+      const currentBadge = row?.querySelector<HTMLElement>('.favicon-wrap')
+      if (currentBadge) currentBadge.replaceWith(createFaviconBadge(doc, favicon, item.title || item.url || '', 16, itemUrl))
+      patched = true
+    }
+    return patched
+  }
+
+  return { element: list, setItems, patchFavicons, toggleSelectAll, clearSelection, selectedIds }
 }

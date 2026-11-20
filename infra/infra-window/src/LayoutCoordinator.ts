@@ -2572,15 +2572,21 @@ class LayoutCoordinator {
     try { view.setBounds(hiddenBounds) } catch (_) {}
     // 内容惰性加载：视图建好后立刻后台载入 renderer，首次显示即就绪。
     if (typeof this._wcm.loadFloatView === 'function') {
+      // 成功与失败都要收口（性能账）：只要还在收起态，就把节流开回去。
+      // 加载**期间**保持不节流（boot 期的定时器 / rAF 不能被降到 1Hz）；加载结束它只是
+      // 一块 0×0 的空壳，没有理由再拖着整窗出帧。失败路径不收口的话，一次加载失败 =
+      // 一块收起浮层把整个窗口（含正在播放/滚动的标签）拖在持续 60fps 出帧上，
+      // 一直要到 2 分钟后的闲置回收才解除 —— 那是纯浪费的 CPU / GPU / 电。
+      const settleThrottle = () => {
+        if (!this._isFloatOnScreen(key)) this._syncFloatThrottle(key, true)
+      }
       this._wcm
         .loadFloatView(key)
-        // 加载完成仍在收起态（预热 / 建好没用到）→ 立刻把节流打开：
-        // 加载**期间**必须保持不节流（boot 期的定时器 / rAF 不能被降到 1Hz），
-        // 加载完成后它只是一块 0×0 的空壳，没有理由再拖着整窗出帧。
-        .then(() => {
-          if (!this._isFloatOnScreen(key)) this._syncFloatThrottle(key, true)
+        .then(settleThrottle)
+        .catch((e: unknown) => {
+          console.error(`[layout] loadFloatView(${key}) failed:`, errorMessage(e))
+          settleThrottle()
         })
-        .catch((e: unknown) => console.error(`[layout] loadFloatView(${key}) failed:`, errorMessage(e)))
     }
     // 新视图**先按"闲置"计**，排一次回收。
     // 为什么必须在这里也排：**预热**建出来的浮层（见 warmFloatView）如果用户从没用到它，
